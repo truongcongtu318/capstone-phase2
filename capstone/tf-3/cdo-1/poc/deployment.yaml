@@ -20,6 +20,6 @@ spec:
         name: main
         resources:
           limits:
-            memory: 64Mi
+            memory: 256Mi
           requests:
             memory: 32Mi
