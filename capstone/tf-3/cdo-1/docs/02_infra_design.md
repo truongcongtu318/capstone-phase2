@@ -86,9 +86,16 @@
 
 ## 6. Scaling strategy
 
-- **Vertical**: <!-- CPU/memory bump triggers -->
-- **Horizontal**: <!-- auto-scaling rules -->
-- **Triggers**: <!-- target CPU 70% / request count / queue depth -->
+* **Option A — EKS Fargate Profile (Serverless Auto-scaling):**
+  * *Pros:* Serverless, không cần quản lý node, tự động scale resource theo Pod.
+  * *Cons:* **Không hỗ trợ DaemonSet**. OTel Collector (bắt buộc theo hợp đồng triển khai) cần chạy ở mức node. Thêm vào đó, ArgoCD repo-server cần writable local filesystem ổn định (vốn hay gặp friction khi chạy trên Fargate).
+  * *Verdict:* **Loại**. Đây là technical blocker thực sự (giới hạn kỹ thuật cứng), không phải sự đánh đổi (trade-off) vì lý do chi phí hay sở thích.
+* **Option B — EKS Managed Node Group + Karpenter (Advanced Provisioner):**
+  * *Pros:* Là hướng tiếp cận production-mature hơn so với Cluster Autoscaler, khả năng scale nhạy bén và tối ưu chi phí cực tốt.
+  * *Cons:* Tốn nhiều thời gian cấu hình, học thuật và vận hành.
+  * *Verdict:* **Loại (tạm thời)**. Nằm ngoài phạm vi (off-scope) đối với thời lượng 2 tuần của dự án. Rủi ro thời gian không đáng để đánh đổi, hướng này được đưa vào "production roadmap" của hệ thống.
+* ✅ **Chosen: Option C — EKS Managed Node Group + Cluster Autoscaler:**
+  * *Reason:* Option A bị loại hoàn toàn vì blocker kỹ thuật. Giữa B và C, chọn C vì đây là giải pháp quen thuộc, thời gian setup nhanh nhất. Mặc dù kém tối ưu hơn Karpenter ở môi trường production thực tế, nhưng nó đáp ứng hoàn hảo bài toán tiết kiệm thời gian và yêu cầu auto-scaling cơ bản trong 2 tuần sandbox.
 
 ## 7. Failure modes + recovery
 
