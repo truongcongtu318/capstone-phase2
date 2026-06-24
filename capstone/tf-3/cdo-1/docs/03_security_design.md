@@ -148,17 +148,39 @@ explicit assume-role pattern:
 
 | Secret | Storage | Rotation | Accessed by |
 |---|---|---|---|
-| | | | |
+| Database application credential | AWS Secrets Manager | 30-90 days, coordinated with RDS user rotation | Patch Controller through ESO-created Kubernetes Secret |
+| Webhook signing key | AWS Secrets Manager | Manual rotation per release or incident | Patch Receiver |
+| CodeCommit access | IRSA + STS, no static secret | AWS-managed token exchange | ArgoCD GitOps Engine |
+| SNS escalation topic ARN/config | Kubernetes ConfigMap; no secret value | Release controlled | Escalation notifier |
+| Firehose delivery config | IAM role and environment config | Release controlled | Audit Writer |
 
 ### 3.2 Inject Pattern
 
-<!-- ECS task definition? Kubernetes External Secrets Operator? Env var via Init container? -->
+Secrets are stored in AWS Secrets Manager and synchronized into Kubernetes with
+External Secrets Operator (ESO):
+
+1. Each workload has a dedicated Kubernetes ServiceAccount mapped to a scoped
+   IRSA role.
+2. ESO reads only the approved Secrets Manager ARNs for that namespace.
+3. ESO creates Kubernetes Secrets in the workload namespace.
+4. Pods consume secrets as mounted files where possible; environment variables
+   are allowed only for libraries that do not support file-based credentials.
+5. Secret names are stable, but secret values are rotated in Secrets Manager.
+
+Runtime GitOps does not use a GitHub Deploy Key. ArgoCD authenticates to
+CodeCommit through IRSA and STS, so no long-lived Git credential is stored in the
+cluster.
 
 ### 3.3 Anti-leak Controls
 
 - Secrets KHÔNG commit Git.
 - Container image không bake credential.
 - Application log redact pattern.
+- CI runs Gitleaks before merge and blocks detected credentials.
+- ESO-managed Kubernetes Secrets are namespace-scoped and excluded from ArgoCD
+  diff output where the value would be rendered.
+- Incident response includes immediate Secrets Manager rotation and pod restart
+  for any leaked credential.
 
 ---
 
@@ -168,19 +190,51 @@ explicit assume-role pattern:
 
 | Data | Storage | KMS key | Notes |
 |---|---|---|---|
-| | | | |
+| Audit events | S3 bucket with Object Lock | `alias/cdo-audit-kms` | Firehose writes encrypted objects; Athena reads are logged |
+| Application data | RDS PostgreSQL / EBS volumes | `alias/cdo-app-data-kms` | RDS storage encryption enabled |
+| Runtime secrets | Secrets Manager and EKS Secrets | `alias/cdo-secrets-kms` | EKS envelope encryption at rest enabled for Kubernetes Secrets |
+| Infrastructure state/artifacts | S3 / DynamoDB / ECR | `alias/cdo-infra-kms` | Terraform state, lock table, and private images |
+| Observability logs | CloudWatch Logs / Firehose backups | `alias/cdo-observability-kms` | Log groups use customer-managed key where supported |
+| Node root volume | Karpenter EC2 EBS root volume | `alias/cdo-infra-kms` | Karpenter EC2NodeClass enforces encrypted root volumes |
 
 ### 4.2 In Transit
 
-- ALB listener TLS setup.
-- Internal service-to-service communication encryption.
-- AWS services invocation encryption.
+- ALB listener uses ACM-managed certificates and the current AWS TLS security
+  policy that enforces TLS 1.2 or newer.
+- Internal service-to-service calls use HTTPS where the service exposes HTTP
+  APIs; Kubernetes NetworkPolicy still controls lateral movement.
+- AWS service calls use HTTPS through VPC endpoints.
+- CodeCommit Git traffic uses HTTPS over the private CodeCommit endpoint.
+- S3 bucket policy denies non-HTTPS requests:
+
+```json
+{
+  "Sid": "DenyInsecureTransport",
+  "Effect": "Deny",
+  "Principal": "*",
+  "Action": "s3:*",
+  "Resource": [
+    "arn:aws:s3:::cdo-audit-bucket",
+    "arn:aws:s3:::cdo-audit-bucket/*"
+  ],
+  "Condition": {
+    "Bool": {
+      "aws:SecureTransport": "false"
+    }
+  }
+}
+```
 
 ### 4.3 Key Management
 
-- CMK rotation settings.
-- Key policy.
-- KMS audit.
+- Customer-managed KMS keys are grouped by purpose: audit, app-data, secrets,
+  infra, and observability.
+- Automatic key rotation is enabled where supported.
+- Key policies grant administration to platform security roles and usage only to
+  the specific IRSA or AWS service role that needs the key.
+- `kms:Decrypt` is never granted with wildcard resource scope.
+- KMS API calls are audited in CloudTrail and correlated with service audit
+  events by `correlation_id` where available.
 
 ---
 
