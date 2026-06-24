@@ -121,7 +121,7 @@ Hệ thống hỗ trợ 3 tier dịch vụ với các đặc quyền và giới 
 Nhóm thiết kế quyết định chọn mô hình **Bridge Isolation** làm kiến trúc cốt lõi.
 
 > [!IMPORTANT]
-> **Bridge Isolation**: Toàn bộ hạ tầng dữ liệu (DynamoDB, SQS, S3) được dùng chung để tối ưu hóa chi phí vận hành và tài nguyên. Tuy nhiên, dữ liệu của mỗi tenant được phân vùng logic (partitioned) nghiêm ngặt bằng `tenant_id`. Ngược lại, quyền thực thi ở compute layer (Kubernetes, GitOps) được cách ly vật lý bằng Namespaces, RBAC, ArgoCD Applications và ArgoCD AppProjects.
+> **Bridge Isolation**: Toàn bộ hạ tầng dữ liệu (DynamoDB, SQS, S3) được dùng chung để tối ưu hóa chi phí vận hành và tài nguyên. Tuy nhiên, dữ liệu của mỗi tenant được phân vùng logic (partitioned) nghiêm ngặt bằng `tenant_id`. Ngược lại, quyền thực thi ở compute layer (Kubernetes, GitOps) được cách ly logic và enforce bằng Namespaces, RBAC, ArgoCD Applications và ArgoCD AppProjects.
 
 #### So sánh các mô hình cách ly:
 
@@ -129,7 +129,7 @@ Nhóm thiết kế quyết định chọn mô hình **Bridge Isolation** làm ki
 | :--- | :--- | :--- | :--- | :---: |
 | **Silo Isolation** | Mỗi tenant sở hữu database, queue, bucket và compute riêng biệt | Bảo mật tuyệt đối, không lo Noisy Neighbor | Chi phí hạ tầng cực lớn, quản lý phức tạp, không phù hợp cho sandbox | ❌ |
 | **Pool Isolation** | Dùng chung toàn bộ hạ tầng từ compute tới database, chỉ lọc bằng tenant_id trong code | Chi phí rẻ nhất, triển khai cực nhanh | Rủi ro rò rỉ dữ liệu cao nếu logic filter trong code có lỗi | ❌ |
-| **Bridge Isolation** | Dùng chung data layer (phân vùng bằng key) nhưng tách biệt compute layer (namespace/RBAC/GitOps) | Cân bằng hoàn hảo giữa chi phí tối ưu và tính an toàn bảo mật | Đòi hỏi kiểm tra tenant context và policy cực kỳ chặt chẽ |  |
+| **Bridge Isolation** | Dùng chung data layer (phân vùng bằng key) nhưng tách biệt compute layer (namespace/RBAC/GitOps) | Cân bằng hoàn hảo giữa chi phí tối ưu và tính an toàn bảo mật | Đòi hỏi kiểm tra tenant context và policy cực kỳ chặt chẽ | ✅ |
 
 ---
 
@@ -312,10 +312,10 @@ limits:
 
 ##### Bước 5: Chạy Smoke Test tự động
 Trước khi chuyển trạng thái sang `ACTIVE`, hệ thống kích hoạt bộ smoke test tự động để xác minh:
-1. Gửi alert giả lập đúng `tenant_id` và `namespace` $ightarrow$ Expect: `ACCEPTED` (202).
-2. Gửi alert giả lập sai `namespace` $ightarrow$ Expect: `403 TENANT_NAMESPACE_MISMATCH`.
-3. Yêu cầu restart workload trong namespace tenant $ightarrow$ Expect: `ALLOWED` và thực thi thành công.
-4. Yêu cầu restart workload sang namespace tenant khác $ightarrow$ Expect: `DENIED` từ RBAC.
+1. Gửi alert giả lập đúng `tenant_id` và `namespace`  →  Expect: `ACCEPTED` (202).
+2. Gửi alert giả lập sai `namespace`  →  Expect: `403 TENANT_NAMESPACE_MISMATCH`.
+3. Yêu cầu restart workload trong namespace tenant  →  Expect: `ALLOWED` và thực thi thành công.
+4. Yêu cầu restart workload sang namespace tenant khác  →  Expect: `DENIED` từ RBAC.
 5. Kiểm tra audit log được ghi nhận đúng prefix trên S3 bucket.
 
 *Chỉ khi 5 smoke test trên pass hoàn toàn, trạng thái tenant trong DynamoDB mới được chuyển thành `ACTIVE`.*
@@ -335,7 +335,7 @@ Trong mô hình multi-tenant dùng chung tài nguyên hạ tầng, hiện tượ
       │
       ├──> (2) Idempotency Lock & Cooldown (DynamoDB Conditional Write)
       │
-      ├──> (3) Concurrency Limit (asyncio Semaphores & Argo CD Workflow Limits)
+      ├──> (3) Concurrency Limit (asyncio Semaphores & Argo Workflows Semaphore)
       │
       ├──> (4) ResourceQuota & LimitRange (Kubernetes Namespace Hard Limits)
       │
@@ -471,7 +471,7 @@ Mỗi đề xuất tự vá lỗi từ AI Engine đều phải đi qua bộ lọ
 
 Nhóm thiết kế CDO-1 thống nhất áp dụng mô hình **Bridge Isolation** vì nó phản ánh chính xác cấu trúc hạ tầng đã chọn:
 * Tối ưu chi phí bằng cách dùng chung Data layer (phân vùng logic qua `tenant_id` trong DynamoDB, prefix trong S3, attributes trong SQS).
-* Đảm bảo an toàn vận hành bằng cách cô lập hoàn toàn Compute/Execution layer (dùng Kubernetes Namespace, K8s RBAC bindings, ArgoCD AppProjects và API Gateway / Process Semaphores).
+* Đảm bảo an toàn vận hành bằng cách cô lập Compute/Execution layer qua Kubernetes Namespace, K8s RBAC bindings, ArgoCD AppProjects và FastAPI Middleware / process-level semaphores.
 
 Thiết kế này vừa đáp ứng đầy đủ yêu cầu khắt khe về bảo mật dữ liệu khách hàng vừa giữ chi phí sandbox trong mức tối thiểu, đồng thời khả thi để demo trọn vẹn trong thời gian 2 tuần của Capstone project.
 
