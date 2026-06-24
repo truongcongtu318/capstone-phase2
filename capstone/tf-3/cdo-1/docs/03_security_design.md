@@ -215,23 +215,31 @@ CloudWatch Alarm phải cảnh báo khi xảy ra:
 Thiết kế này đảm bảo dữ liệu tenant và audit trail được bảo vệ cả khi lưu trữ lẫn khi truyền, đồng thời giới hạn khả năng một workload bị compromise có thể sử dụng hoặc quản trị khóa mã hóa ngoài phạm vi được cấp.
 
 ---
-
 ## 5. Audit Logging
 
 ### 5.1 What to Log
-
-<!-- AI engine decision fields, Infrastructure change tracking, K8s API mutation, app errors -->
+* **AI engine decision**: Ghi lại toàn bộ lịch sử các cuộc gọi qua endpoint nội bộ (`/v1/detect`, `/v1/decide`, `/v1/verify`) của AI Engine. Các trường dữ liệu bắt buộc bao gồm: `timestamp` (định dạng RFC3339 UTC), `tenant_id` (UUID v4), `correlation_id` (hoặc `Idempotency-Key` dùng chung xuyên suốt luồng xử lý sự cố), `input hash` (mã băm cấu hình request/header), `output` (cấu trúc JSON hành động chi tiết như `suggested_action`, `target`, `action_params` từ response), `confidence` (độ tin cậy từ 0.0 - 1.0), `model version` / `runbook_id` và `latency` / `execution_time_seconds`.
+* **Infrastructure change**: Giám sát và ghi nhận toàn bộ các sự kiện thay đổi, khởi tạo hoặc phá hủy tài nguyên hạ tầng AWS (AWS-level management events) thông qua CloudTrail, bao gồm: thực thi `Terraform apply` cập nhật cụm EKS, can thiệp thay đổi cấu hình hoặc dữ liệu thông qua RDS PostgreSQL, DynamoDB, AWS Secrets Manager hoặc chỉnh sửa cấu hình Amazon Kinesis Data Firehose.
+* **K8s API audit**: Bật tính năng Kubernetes Audit Log mức cluster. Áp dụng chính sách `audit-policy` nhằm ghi vết tất cả các thao tác thay đổi trạng thái tài nguyên (Mutations) thực hiện bởi cả 2 luồng: **Path B** (Direct K8s API Patch/Restart như `patch`, `update` Deployments/Scale từ ServiceAccount `selfheal-executor`) và **Path A** (GitOps/ArgoCD controller đồng bộ trạng thái mong muốn từ config-repo vào cluster).
+* **Application error**: Ghi log cấu trúc (Structured JSON) đối với toàn bộ các lỗi phát sinh từ các thành phần core nền tảng (FastAPI Webhook Receiver, Self-Heal Controller, Karpenter) và log lỗi từ workload demo của tenant (ví dụ: `checkout-api`, `order-worker`). Mọi log lỗi bắt buộc phải đính kèm `correlation_id` hoặc `tenant_id` để phục vụ truy vết phân tán xuyên suốt hệ thống (cross-service distributed tracing).
 
 ### 5.2 Storage + Retention
 
 | Log type | Storage | Retention | Query interface |
-|---|---|---|---|
-| | | | |
+| :--- | :--- | :--- | :--- |
+| **AI decision audit** | **Amazon S3** kết hợp kích hoạt **S3 Object Lock** (Chế độ `COMPLIANCE` bảo vệ dữ liệu bất biến, chống sửa/xóa tuyệt đối). Đường dẫn lưu trữ được phân vùng logic theo folder prefix: `s3://tf3-sh-audit-logs/tenant_id=<tenant_uuid>/dt=YYYY-MM-DD/`. Luồng đẩy log đi trực tiếp từ `Self-Heal Controller -> Kinesis Data Firehose -> S3`. | **90 ngày** lưu trữ nóng (hot retention) đáp ứng tiêu chuẩn SOC2 của sandbox, **1 năm** lưu trữ lạnh (cold retention) qua S3 Lifecycle chuyển đổi sang Glacier. | **Amazon Athena** (Tạo bảng Schema đè lên các phân vùng S3 để truy vấn bằng cú pháp SQL tiêu chuẩn). Có thể tích hợp bảng panel Grafana/Athena để hiển thị lúc demo. |
+| **CloudTrail** | **Amazon S3** + **AWS CloudTrail Lake** (Ghi nhận toàn bộ các thao tác API mức hạ tầng AWS của Sandbox). | **90 ngày** mặc định cho môi trường thử nghiệm và đánh giá. | **CloudTrail console** hoặc CloudTrail Lake SQL Queries để kiểm tra lịch sử thao tác của các AWS IAM User/Role. |
+| **Application log** | **Amazon CloudWatch Logs** (Thu thập tập trung log từ tác vụ container thông qua FluentBit agent chạy dưới dạng DaemonSet trong cụm). | **14 ngày** (Phù hợp cho mục đích debug, giám sát thời gian thực và tối ưu chi phí lưu trữ cho môi trường sandbox). | **CloudWatch Logs Insights** (Sử dụng cú pháp filter lọc log theo level, container_name, pod_name và `correlation_id`). |
+| **K8s audit** | **Amazon CloudWatch Logs** (Tích hợp trực tiếp từ EKS Control Plane Logging sang CloudWatch log groups) hoặc stream qua S3. | **30 ngày** (Đủ để theo dõi lịch sử thao tác K8s API trong các đợt chạy mô phỏng sự cố `W12 simulation`). | **CloudWatch Logs Insights** để phân tích cú pháp truy cập Kubernetes API và kiểm tra tính hợp lệ của RBAC Contract. |
+
+---
+> [!NOTE]
+> **Ghi chú kỹ thuật từ CDOps**: Toàn bộ dữ liệu logs lưu chuyển trong pipeline đều được kiên cố hóa bằng mã hóa tại chỗ bằng các KMS Key tương ứng (`alias/selfheal-audit` và `alias/selfheal-observability`), mã hóa trên đường truyền (TLS in transit), đồng thời bộ ship log FluentBit sẽ thực hiện lọc bỏ thông tin nhạy cảm (PII Redaction) nhằm đảm bảo không ghi lọt secret hay thông tin credential vào audit body.
 
 ### 5.3 PII Handling (basic)
 
-- Schema whitelist.
-- Redaction at ingest.
+- **Schema whitelist**: Định nghĩa cứng các cấu trúc trường dữ liệu (JSON Schema) cho payload alert và log sự cố. Mọi trường lạ nằm ngoài whitelist chứa thông tin tự do (free-text) đều bị từ chối tiếp nhận nhằm ngăn chặn việc lọt dữ liệu nhạy cảm của khách hàng.
+- **Redaction at ingest**: Bộ thu thập log FluentBit tích hợp các bộ lọc Regex filter tại tầng Webhook Receiver. Các chuỗi ký tự khớp với pattern của định danh cá nhân, Password, Database Token, Authorization Header hoặc AWS Access Key sẽ tự động bị thay thế bằng chuỗi `[REDACTED]` trước khi gửi vào S3 hoặc CloudWatch Logs.
 
 ---
 
