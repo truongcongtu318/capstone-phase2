@@ -76,13 +76,13 @@
 - **Option A**: <!-- Lambda + API GW - Pros: cost-tight, ops-light · Cons: cold start, 15min limit -->
 - **Option B**: <!-- ECS Fargate + ALB - Pros: longer runtime, predictable latency · Cons: higher fixed cost -->
 - **Option C**: <!-- EKS + Karpenter - Pros: K8s native, GitOps support · Cons: control plane cost -->
-- ✅ **Chosen**: <!-- ... --> - Reason: <!-- ... -->
+- ✅ **Chosen**: EKS Managed Node Group + Cluster Autoscaler (Xem chi tiết tại Section 6) - Reason: Hỗ trợ Native K8s, tích hợp chặt chẽ với ArgoCD GitOps, hỗ trợ DaemonSet (để cài đặt OTel Collector ở mức Node). Dù chi phí control plane cao hơn nhưng đáp ứng hoàn chỉnh các yêu cầu kỹ thuật và vận hành của hệ thống Self-Heal. Cơ chế autoscaling sandbox sẽ dùng Cluster Autoscaler thay vì Karpenter để giảm thiểu rủi ro triển khai trong 2 tuần sandbox.
 
 ### 5.2 Database
 
-- **Option A**: ... 
-- **Option B**: ...
-- ✅ **Chosen**: ...
+- **Option A**: RDS Aurora (Silo/Pool) - Pros: SQL support, strong consistency · Cons: High idle cost, slower provisioning.
+- **Option B**: DynamoDB (Single Table) - Pros: Serverless, scale seamlessly, low latency, native TTL support, conditional writes · Cons: No complex queries.
+- ✅ **Chosen**: Option B (DynamoDB) - Reason: Thích hợp cho việc lưu trữ state của Incident, hỗ trợ cơ chế Conditional Write Lock (tránh race condition khi multiple self-heal workers cùng xử lý một incident) và Auto-Expiry TTL để tự động dọn dẹp các incident cũ, giúp tối ưu hóa chi phí.
 
 ## 6. Scaling strategy
 
@@ -96,6 +96,36 @@
   * *Verdict:* **Loại (tạm thời)**. Nằm ngoài phạm vi (off-scope) đối với thời lượng 2 tuần của dự án. Rủi ro thời gian không đáng để đánh đổi, hướng này được đưa vào "production roadmap" của hệ thống.
 * ✅ **Chosen: Option C — EKS Managed Node Group + Cluster Autoscaler:**
   * *Reason:* Option A bị loại hoàn toàn vì blocker kỹ thuật. Giữa B và C, chọn C vì đây là giải pháp quen thuộc, thời gian setup nhanh nhất. Mặc dù kém tối ưu hơn Karpenter ở môi trường production thực tế, nhưng nó đáp ứng hoàn hảo bài toán tiết kiệm thời gian và yêu cầu auto-scaling cơ bản trong 2 tuần sandbox.
+
+### Quy tắc mở rộng hệ thống chi tiết (EKS Managed Node Group + Cluster Autoscaler)
+
+#### 1. Tăng tài nguyên cho 1 máy (Vertical Scaling)
+* **Cấp độ Pod (Đơn vị chạy đơn lẻ)**:
+  * Khi Pod chạy đơn lẻ (Self-Heal Engine, Prometheus, ArgoCD, App workload) sử dụng RAM liên tục **> 85%** giới hạn (limit) hoặc CPU liên tục **> 90%** trong **3 phút** liên tục.
+  * Khi phát hiện sự kiện `OOMKilled` từ Kubernetes Event.
+  * **Hành động**: Tự động cập nhật `resource limits` của Pod (tăng RAM/CPU lên 1.5x lần) thông qua Self-Heal Engine và deploy lại.
+* **Cấp độ Node (Máy ảo EC2)**:
+  * Khi số lượng Node trong Managed Node Group đã đạt mức tối đa (5 Nodes) nhưng tổng CPU/RAM request của toàn cluster vẫn **> 80%** liên tục trong **10 phút**.
+  * **Hành động**: Thực hiện nâng cấp loại cấu hình máy (Instance Type) từ `t3.medium` lên `t3.large`.
+
+#### 2. Tăng số lượng máy (Horizontal Scaling)
+* **Tăng/giảm Pod Replicas (HPA - Horizontal Pod Autoscaler)**:
+  * **Tăng (Scale-Up)**: Tăng thêm **1 Pod replica** khi CPU trung bình của các Pod hiện tại **> 70%** hoặc số lượng yêu cầu trung bình **> 150 RPS/Pod** liên tục trong **5 phút**. Giới hạn tối đa: 10 Pods.
+  * **Giảm (Scale-Down)**: Giảm bớt **1 Pod replica** khi CPU trung bình **< 40%** liên tục trong **10 phút** (giãn cách để tránh tình trạng scale liên tục gây trồi sụt hệ thống). Giới hạn tối thiểu: 2 Pods.
+* **Tăng/giảm EC2 Nodes (Cluster Autoscaler - CA)**:
+  * **Tăng (Scale-Up node)**: Tự động thêm **1 EC2 Node** vào Managed Node Group ngay khi có bất kỳ Pod nào ở trạng thái `Pending` do thiếu hụt tài nguyên (CPU/RAM) trên Node hiện tại. Giới hạn tối đa: 5 Nodes.
+  * **Giảm (Scale-Down node)**: Tự động giảm bớt **1 EC2 Node** khi tổng tài nguyên CPU & RAM được request trên một Node **< 50%** liên tục trong **10 phút** và các Pod trên Node đó có thể dồn (reschedule) sang các Node khác an toàn.
+
+#### 3. Ngưỡng kích hoạt cụ thể (Activation Thresholds)
+
+| Chỉ số (Metric) | Ngưỡng Tăng (Scale-Up Trigger) | Ngưỡng Giảm (Scale-Down Trigger) | Thời gian duy trì | Hành động (Action) |
+|---|---|---|---|---|
+| **CPU Pod** | `> 70%` | `< 40%` | HPA: `5 phút` | Tăng/Giảm Pod replica (+1 / -1 Pod, Min: 2, Max: 10) |
+| **RAM Pod** | `> 85%` | N/A | `3 phút` | Vertical Pod: Restart với RAM limit x1.5 |
+| **Request Rate (RPS)** | `> 150 RPS/Pod` | `< 50 RPS/Pod` | HPA: `3 phút` | Tăng/Giảm Pod replica (+1 / -1 Pod) |
+| **Hàng đợi (Queue backlog)** | `> 1000 messages` | `< 100 messages` | Worker scale: `2 phút` | HPA: Tăng/Giảm số lượng worker (+2 / -2 workers) |
+| **Trạng thái Pod** | `Pending` (thiếu tài nguyên) | N/A | Ngay lập tức | Cluster Autoscaler: +1 EC2 Node (Max: 5) |
+| **Tài nguyên Node** | N/A | `< 50% CPU & RAM requested` | `10 phút` | Cluster Autoscaler: Drain và terminate 1 EC2 Node |
 
 ## 7. Failure modes + recovery
 

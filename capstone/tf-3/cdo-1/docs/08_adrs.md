@@ -8,7 +8,7 @@
 
 ---
 
-## ADR-001 - Chọn EKS + Karpenter làm nền tảng compute cho Sandbox
+## ADR-001 - Chọn EKS + Cluster Autoscaler làm nền tảng compute cho Sandbox
 
 - **Status**: Proposed
 - **Date**: 2026-06-22
