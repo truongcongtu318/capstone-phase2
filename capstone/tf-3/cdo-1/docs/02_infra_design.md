@@ -349,6 +349,348 @@ Data isolation = tenant_id partition + S3 prefix + SQS MessageAttributes
 
 
 
+### 4.3. Quy trình thêm tenant mới
+
+Khi có tenant mới muốn sử dụng Self-Heal Platform, nhóm dùng onboarding flow 5 bước.
+
+Mục tiêu là tenant mới được tạo nhất quán, có namespace riêng, có RBAC riêng, có GitOps app riêng và được kiểm tra bằng smoke test trước khi active.
+
+Bước 1: Register tenant
+
+Platform admin tạo thông tin tenant mới.
+
+Ví dụ:
+
+{
+  "tenant_id": "tnt-payment-demo",
+  "tenant_name": "Payment Team",
+  "tier": "pro",
+  "namespace": "tenant-payment",
+  "contact": "payment-oncall@example.com"
+}
+
+Thông tin này được lưu vào tenant registry.
+
+Tenant registry có thể nằm trong DynamoDB table:
+
+Table: tenant_registry
+PK: tenant_id
+
+Ví dụ record:
+
+{
+  "tenant_id": "tnt-payment-demo",
+  "namespace": "tenant-payment",
+  "tier": "pro",
+  "status": "ACTIVE"
+}
+Bước 2: Tạo namespace và label
+
+Terraform hoặc GitOps manifest tạo namespace cho tenant.
+
+Ví dụ:
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-payment
+  labels:
+    tenant_id: tnt-payment-demo
+    tier: pro
+    selfheal/enabled: "true"
+
+Label này dùng để:
+
+xác định namespace thuộc tenant nào;
+validate tenant_id trong request;
+hỗ trợ policy và routing.
+Bước 3: Tạo RBAC và tenant policy
+
+Hệ thống tạo Role và RoleBinding cho remediation executor trong namespace của tenant.
+
+Ví dụ policy cho tnt-payment-demo:
+
+tenant_id: tnt-payment-demo
+namespace: tenant-payment
+allowed_actions:
+  - RESTART_DEPLOYMENT
+  - SCALE_UP_PODS
+blocked_actions:
+  - DELETE_NAMESPACE
+  - ACCESS_KUBE_SYSTEM
+  - PATCH_CLUSTER_ROLE
+limits:
+  max_scale_multiplier: 2
+  cooldown_minutes: 5
+
+Ý nghĩa:
+
+Tenant được phép restart/scale workload trong namespace của chính nó.
+Tenant không được thao tác namespace khác.
+Tenant không được thao tác tài nguyên cluster-level.
+Action nguy hiểm phải bị block hoặc escalate.
+Bước 4: Tạo GitOps folder, ArgoCD Application và AppProject
+
+Mỗi tenant có folder Git riêng:
+
+gitops-state/tenants/tnt-payment-demo/
+
+Sau đó tạo ArgoCD Application riêng:
+
+selfheal-tnt-payment-demo
+
+Và AppProject riêng:
+
+selfheal-payment
+
+Application này chỉ được sync manifest từ folder của tenant vào namespace của tenant.
+
+Cách này giúp GitOps path không sửa nhầm manifest hoặc namespace của tenant khác.
+
+Bước 5: Chạy smoke test
+
+Sau khi onboarding xong, hệ thống chạy smoke test trước khi tenant được dùng thật.
+
+Smoke test gồm:
+
+1. Gửi fake alert đúng tenant_id và namespace → expect ACCEPTED
+2. Gửi fake alert sai namespace → expect 403 TENANT_NAMESPACE_MISMATCH
+3. Thử remediation trong namespace của tenant → expect ALLOWED
+4. Thử remediation sang namespace tenant khác → expect DENIED
+5. Kiểm tra audit log được ghi đúng S3 prefix của tenant
+6. Kiểm tra ArgoCD Application chỉ sync vào namespace được phép
+
+Tenant chỉ được chuyển sang trạng thái ACTIVE sau khi smoke test pass.
+
+Nếu dùng Terraform, các bước 2, 3 và 4 có thể được đóng gói trong module:
+
+module: tenant-provision
+
+Output của module:
+
+- Kubernetes namespace
+- namespace labels
+- RBAC Role/RoleBinding
+- tenant policy config
+- GitOps folder
+- ArgoCD Application
+- ArgoCD AppProject
+4.4. Chống một tenant chiếm hết tài nguyên
+
+Trong hệ thống multi-tenant, một tenant có thể tạo quá nhiều alert hoặc remediation request, làm ảnh hưởng đến tenant khác. Trường hợp này gọi là noisy neighbor.
+
+Ví dụ:
+
+tnt-payment-demo bị lỗi CrashLoopBackOff liên tục
+→ gửi 500 alert trong vài phút
+→ worker xử lý toàn alert của payment
+→ alert của checkout bị chậm hoặc không được xử lý kịp
+
+Để tránh vấn đề này, hệ thống dùng 5 cơ chế:
+
+1. Per-tenant rate limit
+2. Idempotency lock và cooldown
+3. Per-tenant concurrency limit
+4. ResourceQuota trong namespace
+5. Blast-radius policy theo từng action
+4.4.1. Per-tenant rate limit
+
+Mỗi tenant có giới hạn số incident được xử lý trong một phút.
+
+Tier	Incident/phút	Concurrent remediation	Cooldown
+Basic	10	2	10 phút
+Pro	30	5	5 phút
+Enterprise	60	10	2 phút
+
+Trong demo:
+
+tnt-checkout-demo:
+- Tier: Basic
+- 10 incidents/phút
+- tối đa 2 remediation song song
+- cooldown 10 phút
+
+tnt-payment-demo:
+- Tier: Pro
+- 30 incidents/phút
+- tối đa 5 remediation song song
+- cooldown 5 phút
+
+Vì Webhook Receiver expose qua Internal ALB, không dùng API Gateway, rate limit được implement trong FastAPI middleware.
+
+Cơ chế: DynamoDB token bucket.
+
+Table:
+
+tenant_rate_limits
+
+Key:
+
+PK = tenant_id
+SK = window_timestamp
+
+Attributes:
+
+count
+quota
+ttl
+
+Luồng xử lý:
+
+Request đi vào Webhook Receiver
+→ FastAPI middleware đọc tenant_id
+→ Tăng counter trong DynamoDB cho window 60 giây hiện tại
+→ So sánh count với quota của tenant
+→ Nếu count <= quota: cho request đi tiếp
+→ Nếu count > quota: trả 429 và ghi audit event RATE_LIMITED
+
+Response khi vượt quota:
+
+HTTP 429 Too Many Requests
+Retry-After: 30
+
+Audit event:
+
+{
+  "event_type": "RATE_LIMITED",
+  "tenant_id": "tnt-checkout-demo",
+  "tier": "basic",
+  "quota": "10 incidents/minute",
+  "decision": "DENY"
+}
+4.4.2. Idempotency lock và cooldown
+
+Rate limit xử lý vấn đề quá nhiều request. Nhưng với self-heal, còn một vấn đề khác: cùng một alert có thể bị gửi lặp lại nhiều lần.
+
+Ví dụ:
+
+payment-api CrashLoopBackOff
+→ Alertmanager gửi alert liên tục
+→ Nếu không có lock, platform có thể restart deployment quá nhiều lần
+
+Để tránh điều này, hệ thống dùng DynamoDB conditional write để tạo idempotency lock.
+
+Lock key:
+
+tenant_id#namespace#service#alert_name#action_type
+
+Ví dụ:
+
+tnt-payment-demo#tenant-payment#payment-api#CrashLoopBackOff#RESTART_DEPLOYMENT
+
+Nếu lock chưa tồn tại, platform tạo lock và thực hiện remediation.
+
+Nếu lock đã tồn tại trong cooldown window, platform không execute lại action. Incident mới sẽ được đánh dấu:
+
+SUPPRESSED_DUPLICATE
+
+Ví dụ:
+
+{
+  "event_type": "SUPPRESSED_DUPLICATE",
+  "tenant_id": "tnt-payment-demo",
+  "service": "payment-api",
+  "action_type": "RESTART_DEPLOYMENT",
+  "reason": "Existing cooldown lock is still active."
+}
+
+Cách này giúp tránh restart/rollback liên tục trên cùng một workload.
+
+4.4.3. Per-tenant concurrency limit
+
+Ngoài rate limit, hệ thống cũng giới hạn số remediation chạy song song theo tenant.
+
+Với Direct Patch path, Webhook Receiver dùng per-tenant semaphore trong FastAPI process.
+
+Ví dụ:
+
+Basic: asyncio.Semaphore(2)
+Pro: asyncio.Semaphore(5)
+Enterprise: asyncio.Semaphore(10)
+
+Với GitOps path, Argo Workflows dùng workflow-level semaphore để giới hạn số workflow đang chạy của từng tenant.
+
+Ví dụ:
+
+Basic: tối đa 2 workflow đang chạy
+Pro: tối đa 5 workflow đang chạy
+Enterprise: tối đa 10 workflow đang chạy
+
+Nếu tenant đã đạt giới hạn concurrency, incident mới sẽ chờ hoặc được đánh dấu:
+
+TENANT_CONCURRENCY_LIMITED
+
+Audit event:
+
+{
+  "event_type": "TENANT_CONCURRENCY_LIMITED",
+  "tenant_id": "tnt-payment-demo",
+  "limit": 5,
+  "decision": "DELAY"
+}
+4.4.4. ResourceQuota trong namespace
+
+Mỗi tenant có namespace riêng, nên hệ thống có thể áp dụng ResourceQuota và LimitRange để tenant này không dùng hết tài nguyên cluster.
+
+Ví dụ ResourceQuota cho tenant-payment:
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-payment-quota
+  namespace: tenant-payment
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "40"
+
+Ý nghĩa:
+
+tenant-payment không thể tạo quá nhiều pod.
+tenant-payment không thể dùng hết CPU/memory của cluster.
+Tenant khác vẫn còn tài nguyên để chạy workload và remediation.
+4.4.5. Blast-radius policy theo action
+
+Không phải action nào AI đề xuất cũng được execute tự động. CDO platform phải kiểm tra blast radius trước khi chạy.
+
+Action	Giới hạn
+RESTART_DEPLOYMENT	Chỉ được restart deployment trong namespace của tenant
+SCALE_UP_PODS	Tối đa tăng 2 lần số replicas hiện tại
+ADJUST_MEMORY_LIMIT	Tối đa tăng 50% mỗi lần
+ROLLBACK_DEPLOYMENT	Chỉ rollback về revision gần nhất đã ổn định
+Unknown action	Block và escalate
+Action đụng kube-system	Block
+Action đụng tenant khác	Block
+
+Nếu action bị block, incident có trạng thái:
+
+BLOCKED_BY_POLICY
+
+Nếu remediation fail nhiều lần hoặc verification không pass, incident có trạng thái:
+
+ESCALATED
+
+Ví dụ audit event khi bị block:
+
+{
+  "event_type": "BLOCKED_BY_POLICY",
+  "tenant_id": "tnt-payment-demo",
+  "service": "payment-api",
+  "action_type": "SCALE_UP_PODS",
+  "reason": "Requested scale exceeds max_scale_multiplier=2",
+  "decision": "DENY"
+}
+
+Tóm lại, nhóm chọn Bridge Isolation vì mô hình này khớp với thiết kế hạ tầng đã chọn: DynamoDB, SQS và S3 dùng chung để giảm chi phí, còn quyền thực thi được tách bằng namespace, RBAC, ArgoCD Application và AppProject. Cách này tiết kiệm hơn Silo nhưng an toàn hơn Pool thuần, đồng thời vẫn chứng minh được isolation với ít nhất 2 tenant trong phạm vi capstone.
+
+
+
+
+
+
 
 
 # 5. Alternatives Considered & Infrastructure Components
