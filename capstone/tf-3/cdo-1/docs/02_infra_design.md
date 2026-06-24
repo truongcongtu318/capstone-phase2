@@ -545,15 +545,46 @@ limits:
 * Khởi tạo ArgoCD `AppProject` giới hạn quyền deploy chỉ trong namespace `tenant-payment`.
 * Khởi tạo ArgoCD `Application` liên kết thư mục Git với namespace tương ứng.
 
-##### Bước 5: Chạy Smoke Test tự động
-Trước khi chuyển trạng thái sang `ACTIVE`, hệ thống kích hoạt bộ smoke test tự động để xác minh:
-1. Gửi alert giả lập đúng `tenant_id` và `namespace`  →  Expect: `ACCEPTED` (202).
-2. Gửi alert giả lập sai `namespace`  →  Expect: `403 TENANT_NAMESPACE_MISMATCH`.
-3. Yêu cầu restart workload trong namespace tenant  →  Expect: `ALLOWED` và thực thi thành công.
-4. Yêu cầu restart workload sang namespace tenant khác  →  Expect: `DENIED` từ RBAC.
-5. Kiểm tra audit log được ghi nhận đúng prefix trên S3 bucket.
+##### Bước 5: Chạy Smoke Test tự động (Automated Smoke Test Verification)
 
-*Chỉ khi 5 smoke test trên pass hoàn toàn, trạng thái tenant trong DynamoDB mới được chuyển thành `ACTIVE`.*
+Sau khi provision hoàn tất tài nguyên hạ tầng và các ranh giới bảo mật logic cho tenant mới, hệ thống sẽ kích hoạt một script smoke test tự động để thực hiện kiểm thử hộp đen (black-box testing) đối với tenant mới khởi tạo. Quá trình kiểm tra này nhằm đảm bảo tính toàn vẹn của hệ thống, độ chính xác của phân quyền RBAC và sự phân tách dữ liệu.
+
+Quy trình smoke test thực hiện 5 bài kiểm tra (cases) cụ thể sau:
+
+1. **Kiểm tra Tiếp nhận Cảnh báo Hợp lệ (Valid Alert Ingestion Check)**:
+   * **Mô tả hành động**: Smoke test script gửi một HTTP POST payload giả lập cảnh báo (ví dụ: `CrashLoopBackOff` cho pod dummy của tenant mới) đến Webhook Receiver thông qua Internal ALB, đính kèm header `X-Tenant-Id: tnt-payment-demo`.
+   * **Điều kiện Đạt (Success Criteria)**: 
+     * Phản hồi HTTP trả về trong vòng **< 1.5 giây** với mã trạng thái `202 Accepted`.
+     * Webhook Receiver xác thực thành công cấu trúc payload và lưu trữ sự cố thành công vào DynamoDB table với trạng thái ban đầu là `PENDING_DECISION`.
+
+2. **Kiểm tra Phân vùng Bảo mật Namespace (Tenant Namespace Mismatch Check)**:
+   * **Mô tả hành động**: Gửi một cảnh báo giả lập với header `X-Tenant-Id: tnt-payment-demo` nhưng cấu trúc payload yêu cầu thay đổi tài nguyên nằm ở namespace `tenant-checkout` (thuộc về tenant khác).
+   * **Điều kiện Đạt (Success Criteria)**:
+     * Phản hồi HTTP trả về ngay lập tức với mã trạng thái `403 Forbidden`.
+     * Body trả về chứa lỗi cụ thể `TENANT_NAMESPACE_MISMATCH`.
+     * Không có bất kỳ tiến trình tự chữa lành nào được khởi chạy đối với target namespace bị tấn công giả lập.
+
+3. **Kiểm tra Thực thi Tự chữa lành Nội bộ (In-Namespace Execution Authorization Check)**:
+   * **Mô tả hành động**: Smoke test script kích hoạt một sự cố giả lập yêu cầu hành động `RESTART_DEPLOYMENT` đối với một deployment dummy có sẵn trong namespace `tenant-payment`. Lệnh gọi này đi qua **Direct Patch Engine** sử dụng ServiceAccount in-cluster.
+   * **Điều kiện Đạt (Success Criteria)**:
+     * Kubernetes API chấp nhận lệnh `patch` từ ServiceAccount `selfheal-executor` nhờ RoleBinding đã được tạo ở Bước 3.
+     * Deployment dummy thực hiện tái khởi động thành công (pod mới chuyển sang trạng thái `Running`, pod cũ bị terminate trong vòng **< 20 giây**).
+     * Chỉ số `restartCount` trong Kubernetes Event tăng đúng trị số.
+
+4. **Kiểm tra Ngăn chặn Leo thang Đặc quyền (Cross-Namespace RBAC Prevention Check)**:
+   * **Mô tả hành động**: Giả lập kịch bản Webhook Receiver bị compromised hoặc AI Engine gặp lỗi logic nghiêm trọng, ra lệnh cho Direct Patch Engine thực thi lệnh thay đổi tài nguyên tại namespace hệ thống `kube-system` hoặc namespace của tenant khác (`tenant-checkout`).
+   * **Điều kiện Đạt (Success Criteria)**:
+     * Kubernetes API Server từ chối thực thi lệnh gọi trực tiếp và trả về lỗi `Unauthorized` (hoặc `Forbidden`) do ServiceAccount không có RoleBinding tương ứng tại target namespace đó.
+     * Hệ thống chặn hành động và tự động phát sinh một Audit Event có loại sự kiện là `SECURITY_VIOLATION`.
+
+5. **Kiểm tra Ghi log và Tính Bất biến Kiểm toán (Audit Trail & Storage Verification)**:
+   * **Mô tả hành động**: Script kiểm tra sự tồn tại của log file JSON được tạo ra từ 4 bài test trên trong S3 bucket kiểm toán.
+   * **Điều kiện Đạt (Success Criteria)**:
+     * File log JSON của sự cố giả lập được tìm thấy dưới prefix cấu trúc: `s3://selfheal-audit/tnt-payment-demo/yyyy/mm/dd/`.
+     * Toàn bộ nội dung log ghi nhận đầy đủ, rõ ràng các bước và kết quả (kể cả các sự kiện `SECURITY_VIOLATION`).
+     * Cơ chế `S3 Object Lock` hoạt động đúng (gửi thử yêu cầu ghi đè/xóa file log này trên S3 thông qua CLI và nhận về lỗi `AccessDenied` từ AWS S3).
+
+*Chỉ khi hệ thống xác nhận **đạt 100% (5/5 cases)** các bài kiểm thử trên, trạng thái đăng ký của tenant mới trong DynamoDB `tenant_registry` mới được cập nhật tự động từ `PENDING` sang `ACTIVE`. Khi đó, tenant mới chính thức được mở cổng đón traffic và telemetry thật.*
 
 ---
 
