@@ -42,32 +42,193 @@
 <!-- Honest về trade-off. Reviewer thích honesty hơn là "everything is great" -->
 
 ## 4. Multi-tenant approach
+4.1. Mô hình định danh tenant
 
-### 4.1 Tenant model
+Trong hệ thống Self-Heal Platform, một tenant được hiểu là một khách hàng hoặc một team sở hữu một nhóm microservice trên Kubernetes.
 
-- **Tenant ID format**: UUID v4
-- **Header**: `X-Tenant-Id` mandatory all API calls
-- **Subscription tiers**: basic / pro / enterprise (impact: quota, feature flags)
+Với phạm vi capstone, nhóm sẽ demo ít nhất 2 tenant để chứng minh hệ thống có thể tách quyền rõ ràng giữa các khách hàng.
 
-### 4.2 Isolation pattern
+Tenant ID	Namespace	Tier	Service demo
+tnt-payment-demo	tenant-payment	Pro	payment-api
+tnt-checkout-demo	tenant-checkout	Basic	checkout-api
 
-- **Data isolation**: <!-- silo (per-tenant DB) / pool (shared with row-level) / bridge (hybrid) -->
-- **Compute isolation**: <!-- shared / per-tenant container / per-tenant account -->
-- **Why this pattern**: <!-- cost vs isolation strength trade-off -->
+Mỗi tenant có một mã định danh riêng là tenant_id.
 
-### 4.3 Tenant onboarding flow
+Mọi request, alert, telemetry package, remediation action và audit log đều phải gắn tenant_id. Nhờ vậy, hệ thống luôn biết incident này thuộc tenant nào, service nào, namespace nào và policy nào cần được áp dụng.
 
-```
-1. POST /platform/v1/tenants (tenant_name, contact, tier)
-2. ...
-3. ...
-```
+Ví dụ một alert gửi vào Webhook Receiver:
 
-### 4.4 Noisy neighbor mitigation
+{
+  "tenant_id": "tnt-payment-demo",
+  "namespace": "tenant-payment",
+  "service": "payment-api",
+  "alert_name": "CrashLoopBackOff",
+  "severity": "critical"
+}
 
-- **Per-tenant quota**: <!-- vd 1000 req/min / tenant -->
-- **Rate limiting**: <!-- API Gateway usage plan / custom Lambda -->
-- **Resource reservation**: <!-- vd dedicated resources for enterprise tier -->
+Request gửi vào Webhook Receiver phải có header:
+
+X-Tenant-Id: <tenant_id>
+
+Tuy nhiên, hệ thống không tin header này một cách tuyệt đối. Trước khi xử lý alert, Webhook Receiver phải validate tenant context.
+
+Luồng validate tenant:
+
+Request đi vào Internal ALB
+→ FastAPI middleware đọc header X-Tenant-Id
+→ Lookup tenant registry từ DynamoDB hoặc Kubernetes namespace label
+→ Kiểm tra tenant_id có khớp namespace/service không
+→ Kiểm tra tenant có policy cho action này không
+→ Nếu hợp lệ: cho request đi tiếp
+→ Nếu không hợp lệ: trả 403 và ghi audit event SECURITY_VIOLATION
+
+Ví dụ request không hợp lệ:
+
+X-Tenant-Id = tnt-payment-demo
+namespace = tenant-checkout
+
+Request này sẽ bị chặn vì tnt-payment-demo chỉ được thao tác trong namespace tenant-payment, không được thao tác vào namespace tenant-checkout.
+
+Response khi bị chặn:
+
+{
+  "error": "TENANT_NAMESPACE_MISMATCH",
+  "message": "Tenant is not allowed to operate on the requested namespace."
+}
+
+Audit log tương ứng:
+
+{
+  "event_type": "SECURITY_VIOLATION",
+  "reason": "TENANT_NAMESPACE_MISMATCH",
+  "tenant_id": "tnt-payment-demo",
+  "requested_namespace": "tenant-checkout",
+  "decision": "DENY"
+}
+
+Hệ thống hỗ trợ 3 tier dịch vụ:
+
+Tier	Mục đích	Ảnh hưởng
+Basic	Service ít quan trọng hoặc môi trường demo/dev	Quota thấp hơn, cooldown lâu hơn
+Pro	Service production thông thường	Quota trung bình, remediation tiêu chuẩn
+Enterprise	Service quan trọng	Quota cao hơn, audit nghiêm hơn, policy chặt hơn
+
+Trong demo capstone, nhóm sẽ dùng:
+
+tnt-checkout-demo → Basic
+tnt-payment-demo  → Pro
+4.2. Cách tách biệt dữ liệu và quyền giữa các tenant
+
+Nhóm chọn mô hình Bridge Isolation.
+
+Bridge Isolation nghĩa là:
+
+Hạ tầng dữ liệu dùng chung để tiết kiệm chi phí, nhưng dữ liệu luôn được gắn tenant_id; còn quyền thực thi trong Kubernetes và GitOps được tách bằng namespace, RBAC, ArgoCD Application và ArgoCD AppProject.
+
+Nhóm đã cân nhắc 3 mô hình:
+
+Mô hình	Cách hoạt động	Ưu điểm	Nhược điểm
+Silo Isolation	Mỗi tenant có database, queue, bucket và compute riêng	An sau nhất	Chi phí cao, setup lâu, không phù hợp scope 2 tuần
+Pool Isolation	Tất cả tenant dùng chung hạ tầng, chỉ phân biệt bằng tenant_id	Rẻ nhất, build nhanh	Rủi ro cao nếu code filter sai tenant
+Bridge Isolation	Data layer dùng chung nhưng partition bằng tenant_id; execution tách bằng namespace/RBAC/GitOps	Cân bằng giữa chi phí và an toàn	Cần validate tenant và policy kỹ
+
+Nhóm không chọn Silo vì nếu mỗi tenant có DynamoDB table riêng, S3 bucket riêng, SQS queue riêng thì chi phí và độ phức tạp sẽ tăng nhanh. Cách này phù hợp production lớn nhưng quá nặng cho capstone 2 tuần.
+
+Nhóm cũng không chọn Pool hoàn toàn vì nếu chỉ dựa vào tenant_id trong code thì một lỗi filter có thể làm tenant này đọc nhầm dữ liệu hoặc sửa nhầm workload của tenant khác.
+
+Vì vậy, nhóm chọn Bridge Isolation để cân bằng giữa cost và safety.
+
+4.2.1. Data isolation
+
+Các service dữ liệu dùng chung gồm DynamoDB, SQS và S3. Tuy nhiên, mọi record, message và object đều phải có thông tin tenant.
+
+DynamoDB
+
+DynamoDB dùng để lưu incident state, idempotency lock, cooldown và tenant registry.
+
+Incident state key:
+
+PK = tenant_id#incident_id
+
+Ví dụ:
+
+tnt-payment-demo#inc-001
+tnt-checkout-demo#inc-002
+
+Idempotency lock key:
+
+lock_key = tenant_id#namespace#service#alert_name#action_type
+
+Ví dụ:
+
+tnt-payment-demo#tenant-payment#payment-api#CrashLoopBackOff#RESTART_DEPLOYMENT
+
+Ý nghĩa:
+
+Cùng một alert trong cùng tenant sẽ không tạo nhiều remediation trùng lặp.
+Tenant này không ghi đè lock của tenant khác.
+Có thể áp dụng cooldown theo từng tenant, từng service và từng action.
+S3 audit log
+
+S3 audit bucket dùng chung nhưng tách bằng prefix theo tenant.
+
+Cấu trúc path:
+
+s3://selfheal-audit/<tenant_id>/<yyyy>/<mm>/<dd>/<incident_id>.json
+
+Ví dụ:
+
+s3://selfheal-audit/tnt-payment-demo/2026/06/23/inc-001.json
+s3://selfheal-audit/tnt-checkout-demo/2026/06/23/inc-002.json
+
+Cách này giúp:
+
+Audit log của từng tenant được tách rõ ràng.
+Athena có thể query theo tenant dễ hơn.
+Có thể mở rộng lifecycle policy hoặc retention policy theo tenant/tier trong tương lai.
+SQS
+
+SQS Standard queue dùng chung để giảm chi phí và đơn giản hóa vận hành.
+
+Tuy nhiên, tenant metadata phải được đặt trong MessageAttributes, không chỉ nằm trong message body.
+
+MessageAttributes:
+
+tenant_id
+incident_id
+severity
+action_type
+
+Ví dụ:
+
+{
+  "tenant_id": "tnt-payment-demo",
+  "incident_id": "inc-001",
+  "severity": "critical",
+  "action_type": "RESTART_DEPLOYMENT"
+}
+
+Message body chứa full payload:
+
+{
+  "incident_id": "inc-001",
+  "tenant_id": "tnt-payment-demo",
+  "namespace": "tenant-payment",
+  "service": "payment-api",
+  "alert": {
+    "name": "CrashLoopBackOff",
+    "severity": "critical"
+  },
+  "telemetry": {},
+  "ai_action_plan": {}
+}
+
+Lý do đặt tenant_id trong MessageAttributes:
+
+Worker có thể kiểm tra tenant nhanh mà chưa cần deserialize toàn bộ body.
+Sau này có thể route message theo tenant hoặc severity.
+Khi message vào DLQ, việc debug theo tenant dễ hơn.
+
 
 # 5. Alternatives Considered & Infrastructure Components
 
