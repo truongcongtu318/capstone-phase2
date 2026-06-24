@@ -15,12 +15,15 @@
 
 | Component | AWS Service | Reason | Cost note |
 |---|---|---|---|
-| Compute | | | $X |
-| API entry | | | $X |
-| Database | | | $X |
-| Storage | | | $X |
-| Event bus | | | $X |
-| Observability | | | $X |
+| Compute (EKS Control Plane) | Amazon EKS v1.28 | K8s native để mô phỏng chính xác môi trường production của client (200+ microservices trên EKS). Hỗ trợ GitOps, IRSA, và K8s API patching native. | $73/month (fixed) |
+| Node Autoscaling | Karpenter (không dùng Cluster Autoscaler) | Karpenter scale nhanh hơn 6-10x so với Cluster Autoscaler (không cần chờ ASG warm up). Hỗ trợ Spot instance consolidation tối ưu chi phí sandbox. | ~$50/month (Spot `t3.medium` $0.023/hr x 3 node) |
+| API Ingress | Application Load Balancer (ALB) | Tiếp nhận HTTP alerts từ AlertManager, hỗ trợ routing theo path và authentication. | $22.5/month + LCU |
+| Database (Sandbox) | RDS PostgreSQL Single-AZ (`db.t3.micro`) | Lưu cấu hình hệ thống và dữ liệu phụ trợ của sandbox. Dùng phiên bản nhỏ nhất Single-AZ để tối ưu chi phí (Production target sẽ dùng RDS Aurora Multi-AZ). | ~$15/month |
+| State Machine | DynamoDB (On-Demand) | Lưu trạng thái từng sự cố (Triggered -> Deciding -> Executing -> Verifying -> Done). TTL tự động giải phóng lock nếu controller crash. | On-Demand, ~$2/month |
+| Audit Storage | Amazon S3 + Object Lock (COMPLIANCE mode) | Nguồn kiểm toán bất biến duy nhất (Single Source of Truth) cho SOC2. Compliance mode ngăn mọi xóa/sửa kể cả root account. | $0.023/GB-month |
+| Audit Streaming | Kinesis Firehose | Stream audit events từ Controller vào S3 ngay lập tức mà không qua Git. Đảm bảo Raw Webhook Event + AI Decision JSON + Pre/Post K8s State đều được lưu. | $0.029/GB |
+| Secrets Management | AWS Secrets Manager + ESO | Lưu credentials AI Engine, Git Deploy Key, DB creds. External Secrets Operator sync vào K8s Secret. Không dùng static env vars. | $0.40/secret-month |
+| Observability | Prometheus + Grafana + CloudWatch | Prometheus thu thập K8s metrics, AlertManager kích hoạt luồng self-heal. CloudWatch cho AWS-level metrics (ALB, DynamoDB, Kinesis). | ~$8/month |
 
 ## 3. Differentiation angle deep-dive
 
