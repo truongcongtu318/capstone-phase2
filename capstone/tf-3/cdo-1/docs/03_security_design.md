@@ -1,4 +1,4 @@
-# Thiết kế bảo mật - Task force 3 · CDO 1
+# Security Design - Task force 3 · CDO 1
 
 <!-- Doc owner: <Nhóm CDO>
      Status: Draft (W11 T4) → Final (W11 T6) → Refined (W12 T4)
@@ -6,9 +6,9 @@
      Scope: Bảo mật ở tầng DevOps (network, IAM, secrets, encryption, audit, K8s nếu áp dụng).
      Tier: Medium -->
 
-## 1. Bảo mật mạng
+## 1. Network Security
 
-### 1.1 Sơ đồ mạng
+### 1.1 Network Diagram
 
 Lưu lượng runtime nằm trong CDO VPC. Thiết kế này chủ động không dùng NAT
 Gateway cho workload runtime; các workload gọi AWS service thông qua VPC
@@ -50,7 +50,7 @@ Ranh giới mạng:
 
 ### 1.2 Security Groups
 
-| Tên SG | Inbound | Outbound | Gắn vào |
+| SG name | Inbound | Outbound | Attached to |
 |---|---|---|---|
 | `sg-alb-public` | TCP 443 từ operator CIDR đã duyệt / WAF | TCP 8443 đến `sg-eks-workload` | Public ALB |
 | `sg-eks-workload` | TCP 8443 từ `sg-alb-public`; pod-to-pod traffic chỉ được mở qua Kubernetes NetworkPolicy | TCP 443 đến VPC endpoint; TCP 5432 đến `sg-rds`; TCP 443 đến EKS control plane | Patch Receiver, Patch Controller, Audit Writer, GitOps Engine |
@@ -93,7 +93,7 @@ truy cập workload được biểu diễn bằng SG reference khi có thể.
 
 ### 2.1 Service Roles
 
-| Role | Được dùng bởi | Quyền hạn (least-privilege) |
+| Role | Used by | Permissions (least-privilege) |
 |---|---|---|
 | `irsa-patch-receiver` | Receiver ServiceAccount | Đọc request configuration, ghi sanitized request metadata, không có quyền mutation trên infrastructure resource |
 | `irsa-patch-controller` | Controller ServiceAccount | Đọc approved patch intent, tạo thay đổi Kubernetes có giới hạn trong namespace được sở hữu, gọi STS, đọc Secrets Manager entry cần thiết |
@@ -110,7 +110,7 @@ qua integration contract đã thống nhất, thay vì gọi model trực tiếp
 
 ### 2.2 K8s RBAC
 
-| Role | Subject | Verb | Resource | Phạm vi namespace |
+| Role | Subject | Verbs | Resources | Namespace scope |
 |---|---|---|---|---|
 | `patch-receiver-readonly` | `sa/patch-receiver` | `get`, `list` | `configmaps`, `services`, `endpoints` | `cdo-system` |
 | `patch-controller-ns-editor` | `sa/patch-controller` | `get`, `list`, `watch`, `patch`, `update` | `deployments`, `statefulsets`, `configmaps`, `horizontalpodautoscalers` | Tenant namespace do CDO sở hữu |
@@ -141,11 +141,11 @@ assume-role pattern rõ ràng:
 
 ---
 
-## 3. Quản lý secrets
+## 3. Secrets Management
 
-### 3.1 Danh mục secrets
+### 3.1 Secrets Inventory
 
-| Secret | Nơi lưu trữ | Rotation | Được truy cập bởi |
+| Secret | Storage | Rotation | Accessed by |
 |---|---|---|---|
 | Database application credential | AWS Secrets Manager | 30-90 ngày, phối hợp với RDS user rotation | Patch Controller thông qua Kubernetes Secret do ESO tạo |
 | Webhook signing key | AWS Secrets Manager | Manual rotation theo release hoặc incident | Patch Receiver |
@@ -182,11 +182,11 @@ IRSA và STS, vì vậy cluster không lưu long-lived Git credential.
 
 ---
 
-## 4. Mã hóa
+## 4. Encryption
 
 ### 4.1 At Rest
 
-| Dữ liệu | Nơi lưu trữ | KMS key | Ghi chú |
+| Data | Storage | KMS key | Notes |
 |---|---|---|---|
 | Audit events | S3 bucket với Object Lock | `alias/cdo-audit-kms` | Firehose ghi object đã mã hóa; Athena read được log lại |
 | Application data | RDS PostgreSQL / EBS volume | `alias/cdo-app-data-kms` | Bật RDS storage encryption |
@@ -238,7 +238,7 @@ IRSA và STS, vì vậy cluster không lưu long-lived Git credential.
 
 ## 5. Audit Logging
 
-### 5.1 Nội dung cần log
+### 5.1 What to Log
 
 Audit logging phải đủ để giải thích ai yêu cầu thay đổi, hệ thống quyết định gì,
 đã apply gì, và control bảo mật có can thiệp hay không.
@@ -259,7 +259,7 @@ Events:
 
 Các audit field bắt buộc:
 
-| Field | Mục đích |
+| Field | Purpose |
 |---|---|
 | `event_id` | Định danh duy nhất của event |
 | `timestamp` | Thời điểm event theo UTC |
@@ -289,9 +289,9 @@ Ví dụ audit event:
 }
 ```
 
-### 5.2 Lưu trữ + Thời gian lưu
+### 5.2 Storage + Retention
 
-| Loại log | Nơi lưu trữ | Thời gian lưu | Giao diện truy vấn |
+| Log type | Storage | Retention | Query interface |
 |---|---|---|---|
 | Application audit events | Kinesis Firehose đến S3 Object Lock bucket | 1 năm hot query, archive lâu hơn theo compliance policy | Athena |
 | EKS API server audit logs | CloudWatch Logs encrypted log group | 90 ngày hot retention | CloudWatch Logs Insights |
@@ -374,9 +374,9 @@ value.
 
 ---
 
-## 7. Điểm chạm compliance
+## 7. Compliance Touchpoints
 
-| Tiêu chuẩn | Control liên quan (trong phạm vi capstone) |
+| Standard | Relevant controls (capstone scope) |
 |---|---|
 | SOC2 Type II | IAM/RBAC least privilege, immutable audit logs, change traceability, security alerting, encrypted storage, kiểm soát truy cập secrets |
 | GDPR | Data minimization trong audit logs, tenant identifier được xử lý như sensitive metadata, encryption in transit và at rest, chính sách deletion/retention phù hợp |
@@ -385,7 +385,7 @@ value.
 
 ---
 
-## 8. Câu hỏi mở
+## 8. Open Questions
 
 - [ ] Xác nhận tên CodeCommit repository cuối cùng và branch protection model cho
       runtime GitOps.
@@ -400,7 +400,7 @@ value.
 
 ---
 
-## 9. Tài liệu liên quan
+## 9. Related documents
 
 - `02_infra_design.md`
 - `04_deployment_design.md`
