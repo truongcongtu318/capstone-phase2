@@ -351,11 +351,28 @@ secret values.
 
 ## 6. Container & K8s Security (chỉ áp dụng nếu CDO chọn K8s/EKS angle)
 
-- Image scan rules.
-- Image signing.
-- Pod Security Standard profiles.
-- NetworkPolicies.
-- IRSA (IAM Roles for Service Accounts).
+- Container images are scanned with Trivy in CI before merge. Critical and high
+  vulnerabilities block promotion unless a time-boxed exception is approved.
+- Gitleaks runs in CI to block committed secrets before manifests or source code
+  reach the GitOps repository.
+- Admission control uses Kyverno or Gatekeeper to enforce the security baseline:
+  no privileged pods, no hostPath volumes unless explicitly approved, no
+  `latest` image tag, required resource requests/limits, and required labels for
+  tenant ownership.
+- Namespaces use the Pod Security `restricted` baseline. Exceptions require a
+  documented workload reason and an expiry date.
+- Pods set `securityContext.seccompProfile.type: RuntimeDefault` by default.
+- NetworkPolicy starts with default deny ingress and egress, then allows only
+  ALB-to-receiver, workload-to-VPC-endpoint, workload-to-RDS, and required
+  intra-namespace service traffic.
+- Each workload has a dedicated ServiceAccount and IRSA role. Shared
+  ServiceAccounts are not used for application workloads.
+- ResourceQuota and LimitRange are configured per tenant namespace to prevent a
+  single tenant from exhausting node, CPU, memory, or object count capacity.
+- ArgoCD AppProject restricts allowed source repository, destination namespaces,
+  sync windows, and cluster-scoped resource kinds.
+- EKS node groups and Karpenter node pools use hardened AMIs, encrypted root EBS
+  volumes, IMDSv2, and minimal node IAM permissions.
 
 ---
 
@@ -363,17 +380,29 @@ secret values.
 
 | Standard | Relevant controls (capstone scope) |
 |---|---|
-| SOC2 Type II | |
-| GDPR | |
+| SOC2 Type II | Least privilege IAM/RBAC, immutable audit logs, change traceability, security alerting, encrypted storage, controlled access to secrets |
+| GDPR | Data minimization in audit logs, tenant identifiers treated as sensitive metadata, encryption in transit and at rest, deletion/retention policy alignment |
+| ISO 27001 | Access control, logging and monitoring, cryptographic controls, network segmentation, vulnerability management |
+| CIS Kubernetes Benchmark | Pod Security restricted baseline, no privileged workloads, NetworkPolicy default deny, audit logging, RBAC least privilege |
 
 ---
 
 ## 8. Open Questions
 
-- [ ] Q1: ...
-- [ ] Q2: ...
+- [ ] Confirm final CodeCommit repository naming and branch protection model for
+      runtime GitOps.
+- [ ] Confirm SNS escalation subscribers, on-call ownership, and whether alerts
+      should fan out to Slack or email only.
+- [ ] Confirm ALB exposure model: approved operator CIDRs only, WAF allowlist, or
+      private ALB behind VPN / corporate network.
+- [ ] Confirm whether AIOps remains the sole owner of AI Engine invocation. If
+      CDO later invokes Bedrock directly, IAM, endpoint, audit, and ownership
+      sections must be updated.
+- [ ] Confirm retention period and Object Lock mode for the audit S3 bucket.
 
-## Related documents
+---
+
+## 9. Related documents
 
 - `02_infra_design.md`
 - `04_deployment_design.md`
