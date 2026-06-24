@@ -95,17 +95,50 @@ access is expressed by SG references wherever possible.
 
 | Role | Used by | Permissions (least-privilege) |
 |---|---|---|
-| | | |
+| `irsa-patch-receiver` | Receiver ServiceAccount | Read request configuration, write sanitized request metadata, no mutation permission on infrastructure resources |
+| `irsa-patch-controller` | Controller ServiceAccount | Read approved patch intents, create bounded Kubernetes changes in owned namespaces, call STS, read required Secrets Manager entries |
+| `irsa-audit-writer` | Audit Writer ServiceAccount | `firehose:PutRecord`, `firehose:PutRecordBatch`, scoped S3 write through Firehose delivery role, KMS encrypt for audit key |
+| `irsa-gitops-engine` | ArgoCD / GitOps Engine ServiceAccount | `codecommit:GitPull` and read-only CodeCommit API access for the CDO repository only |
+| `irsa-karpenter-controller` | Karpenter ServiceAccount | Provision and terminate allowed EC2 node classes, read SSM AMI parameters, pass only the approved EKS node instance profile |
+| `eks-node-role` | EKS managed node groups and Karpenter nodes | ECR image pull, CloudWatch agent publishing, CNI permissions, no application data access |
+| `irsa-escalation-notifier` | Escalation worker ServiceAccount | `sns:Publish` to the approved escalation topic only |
+| `firehose-delivery-role` | Kinesis Firehose | Write to audit S3 bucket prefix, use audit KMS key, emit delivery errors to CloudWatch |
+
+AI Engine ownership note: if AIOps owns the model runtime, CDO service roles do
+not include `bedrock:InvokeModel`. CDO passes approved requests and receives
+decisions through the agreed integration contract rather than invoking the model
+directly.
 
 ### 2.2 K8s RBAC
 
 | Role | Subject | Verbs | Resources | Namespace scope |
 |---|---|---|---|---|
-| | | | | |
+| `patch-receiver-readonly` | `sa/patch-receiver` | `get`, `list` | `configmaps`, `services`, `endpoints` | `cdo-system` |
+| `patch-controller-ns-editor` | `sa/patch-controller` | `get`, `list`, `watch`, `patch`, `update` | `deployments`, `statefulsets`, `configmaps`, `horizontalpodautoscalers` | Tenant namespaces owned by CDO |
+| `audit-writer-runtime` | `sa/audit-writer` | `create` | `events` | `cdo-system` |
+| `argocd-application-sync` | `sa/argocd-application-controller` | `get`, `list`, `watch`, `patch`, `update`, `create` | Declared application resources only | Namespaces listed in the ArgoCD AppProject |
+| `karpenter-controller` | `sa/karpenter` | `get`, `list`, `watch`, `create`, `delete` | `nodes`, `nodeclaims`, `nodepools`, `events` | Cluster-scoped where required by Karpenter |
+| `escalation-notifier-readonly` | `sa/escalation-notifier` | `get`, `list` | `configmaps`, `events` | `cdo-system` |
+
+RBAC rules do not grant `cluster-admin` to CDO workloads. Tenant mutation is
+limited to namespaces explicitly assigned to CDO, and cross-tenant mutation is
+blocked by namespace scoping, admission policy, and ArgoCD AppProject
+destination restrictions.
 
 ### 2.3 Cross-account Access
 
-<!-- Nếu task force account khác với platform account, ghi rõ assume role pattern -->
+If platform, AIOps, and CDO accounts are separated, cross-account access uses an
+explicit assume-role pattern:
+
+- The CDO workload role assumes only named target roles with external ID and
+  session tags (`tenant_id`, `service`, `purpose`).
+- Target account roles trust the CDO account OIDC provider or deployment role,
+  not broad AWS principals.
+- Session duration is short and aligned with reconciliation jobs.
+- CloudTrail records `AssumeRole` and downstream actions in both source and
+  target accounts.
+- CDO roles cannot assume AIOps model-owner roles unless an ADR explicitly moves
+  AI Engine ownership to CDO.
 
 ---
 
