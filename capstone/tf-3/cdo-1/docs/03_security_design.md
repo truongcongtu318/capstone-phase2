@@ -260,8 +260,8 @@ Ví dụ audit event:
   "event_id": "evt-01JZ7X6YQ5G7Y7V9VK2P0S6E2A",
   "timestamp": "2026-06-25T09:30:00Z",
   "severity": "SECURITY",
-  "correlation_id": "corr-cdo-20260625-0017",
-  "tenant_id": "tnt-payment-demo",
+  "correlation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "tenant_id": "d3b07384-d113-495f-9f58-20d18d357d75",
   "actor": "arn:aws:sts::111122223333:assumed-role/irsa-patch-controller/session",
   "action_type": "K8S_MUTATION",
   "resource_ref": "deployment/tenant-payment/api",
@@ -269,6 +269,8 @@ Ví dụ audit event:
   "reason": "Attempted mutation outside approved namespace"
 }
 ```
+
+*`correlation_id` và `tenant_id` luôn ở dạng UUID v4, đúng `format: uuid` đã định nghĩa trong AI API Contract/Telemetry Contract, để truy vết liền mạch khi đối chiếu log với request gửi sang AI Engine.*
 
 ### 5.2 Storage + Retention
 

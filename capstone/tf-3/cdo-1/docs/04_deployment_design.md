@@ -316,10 +316,10 @@ Không dùng Step Functions.
 7. Tenant READY
 ```
 
-| Tenant ID | Namespace |
-|---|---|
-| `tnt-payment-demo` | `tenant-payment` |
-| `tnt-checkout-demo` | `tenant-checkout` |
+| Tenant Slug (nội bộ) | `tenant_id` (UUID v4) | Namespace |
+|---|---|---|
+| `tnt-payment-demo` | `d3b07384-d113-495f-9f58-20d18d357d75` | `tenant-payment` |
+| `tnt-checkout-demo` | `6c8b4b2b-4d45-4209-a1b4-4b532d56a31c` | `tenant-checkout` |
 Tenant config gồm:
 - tenant ID, namespace, owner;
 - quota và allowed pattern;
@@ -365,11 +365,12 @@ Self-Heal platform failure
 ```
 
 Lỗi của Self-Heal Platform không quay lại Receiver để tránh vòng lặp.
-| Endpoint | Purpose |
-|---|---|
-| `/healthz` | Process còn chạy |
-| `/readyz` | Dependency sẵn sàng |
-| `/metrics` | Prometheus scrape |
+| Endpoint | Purpose | Component |
+|---|---|---|
+| `/healthz` | Process còn chạy | Receiver, Worker (convention CDO) |
+| `/readyz` | Dependency sẵn sàng | Receiver, Worker (convention CDO) |
+| `/health`, `/ready` | Liveness/Readiness probe | AI Engine (path cố định theo AI Deployment Contract mục 7, không đổi sang `*z`) |
+| `/metrics` | Prometheus scrape | Tất cả component |
 S3 Object Lock là canonical audit store.
 
 ## 9. Open questions
@@ -380,7 +381,7 @@ S3 Object Lock là canonical audit store.
 - [x] **EKS kết nối AI Engine bằng Peering, PrivateLink hay public HTTPS?**  
   *Giải quyết:* Chốt **CDO tự host AI Engine** (Docker container) chạy trực tiếp trong cụm EKS (chung namespace `self-heal-system`), giao tiếp local API.
 - [x] **AI authentication dùng SigV4, API key hay mTLS?**  
-  *Giải quyết:* Chốt dùng **local authentication** (ServiceAccount token) do chạy in-cluster.
+  *Giải quyết:* Chốt dùng **IAM SigV4** đúng theo AI API Contract (mục 2) cho mọi request `/v1/detect`, `/v1/decide`, `/v1/verify`, dù chạy in-cluster — Worker ký request bằng IRSA credential trước khi gọi AI Engine; Network Policy/ClusterIP chỉ giới hạn nguồn gọi tới (không thay thế xác thực ở application layer).
 - [ ] Git write credential dùng GitHub App, token hay deploy key?
 - [ ] RDS lưu dữ liệu nào mà DynamoDB/Git không đáp ứng?
 - [ ] Chọn EKS Pod Identity hay IRSA?
