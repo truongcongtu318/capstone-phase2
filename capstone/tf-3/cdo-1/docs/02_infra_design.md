@@ -6,7 +6,7 @@
      Tier: Medium -->
 
 ## 1. Architecture diagram
-
+![AWS Architecture](../assets/W11.drawio-3.png)
 ![AWS Cloud Sandbox Architecture](../assets/AWS%20Cloud%20Sandbox.png)
 
 *Caption: Cụm EKS node group, cơ sở dữ liệu RDS PostgreSQL, và Internal Application Load Balancer (ALB) chạy hoàn toàn trong các Private Subnets, không có public IP. Toàn bộ traffic đi tới các dịch vụ AWS (AWS Secrets Manager, Amazon S3, Amazon DynamoDB, AWS CodeCommit) đều được định tuyến thông qua các VPC Gateway và Interface Endpoints tương ứng, đảm bảo dữ liệu không đi ra Internet công cộng. Prometheus AlertManager chạy trong EKS gửi alerts trực tiếp tới Webhook Receiver qua ClusterIP nội bộ cụm (bypass ALB). AWS CloudWatch Alarms gửi alert đi qua Internal ALB để vào Webhook Receiver. Nhóm CDO-01 tự host AI Engine (build từ Docker image của nhóm AI) chạy trực tiếp trong cụm EKS (chung namespace `self-heal-system`), giúp Webhook Receiver và Direct Patch Engine giao tiếp API nội bộ tốc độ cao với độ trễ tối thiểu.*
