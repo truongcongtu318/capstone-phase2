@@ -159,7 +159,7 @@ truy cập workload được biểu diễn bằng SG reference khi có thể.
 - Network ACL giữ ở mức stateless và chặt chẽ: private subnet chứa Internal ALB cho phép ingress trên cổng 443 và ephemeral response port; private/data subnet chỉ cho phép VPC CIDR traffic cần cho EKS, RDS và return traffic của interface endpoint.
 - Runtime GitOps dùng AWS CodeCommit thông qua VPC endpoint. GitHub có thể dùng
   ở giai đoạn CI/CD bootstrap nếu deployment design cần, nhưng không dùng trong
-  runtime reconciliation.
+  runtime reconciliation. Do sandbox không NAT Gateway, toàn bộ Helm charts bên thứ ba và container images (ArgoCD, Prometheus, FastAPI...) bắt buộc phải được mirror trực tiếp vào AWS ECR Private Registry và Private Helm Registry nội bộ. ArgoCD và Karpenter chỉ trỏ vào ECR/internal registry này để kéo image/chart nhằm tránh timeout.
 - Gateway VPC Endpoint:
   - S3 cho audit storage, tải ECR layer và Terraform state nếu state nằm trong
     account.
@@ -211,7 +211,7 @@ AI Engine được self-host trong EKS namespace `self-heal-system` từ Docker 
 RBAC không cấp `cluster-admin` cho CDO workload. Việc mutation tenant bị giới hạn
 trong các namespace được gán rõ cho CDO, và cross-tenant mutation bị chặn bằng
 namespace scope, admission policy và giới hạn destination trong ArgoCD
-AppProject.
+AppProject. Để triệt tiêu rủi ro leo thang đặc quyền (khi token patch-controller bị compromise), hệ thống cấu hình **K8s Admission Controller (Kyverno Mutating/Validating Webhook)** giới hạn cứng: chỉ cho phép patch các trường `spec.replicas` và `spec.template.spec.containers[*].resources` của deployment. Mọi request patch các trường nhạy cảm khác (như image tag hay privileged security context) đều bị Admission Controller chặn ngay ở API Server mức hạ tầng.
 
 - Namespace `observability` là platform-critical namespace. AI/self-heal action không được patch/delete trực tiếp các workload trong namespace này. Prometheus/AlertManager chỉ đóng vai trò phát hiện và gửi alert, không phải target remediation.
 
