@@ -15,24 +15,63 @@ Gateway cho workload runtime; các workload gọi AWS service thông qua VPC
 Endpoint. GitOps runtime kéo manifest từ AWS CodeCommit qua private endpoint,
 không dùng GitHub.
 
-```mermaid
-flowchart LR
-    user[Operator / Mentor]
-    alb[Public ALB<br/>TLS 1.2+]
-    receiver[Patch Receiver<br/>EKS workload]
-    controller[Patch Controller<br/>EKS workload]
-    gitops[GitOps Engine<br/>ArgoCD]
-    codecommit[(AWS CodeCommit<br/>private Git repo)]
-    sns[SNS Escalation Topic]
-    s3[(S3 Audit Bucket)]
-    rds[(RDS PostgreSQL)]
-    vpce[VPC Endpoints<br/>S3, DynamoDB, SQS, Firehose,<br/>Secrets Manager, KMS, CloudWatch,<br/>ECR, STS, CodeCommit, SNS]
+Hệ thống tiếp nhận Alert qua 2 luồng chính:
+- **Prometheus AlertManager** (chạy trong namespace `observability` của EKS) gửi trực tiếp tới Webhook Receiver qua **ClusterIP** nội bộ cụm.
+- **CloudWatch / EventBridge Alarms** đi qua **Internal ALB** (chạy trong Private Subnets) để gửi tới Webhook Receiver. CloudWatch/EventBridge alarm đi vào Internal ALB thông qua internal alert relay hoặc integration component nằm trong VPC; không expose ALB ra public Internet.
 
-    user -->|Luồng Direct Patch: HTTPS| alb --> receiver --> controller
-    controller -->|Ghi audit| s3
-    controller -->|Dữ liệu ứng dụng| rds
-    gitops -->|Luồng GitOps: git pull| codecommit
+```mermaid
+flowchart TD
+    subgraph Observability Namespace
+        alertmanager[Prometheus AlertManager]
+    end
+
+    subgraph AWS Services and VPC Edge
+        cloudwatch[CloudWatch / EventBridge Alarms]
+        user[Operator / Mentor<br/>(Demo/Admin)]
+        alb[Internal ALB<br/>TLS 1.2+]
+        codecommit[(AWS CodeCommit<br/>private Git repo)]
+        sns[SNS Escalation Topic]
+        firehose[Kinesis Firehose]
+        s3[(S3 Audit Bucket<br/>Object Lock)]
+        rds[(RDS PostgreSQL Sandbox DB)]
+    end
+
+    subgraph self-heal-system Namespace
+        receiver[FastAPI Webhook Receiver]
+        controller[Self-Heal Controller]
+        commitengine[Git Commit Engine]
+        ai[AI Engine<br/>/detect /decide /verify]
+    end
+
+    subgraph GitOps Namespace
+        gitops[GitOps Engine<br/>ArgoCD]
+    end
+
+    vpce[VPC Endpoints<br/>S3, DynamoDB, SQS (Optional), Firehose,<br/>Secrets Manager, KMS, CloudWatch,<br/>ECR, STS, CodeCommit, SNS]
+
+    %% Alert Ingestion Flow
+    alertmanager -->|ClusterIP Service| receiver
+    cloudwatch -->|HTTPS| alb
+    user -.->|Demo/Admin HTTPS| alb
+    alb --> receiver
+
+    %% Processing Flow
+    receiver --> controller
+    controller -->|Call AI API via ClusterIP| ai
+
+    %% Audit & Database Flow
+    controller -->|Audit events| firehose --> s3
+    controller -->|Dữ liệu cấu hình sandbox tùy chọn| rds
+
+    %% GitOps Flow
+    controller -->|Trigger slow-lane patch| commitengine
+    commitengine -->|Git push manifest changes| codecommit
+    gitops -->|Git pull / sync desired state| codecommit
+
+    %% Escalation Flow
     controller -->|Luồng escalation| sns
+
+    %% VPC Endpoints connections
     receiver -. AWS API calls .-> vpce
     controller -. AWS API calls .-> vpce
     gitops -. AWS API calls .-> vpce
@@ -40,9 +79,9 @@ flowchart LR
 
 Ranh giới mạng:
 
-- Public subnet chỉ chứa ALB và các thành phần routing cần internet-facing.
+- Private Subnets chứa Internal ALB, EKS workloads và RDS. Hệ thống không expose public IP cho runtime workload.
 - Private application subnet chứa EKS managed node và node do Karpenter cấp phát.
-- Isolated data subnet chứa RDS.
+- Isolated data subnet chứa RDS (Sandbox DB).
 - Không workload nào cần internet egress trực tiếp trong quá trình runtime
   reconciliation.
 - Direct Patch path, GitOps path và Escalation path được tách bằng Security
@@ -52,10 +91,10 @@ Ranh giới mạng:
 
 | SG name | Inbound | Outbound | Attached to |
 |---|---|---|---|
-| `sg-alb-public` | TCP 443 từ operator CIDR đã duyệt / WAF | TCP 8443 đến `sg-eks-workload` | Public ALB |
-| `sg-eks-workload` | TCP 8443 từ `sg-alb-public`; pod-to-pod traffic chỉ được mở qua Kubernetes NetworkPolicy | TCP 443 đến VPC endpoint; TCP 5432 đến `sg-rds`; TCP 443 đến EKS control plane | Patch Receiver, Patch Controller, Audit Writer, GitOps Engine |
+| `sg-alb-internal` | TCP 443 từ VPC CIDR hoặc SG của alert relay/internal client | TCP 8443 đến `sg-eks-workload` | Internal ALB |
+| `sg-eks-workload` | TCP 8443 từ `sg-alb-internal`; pod-to-pod traffic chỉ được mở qua Kubernetes NetworkPolicy | TCP 443 đến VPC endpoint; TCP 5432 đến `sg-rds`; TCP 443 đến EKS control plane | Webhook Receiver, Self-Heal Controller, AI Engine, Audit Writer, GitOps Engine |
 | `sg-eks-control-plane` | TCP 443 từ EKS node và admin role được phép | TCP 10250 đến EKS node; TCP 443 đến AWS API qua VPC endpoint | EKS control plane ENI |
-| `sg-rds` | TCP 5432 chỉ từ `sg-eks-workload` | Không mở outbound rộng; chỉ dùng response traffic mặc định do AWS quản lý | RDS PostgreSQL |
+| `sg-rds` | TCP 5432 chỉ từ `sg-eks-workload` | Không mở outbound rộng; chỉ dùng response traffic mặc định do AWS quản lý | RDS PostgreSQL Sandbox DB |
 | `sg-vpc-endpoint` | TCP 443 từ `sg-eks-workload` và `sg-eks-control-plane` | TCP 443 đến AWS service endpoint target | Interface VPC endpoint |
 
 Security Group được quản lý bằng Terraform state và review qua cùng pull-request
@@ -64,9 +103,7 @@ truy cập workload được biểu diễn bằng SG reference khi có thể.
 
 ### 1.3 Network ACL / VPC Endpoint
 
-- Network ACL giữ ở mức stateless và chặt chẽ: public subnet cho phép ALB ingress
-  trên cổng 443 và ephemeral response port; private/data subnet chỉ cho phép VPC
-  CIDR traffic cần cho EKS, RDS và return traffic của interface endpoint.
+- Network ACL giữ ở mức stateless và chặt chẽ: private subnet chứa Internal ALB cho phép ingress trên cổng 443 và ephemeral response port; private/data subnet chỉ cho phép VPC CIDR traffic cần cho EKS, RDS và return traffic của interface endpoint.
 - Runtime GitOps dùng AWS CodeCommit thông qua VPC endpoint. GitHub có thể dùng
   ở giai đoạn CI/CD bootstrap nếu deployment design cần, nhưng không dùng trong
   runtime reconciliation.
@@ -75,7 +112,7 @@ truy cập workload được biểu diễn bằng SG reference khi có thể.
     account.
   - DynamoDB cho lock table và service integration khi áp dụng.
 - Interface VPC Endpoint:
-  - SQS cho asynchronous patch workflow.
+  - SQS (Optional / future async buffer, không nằm trong luồng runtime chính của W12).
   - Kinesis Firehose cho audit delivery.
   - Secrets Manager để lấy secret.
   - KMS cho encrypt/decrypt call.
@@ -104,25 +141,25 @@ truy cập workload được biểu diễn bằng SG reference khi có thể.
 | `irsa-escalation-notifier` | Escalation worker ServiceAccount | `sns:Publish` chỉ đến escalation topic đã duyệt |
 | `firehose-delivery-role` | Kinesis Firehose | Ghi vào audit S3 bucket prefix, dùng audit KMS key, gửi delivery error vào CloudWatch |
 
-Ghi chú về ownership của AI Engine: nếu AIOps sở hữu model runtime, CDO service
-role không có `bedrock:InvokeModel`. CDO gửi request đã duyệt và nhận decision
-qua integration contract đã thống nhất, thay vì gọi model trực tiếp.
+AI Engine được self-host trong EKS namespace `self-heal-system` từ Docker image do nhóm AI cung cấp. CDO-01 chịu trách nhiệm vận hành runtime, network policy, logging và secret injection cho AI Engine. AI Engine chỉ expose internal service endpoint cho Webhook Receiver / Self-Heal Controller gọi qua ClusterIP. AI Engine không có quyền `eks:*`, không giữ kubeconfig, và không trực tiếp mutate Kubernetes resource.
 
 ### 2.2 K8s RBAC
 
 | Role | Subject | Verbs | Resources | Namespace scope |
 |---|---|---|---|---|
-| `patch-receiver-readonly` | `sa/patch-receiver` | `get`, `list` | `configmaps`, `services`, `endpoints` | `cdo-system` |
+| `patch-receiver-readonly` | `sa/patch-receiver` | `get`, `list` | `configmaps`, `services`, `endpoints` | `self-heal-system` |
 | `patch-controller-ns-editor` | `sa/patch-controller` | `get`, `list`, `watch`, `patch`, `update` | `deployments`, `statefulsets`, `configmaps`, `horizontalpodautoscalers` | Tenant namespace do CDO sở hữu |
-| `audit-writer-runtime` | `sa/audit-writer` | `create` | `events` | `cdo-system` |
+| `audit-writer-runtime` | `sa/audit-writer` | `create` | `events` | `self-heal-system` |
 | `argocd-application-sync` | `sa/argocd-application-controller` | `get`, `list`, `watch`, `patch`, `update`, `create` | Chỉ resource được khai báo cho application | Namespace được liệt kê trong ArgoCD AppProject |
 | `karpenter-controller` | `sa/karpenter` | `get`, `list`, `watch`, `create`, `delete` | `nodes`, `nodeclaims`, `nodepools`, `events` | Cluster-scoped khi Karpenter yêu cầu |
-| `escalation-notifier-readonly` | `sa/escalation-notifier` | `get`, `list` | `configmaps`, `events` | `cdo-system` |
+| `escalation-notifier-readonly` | `sa/escalation-notifier` | `get`, `list` | `configmaps`, `events` | `self-heal-system` |
 
 RBAC không cấp `cluster-admin` cho CDO workload. Việc mutation tenant bị giới hạn
 trong các namespace được gán rõ cho CDO, và cross-tenant mutation bị chặn bằng
 namespace scope, admission policy và giới hạn destination trong ArgoCD
 AppProject.
+
+- Namespace `observability` là platform-critical namespace. AI/self-heal action không được patch/delete trực tiếp các workload trong namespace này. Prometheus/AlertManager chỉ đóng vai trò phát hiện và gửi alert, không phải target remediation.
 
 ### 2.3 Cross-account Access
 
@@ -136,8 +173,7 @@ assume-role pattern rõ ràng:
 - Session duration ngắn và khớp với reconciliation job.
 - CloudTrail ghi lại `AssumeRole` và downstream action ở cả source account và
   target account.
-- CDO role không được assume AIOps model-owner role trừ khi ADR chuyển ownership
-  AI Engine sang CDO.
+- Do AI Engine được self-host trong cụm EKS của CDO (namespace `self-heal-system`), CDO không cần assume role sang account khác để gọi model trong runtime, mà thực hiện qua internal service call.
 
 ---
 
@@ -189,7 +225,7 @@ IRSA và STS, vì vậy cluster không lưu long-lived Git credential.
 | Data | Storage | KMS key | Notes |
 |---|---|---|---|
 | Audit events | S3 bucket với Object Lock | `alias/cdo-audit-kms` | Firehose ghi object đã mã hóa; Athena read được log lại |
-| Application data | RDS PostgreSQL / EBS volume | `alias/cdo-app-data-kms` | Bật RDS storage encryption |
+| Sandbox config data | RDS PostgreSQL Sandbox DB / EBS volume | `alias/cdo-app-data-kms` | Bật RDS storage encryption |
 | Runtime secrets | Secrets Manager và EKS Secrets | `alias/cdo-secrets-kms` | Bật EKS envelope encryption at rest cho Kubernetes Secrets |
 | Infrastructure state/artifacts | S3 / DynamoDB / ECR | `alias/cdo-infra-kms` | Terraform state, lock table và private image |
 | Observability logs | CloudWatch Logs / Firehose backup | `alias/cdo-observability-kms` | Log group dùng customer-managed key khi service hỗ trợ |
@@ -361,8 +397,9 @@ value.
   được document và expiry date.
 - Pod đặt `securityContext.seccompProfile.type: RuntimeDefault` mặc định.
 - NetworkPolicy bắt đầu bằng default deny ingress/egress, sau đó chỉ allow
-  ALB-to-receiver, workload-to-VPC-endpoint, workload-to-RDS và traffic nội bộ
+  ALB-to-receiver, workload-to-VPC-endpoint, workload-to-RDS (Sandbox DB) và traffic nội bộ
   namespace thật sự cần.
+- Namespace `observability` chứa Prometheus AlertManager được bảo vệ nghiêm ngặt. Các self-heal actions bị cấm tuyệt đối việc mutate (patch/delete) các tài nguyên trong namespace này để tránh làm gián đoạn giám sát và phát hiện sự cố.
 - Mỗi workload có ServiceAccount và IRSA role riêng. Không dùng shared
   ServiceAccount cho application workload.
 - ResourceQuota và LimitRange được cấu hình theo từng tenant namespace để một
@@ -393,9 +430,7 @@ value.
       Slack hay chỉ email.
 - [ ] Xác nhận mô hình exposure của ALB: chỉ approved operator CIDR, WAF
       allowlist, hoặc private ALB sau VPN / corporate network.
-- [ ] Xác nhận AIOps có tiếp tục là owner duy nhất của AI Engine invocation hay
-      không. Nếu sau này CDO gọi Bedrock trực tiếp, cần cập nhật IAM, endpoint,
-      audit và ownership section.
+- [x] AI Engine đã được thống nhất self-host trong cụm EKS namespace `self-heal-system`.
 - [ ] Xác nhận retention period và Object Lock mode cho audit S3 bucket.
 
 ---
