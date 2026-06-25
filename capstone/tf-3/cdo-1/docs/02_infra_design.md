@@ -211,6 +211,23 @@ Hệ thống triển khai 5 cơ chế phòng vệ độc lập để ngăn chặ
 
 **Môi trường áp dụng**: EKS Managed Node Group + Karpenter (node provisioner) + HPA (Pod scaling). Instance type pool: `t3.medium`, `t3.large`, `t3.xlarge` (Karpenter tự chọn phù hợp nhất). Tối đa 5 Nodes tại bất kỳ thời điểm nào.
 
+### Nguyên lý áp dụng Scaling Strategy (Scale dọc vs Scale ngang)
+
+Để hệ thống hoạt động với hiệu suất tối đa, tính sẵn sàng cao và tối ưu chi phí, cơ chế Auto-Scaling được phân tách rõ ràng theo hai định hướng:
+
+*   **Scale dọc (Vertical Scaling - Thay đổi kích cỡ tài nguyên):**
+    *   **Khi nào áp dụng:**
+        *   **Quá tải tài nguyên cục bộ:** Khi một tiến trình đơn lẻ (như AI Engine hay các tác vụ xử lý đồ họa/tính toán nặng) bị nghẽn CPU hoặc cạn kiệt RAM mà không thể phân chia xử lý song song.
+        *   **Ngăn ngừa & Khắc phục lỗi OOM (Out Of Memory):** Khi Pod có dấu hiệu sắp tràn RAM (`RAM > 85% limit`) hoặc ghi nhận sự kiện `OOMKilled` thực tế.
+        *   **Thiếu tài nguyên lập lịch (Scheduling):** Khi Pod mới không thể schedule lên các Node hiện tại vì yêu cầu request CPU/RAM của Pod vượt quá phần tài nguyên còn trống của Node (`t3.medium`).
+    *   **Cơ chế hoạt động:** Nâng cấp limits/requests CPU và RAM của chính Pod đó (thông qua Self-Heal Engine tự động patch manifest) hoặc Karpenter thực hiện **Node Consolidation** để drain Node nhỏ và reschedule Pod sang một EC2 Instance có cấu hình lớn hơn (`t3.large`, `t3.xlarge`).
+*   **Scale ngang (Horizontal Scaling - Thay đổi số lượng bản sao):**
+    *   **Khi nào áp dụng:**
+        *   **Tải phân tán tăng cao (High Throughput/RPS):** Khi lượng request từ người dùng đến Webhook Receiver hoặc các Tenant API tăng mạnh, cần thêm Pod để chia sẻ tải và giảm Latency.
+        *   **Tồn đọng hàng đợi (Queue Backlog):** Khi số lượng message chờ xử lý trong SQS Queue vượt ngưỡng (`SQS Queue depth > 1000 messages`), cần thêm Worker chạy song song để giải phóng backlog.
+        *   **Độ tin cậy & Chịu lỗi (High Availability & Fault Tolerance):** Tránh Single Point of Failure (SPOF) bằng cách chạy tối thiểu 2 replicas trên nhiều Availability Zones (Multi-AZ).
+    *   **Cơ chế hoạt động:** HPA tự động tăng số lượng Pod replicas, hoặc Karpenter tự động provision thêm EC2 instance mới (nâng số lượng node vật lý lên tối đa 5) để phân bổ các Pod replicas mới.
+
 #### 1. Điều chỉnh cấu hình tài nguyên (Vertical Auto-Scaling)
 
 **Khi nào cần tăng CPU/RAM cho 1 Pod (đơn vị chạy đơn lẻ):**
