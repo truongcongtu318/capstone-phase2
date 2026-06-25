@@ -19,8 +19,8 @@ Hệ thống tiếp nhận alert qua 2 luồng chính:
 ```mermaid
 flowchart TB
     %% External / AWS control-plane event sources
-    cloudwatch[CloudWatch / EventBridge Alarms]
-    operator[Operator / Mentor<br/>(Demo/Admin via VPN/Internal Client)]
+    cloudwatch["CloudWatch / EventBridge Alarms"]
+    operator["Operator / Mentor<br/>(Demo/Admin via VPN/Internal Client)"]
 
     subgraph VPC["AWS Cloud Sandbox VPC - No Public Workload IP"]
         direction TB
@@ -28,63 +28,63 @@ flowchart TB
         subgraph PrivateSubnets["Private Subnets"]
             direction TB
 
-            relay[Internal Alert Relay<br/>Lambda in VPC / Internal Integration]
-            alb[Internal ALB<br/>private only / TLS 1.2+]
+            relay["Internal Alert Relay<br/>Lambda in VPC / Internal Integration"]
+            alb["Internal ALB<br/>private only / TLS 1.2+"]
 
             subgraph EKS["EKS Cluster"]
                 direction TB
 
                 subgraph Observability["observability Namespace"]
-                    alertmanager[Prometheus AlertManager]
-                    prometheus[Prometheus]
-                    grafana[Grafana]
+                    alertmanager["Prometheus AlertManager"]
+                    prometheus["Prometheus"]
+                    grafana["Grafana"]
                 end
 
                 subgraph SelfHeal["self-heal-system Namespace"]
-                    receiver[FastAPI Webhook Receiver]
-                    controller[Self-Heal Controller<br/>Direct Patch Engine]
-                    ai[AI Engine<br/>/detect /decide /verify]
-                    commitengine[Git Commit Engine]
+                    receiver["FastAPI Webhook Receiver"]
+                    controller["Self-Heal Controller<br/>Direct Patch Engine"]
+                    ai["AI Engine<br/>/detect /decide /verify"]
+                    commitengine["Git Commit Engine"]
                 end
 
                 subgraph ArgoCDNS["argocd Namespace"]
-                    argocd[ArgoCD Controller]
+                    argocd["ArgoCD Controller"]
                 end
 
                 subgraph TenantNS["tenant-a / tenant-b Namespaces"]
-                    tenantapp[Tenant Applications]
+                    tenantapp["Tenant Applications"]
                 end
             end
 
-            rds[(RDS PostgreSQL<br/>Sandbox Config DB)]
+            rds[("RDS PostgreSQL<br/>Sandbox Config DB")]
         end
 
         subgraph VPCE["VPC Gateway / Interface Endpoints"]
             direction LR
-            s3ep[S3 Gateway]
-            dynamoep[DynamoDB Gateway]
-            smep[Secrets Manager]
-            kmsep[KMS]
-            firehoseep[Kinesis Firehose]
-            codeep[CodeCommit Git/API]
-            snsep[SNS]
-            cwlep[CloudWatch Logs]
-            ecrep[ECR API + Docker]
-            stsep[STS]
+            s3ep["S3 Gateway"]
+            dynamoep["DynamoDB Gateway"]
+            smep["Secrets Manager"]
+            kmsep["KMS"]
+            firehoseep["Kinesis Firehose"]
+            codeep["CodeCommit Git/API"]
+            snsep["SNS"]
+            cwlep["CloudWatch Logs"]
+            ecrep["ECR API + Docker"]
+            stsep["STS"]
         end
     end
 
     subgraph AWSServices["AWS Managed Services"]
         direction TB
-        codecommit[(AWS CodeCommit<br/>Config Repo)]
-        firehose[Kinesis Firehose]
-        s3[(S3 Audit Bucket<br/>Object Lock)]
-        dynamodb[(DynamoDB<br/>State / Lock / Idempotency)]
-        secrets[(Secrets Manager)]
-        sns[SNS Escalation Topic]
-        cloudwatchlogs[(CloudWatch Logs)]
-        ecr[(ECR)]
-        athena[Athena]
+        codecommit[("AWS CodeCommit<br/>Config Repo")]
+        firehose["Kinesis Firehose"]
+        s3[("S3 Audit Bucket<br/>Object Lock")]
+        dynamodb[("DynamoDB<br/>State / Lock / Idempotency")]
+        secrets["Secrets Manager"]
+        sns["SNS Escalation Topic"]
+        cloudwatchlogs[("CloudWatch Logs")]
+        ecr[("ECR")]
+        athena["Athena"]
     end
 
     %% Alert Ingestion Flow
