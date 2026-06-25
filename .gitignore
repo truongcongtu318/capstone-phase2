@@ -1,1 +1,5 @@
 .examples/
+.DS_Store/
+CAPSTONE_EVIDENCE_PACK_FORMAT.md
+TF3_SELFHEAL_LEARNER.md
+.claude/
