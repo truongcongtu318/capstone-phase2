@@ -23,6 +23,7 @@ Terraform quản lý:
 - Data Firehose, S3 Object Lock, KMS và Secrets Manager;
 - CloudWatch resources;
 - bootstrap ArgoCD, Argo Workflows, Argo Rollouts và ESO.
+
 | Resource group | Owner |
 |---|---|
 | AWS infrastructure | Terraform |
