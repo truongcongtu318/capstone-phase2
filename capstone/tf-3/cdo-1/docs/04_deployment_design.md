@@ -299,7 +299,7 @@ Image build một lần và promote bằng digest.
 | RDS credentials | Runtime |
 | SNS Topic / Chatbot | Escalation |
 | ArgoCD bootstrap credential | Platform admin |
-| AI authentication | Worker nếu không dùng SigV4 |
+| AI authentication (mTLS client cert, nếu bật) | Worker |
 
 Do EKS cluster chạy trong private subnets không có NAT Gateway, runtime escalation bắt buộc phải gửi sự kiện qua AWS SNS / EventBridge thay vì gọi trực tiếp Slack webhook công cộng từ các private pods. Thông báo Slack (nếu cần) sẽ đi qua AWS Chatbot hoặc các subscriber bên ngoài VPC. Slack webhook trong GitHub Actions chỉ dùng để thông báo trạng thái CI.
 
@@ -381,7 +381,7 @@ S3 Object Lock là canonical audit store.
 - [x] **EKS kết nối AI Engine bằng Peering, PrivateLink hay public HTTPS?**  
   *Giải quyết:* Chốt **CDO tự host AI Engine** (Docker container) chạy trực tiếp trong cụm EKS (chung namespace `self-heal-system`), giao tiếp local API.
 - [x] **AI authentication dùng SigV4, API key hay mTLS?**  
-  *Giải quyết:* Chốt dùng **IAM SigV4** đúng theo AI API Contract (mục 2) cho mọi request `/v1/detect`, `/v1/decide`, `/v1/verify`, dù chạy in-cluster — Worker ký request bằng IRSA credential trước khi gọi AI Engine; Network Policy/ClusterIP chỉ giới hạn nguồn gọi tới (không thay thế xác thực ở application layer).
+  *Giải quyết:* Chốt dùng **Local Trust (mTLS tùy chọn) + K8s Network Policy** đúng theo AI API Contract (mục 2, bản cập nhật) — không dùng IAM SigV4. NetworkPolicy giới hạn ingress tới AI Engine chỉ từ ServiceAccount `selfheal-executor`/Worker trong namespace `self-heal-system`; mọi request `/v1/detect`, `/v1/decide`, `/v1/verify` vẫn bắt buộc kèm `Idempotency-Key` (UUID v4).
 - [ ] Git write credential dùng GitHub App, token hay deploy key?
 - [ ] RDS lưu dữ liệu nào mà DynamoDB/Git không đáp ứng?
 - [ ] Chọn EKS Pod Identity hay IRSA?
