@@ -1,6 +1,6 @@
 # Infrastructure Design - Task force 3 · CDO 1
 
-<!-- Doc owner: <Nhóm CDO>
+<!-- Doc owner: <Nhóm CDO1>
      Status: Draft (W11 T3-T4) → Final (W11 T6 Pack #1) → Updated (W12 T4 Pack #2)
      Word target: 1500-2500 từ
      Tier: Medium -->
