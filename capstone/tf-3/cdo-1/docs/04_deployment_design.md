@@ -316,10 +316,10 @@ Không dùng Step Functions.
 7. Tenant READY
 ```
 
-| Tenant ID (UUID v4) | Tenant Alias | Namespace |
-|---|---|---|
-| `8f3b23c9-0291-4c12-881b-5e60d1f7d24a` | `tnt-payment-demo` | `tenant-payment` |
-| `1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d` | `tnt-checkout-demo` | `tenant-checkout` |
+| Tenant ID | Namespace |
+|---|---|
+| `tnt-payment-demo` | `tenant-payment` |
+| `tnt-checkout-demo` | `tenant-checkout` |
 Tenant config gồm:
 - tenant ID, namespace, owner;
 - quota và allowed pattern;

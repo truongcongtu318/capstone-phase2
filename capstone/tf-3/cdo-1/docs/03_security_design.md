@@ -261,10 +261,10 @@ Ví dụ audit event:
   "timestamp": "2026-06-25T09:30:00Z",
   "severity": "SECURITY",
   "correlation_id": "corr-cdo-20260625-0017",
-  "tenant_id": "tenant-a",
+  "tenant_id": "tnt-payment-demo",
   "actor": "arn:aws:sts::111122223333:assumed-role/irsa-patch-controller/session",
   "action_type": "K8S_MUTATION",
-  "resource_ref": "deployment/tenant-a/api",
+  "resource_ref": "deployment/tenant-payment/api",
   "decision": "POLICY_BLOCKED",
   "reason": "Attempted mutation outside approved namespace"
 }
