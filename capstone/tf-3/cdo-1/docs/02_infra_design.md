@@ -32,6 +32,23 @@
 
 ---
 
+### **Tổng chi phí ước tính mỗi tháng (Rough Total Cost/Month)**
+
+| Loại cấu hình | Tổng chi phí Sandbox / Tháng | Chi phí / Tenant / Tháng (Giả định 2 Tenants) |
+|---|---|---|
+| **Hạ tầng Sandbox (Total Sandbox)** | **$173.56** | **$86.78** |
+
+**Các giả định đi kèm con số ước tính:**
+* **Môi trường**: Sandbox chạy tại region `us-east-1`, hoạt động liên tục 730 giờ/tháng.
+* **Quy mô thử nghiệm**: Gồm 2 tenants hoạt động song song trong cụm Sandbox.
+* **Compute (EKS Nodes)**: Sử dụng 3 node EC2 Spot `t3.medium` chạy liên tục (đơn giá Spot `$0.023/node-hour`).
+* **API Ingress**: Sử dụng 1 ALB hoạt động 24/7 (phát sinh trung bình 1 LCU).
+* **Cơ sở dữ liệu**: Dùng RDS PostgreSQL Single-AZ (`db.t3.micro`) và DynamoDB On-Demand ở mức tải demo thấp.
+* **Audit Storage & Streaming**: Phát sinh trung bình ~10 GB dữ liệu audit/tháng (lưu trữ trên S3, streaming qua Kinesis Firehose).
+* **Quản lý Secrets**: Gồm 6 secrets trong AWS Secrets Manager.
+* **Giám sát (Observability)**: Sử dụng Prometheus/Grafana tự vận hành trên EKS và CloudWatch logs ở mức low-volume.
+* *Lưu ý*: Chi phí trên chưa bao gồm thuế, phí lưu trữ EBS volumes, NAT Gateway, KMS requests, data transfer và các gói support của AWS.
+
 ## 3. Differentiation angle deep-dive
 
 ### 3.1 Why this angle?
