@@ -1,6 +1,6 @@
 # Security Design - Task force 3 · CDO 1
 
-<!-- Doc owner: <Nhóm CDO>
+<!-- Doc owner: <Nhóm CDO1>
      Status: Draft (W11 T4) → Final (W11 T6) → Refined (W12 T4)
      Word target: 1200-2000 từ
      Scope: Bảo mật ở tầng DevOps (network, IAM, secrets, encryption, audit, K8s nếu áp dụng).
@@ -10,92 +10,145 @@
 
 ### 1.1 Network Diagram
 
-Lưu lượng runtime nằm trong CDO VPC. Thiết kế này chủ động không dùng NAT
-Gateway cho workload runtime; các workload gọi AWS service thông qua VPC
-Endpoint. GitOps runtime kéo manifest từ AWS CodeCommit qua private endpoint,
-không dùng GitHub.
+Lưu lượng runtime nằm trong AWS Cloud Sandbox VPC. Thiết kế này chủ động không dùng NAT Gateway cho runtime workloads; các workload gọi AWS services thông qua VPC Endpoints. GitOps runtime kéo manifest từ AWS CodeCommit qua private endpoint, không dùng GitHub trong runtime path.
 
-Hệ thống tiếp nhận Alert qua 2 luồng chính:
-- **Prometheus AlertManager** (chạy trong namespace `observability` của EKS) gửi trực tiếp tới Webhook Receiver qua **ClusterIP** nội bộ cụm.
-- **CloudWatch / EventBridge Alarms** đi qua **Internal ALB** (chạy trong Private Subnets) để gửi tới Webhook Receiver. CloudWatch/EventBridge alarm đi vào Internal ALB thông qua internal alert relay hoặc integration component nằm trong VPC; không expose ALB ra public Internet.
+Hệ thống tiếp nhận alert qua 2 luồng chính:
+- **Prometheus AlertManager** chạy trong namespace `observability`, gửi alert trực tiếp tới FastAPI Webhook Receiver qua **ClusterIP Service** nội bộ cụm EKS, không đi qua ALB.
+- **CloudWatch / EventBridge Alarms** không gọi trực tiếp public endpoint. Alert đi qua một **Internal Alert Relay / Integration Component** nằm trong VPC, sau đó mới forward tới **Internal ALB** trong Private Subnets.
 
 ```mermaid
-flowchart TD
-    subgraph Observability Namespace
-        alertmanager[Prometheus AlertManager]
+flowchart TB
+    %% External / AWS control-plane event sources
+    cloudwatch[CloudWatch / EventBridge Alarms]
+    operator[Operator / Mentor<br/>(Demo/Admin via VPN/Internal Client)]
+
+    subgraph VPC["AWS Cloud Sandbox VPC - No Public Workload IP"]
+        direction TB
+
+        subgraph PrivateSubnets["Private Subnets"]
+            direction TB
+
+            relay[Internal Alert Relay<br/>Lambda in VPC / Internal Integration]
+            alb[Internal ALB<br/>private only / TLS 1.2+]
+
+            subgraph EKS["EKS Cluster"]
+                direction TB
+
+                subgraph Observability["observability Namespace"]
+                    alertmanager[Prometheus AlertManager]
+                    prometheus[Prometheus]
+                    grafana[Grafana]
+                end
+
+                subgraph SelfHeal["self-heal-system Namespace"]
+                    receiver[FastAPI Webhook Receiver]
+                    controller[Self-Heal Controller<br/>Direct Patch Engine]
+                    ai[AI Engine<br/>/detect /decide /verify]
+                    commitengine[Git Commit Engine]
+                end
+
+                subgraph ArgoCDNS["argocd Namespace"]
+                    argocd[ArgoCD Controller]
+                end
+
+                subgraph TenantNS["tenant-a / tenant-b Namespaces"]
+                    tenantapp[Tenant Applications]
+                end
+            end
+
+            rds[(RDS PostgreSQL<br/>Sandbox Config DB)]
+        end
+
+        subgraph VPCE["VPC Gateway / Interface Endpoints"]
+            direction LR
+            s3ep[S3 Gateway]
+            dynamoep[DynamoDB Gateway]
+            smep[Secrets Manager]
+            kmsep[KMS]
+            firehoseep[Kinesis Firehose]
+            codeep[CodeCommit Git/API]
+            snsep[SNS]
+            cwlep[CloudWatch Logs]
+            ecrep[ECR API + Docker]
+            stsep[STS]
+        end
     end
 
-    subgraph AWS Services and VPC Edge
-        cloudwatch[CloudWatch / EventBridge Alarms]
-        user[Operator / Mentor<br/>(Demo/Admin)]
-        alb[Internal ALB<br/>TLS 1.2+]
-        codecommit[(AWS CodeCommit<br/>private Git repo)]
-        sns[SNS Escalation Topic]
+    subgraph AWSServices["AWS Managed Services"]
+        direction TB
+        codecommit[(AWS CodeCommit<br/>Config Repo)]
         firehose[Kinesis Firehose]
         s3[(S3 Audit Bucket<br/>Object Lock)]
-        rds[(RDS PostgreSQL Sandbox DB)]
+        dynamodb[(DynamoDB<br/>State / Lock / Idempotency)]
+        secrets[(Secrets Manager)]
+        sns[SNS Escalation Topic]
+        cloudwatchlogs[(CloudWatch Logs)]
+        ecr[(ECR)]
+        athena[Athena]
     end
-
-    subgraph self-heal-system Namespace
-        receiver[FastAPI Webhook Receiver]
-        controller[Self-Heal Controller]
-        commitengine[Git Commit Engine]
-        ai[AI Engine<br/>/detect /decide /verify]
-    end
-
-    subgraph GitOps Namespace
-        gitops[GitOps Engine<br/>ArgoCD]
-    end
-
-    vpce[VPC Endpoints<br/>S3, DynamoDB, SQS (Optional), Firehose,<br/>Secrets Manager, KMS, CloudWatch,<br/>ECR, STS, CodeCommit, SNS]
 
     %% Alert Ingestion Flow
     alertmanager -->|ClusterIP Service| receiver
-    cloudwatch -->|HTTPS| alb
-    user -.->|Demo/Admin HTTPS| alb
-    alb --> receiver
+    cloudwatch -->|Event trigger| relay
+    relay -->|HTTPS internal traffic| alb
+    operator -.->|VPN / internal demo access| alb
+    alb -->|HTTPS 8443| receiver
 
     %% Processing Flow
-    receiver --> controller
+    receiver -->|validate / normalize / enrich| controller
     controller -->|Call AI API via ClusterIP| ai
 
-    %% Audit & Database Flow
-    controller -->|Audit events| firehose --> s3
-    controller -->|Dữ liệu cấu hình sandbox tùy chọn| rds
+    %% Fast Lane - Direct Patch
+    controller -->|Fast Lane: K8s API patch| tenantapp
 
-    %% GitOps Flow
+    %% Slow Lane - GitOps Commit
     controller -->|Trigger slow-lane patch| commitengine
     commitengine -->|Git push manifest changes| codecommit
-    gitops -->|Git pull / sync desired state| codecommit
+    argocd -->|Git pull / sync desired state| codecommit
+    argocd -->|Apply desired state| tenantapp
 
-    %% Escalation Flow
-    controller -->|Luồng escalation| sns
+    %% State, secrets, audit
+    controller -->|State / lock / idempotency| dynamodb
+    controller -->|Get secrets| secrets
+    controller -->|Optional sandbox config data| rds
+    controller -->|Audit events| firehose
+    firehose -->|Write immutable audit logs| s3
+    s3 -->|Query audit logs| athena
 
-    %% VPC Endpoints connections
-    receiver -. AWS API calls .-> vpce
-    controller -. AWS API calls .-> vpce
-    gitops -. AWS API calls .-> vpce
+    %% Escalation
+    controller -->|Escalation event| sns
+
+    %% VPC endpoint usage
+    receiver -. AWS API via VPC Endpoint .-> VPCE
+    controller -. AWS API via VPC Endpoint .-> VPCE
+    commitengine -. CodeCommit via VPC Endpoint .-> VPCE
+    argocd -. CodeCommit via VPC Endpoint .-> VPCE
+
+    VPCE -. private access .-> AWSServices
 ```
 
 Ranh giới mạng:
 
-- Private Subnets chứa Internal ALB, EKS workloads và RDS. Hệ thống không expose public IP cho runtime workload.
-- Private application subnet chứa EKS managed node và node do Karpenter cấp phát.
-- Isolated data subnet chứa RDS (Sandbox DB).
-- Không workload nào cần internet egress trực tiếp trong quá trình runtime
-  reconciliation.
-- Direct Patch path, GitOps path và Escalation path được tách bằng Security
-  Group rule và quyền IAM.
+- Không có Public ALB trong runtime path.
+- Internal ALB nằm trong Private Subnets, không có public IP.
+- Prometheus AlertManager gửi alert qua ClusterIP Service, bypass ALB.
+- CloudWatch / EventBridge Alarms đi vào hệ thống qua Internal Alert Relay nằm trong VPC, sau đó mới forward tới Internal ALB.
+- Operator / Mentor chỉ truy cập demo/admin qua VPN hoặc internal client, không đi qua public Internet trực tiếp.
+- GitOps runtime dùng AWS CodeCommit qua VPC Endpoint, không dùng GitHub.
+- Audit không ghi thẳng xuống S3; audit events đi qua Kinesis Firehose → S3 Object Lock → Athena.
+- Các workload trong EKS gọi AWS services thông qua VPC Gateway / Interface Endpoints, không cần NAT Gateway.
 
 ### 1.2 Security Groups
 
 | SG name | Inbound | Outbound | Attached to |
 |---|---|---|---|
-| `sg-alb-internal` | TCP 443 từ VPC CIDR hoặc SG của alert relay/internal client | TCP 8443 đến `sg-eks-workload` | Internal ALB |
+| `sg-alb-internal` | TCP 443 từ SG của Internal Alert Relay hoặc VPN/Internal Client CIDR | TCP 8443 đến `sg-eks-workload` | Internal ALB |
 | `sg-eks-workload` | TCP 8443 từ `sg-alb-internal`; pod-to-pod traffic chỉ được mở qua Kubernetes NetworkPolicy | TCP 443 đến VPC endpoint; TCP 5432 đến `sg-rds`; TCP 443 đến EKS control plane | Webhook Receiver, Self-Heal Controller, AI Engine, Audit Writer, GitOps Engine |
 | `sg-eks-control-plane` | TCP 443 từ EKS node và admin role được phép | TCP 10250 đến EKS node; TCP 443 đến AWS API qua VPC endpoint | EKS control plane ENI |
 | `sg-rds` | TCP 5432 chỉ từ `sg-eks-workload` | Không mở outbound rộng; chỉ dùng response traffic mặc định do AWS quản lý | RDS PostgreSQL Sandbox DB |
 | `sg-vpc-endpoint` | TCP 443 từ `sg-eks-workload` và `sg-eks-control-plane` | TCP 443 đến AWS service endpoint target | Interface VPC endpoint |
+
+Internal ALB không nhận traffic trực tiếp từ Internet. CloudWatch/EventBridge alarm phải đi qua Internal Alert Relay nằm trong VPC, còn Operator/Mentor chỉ truy cập qua VPN hoặc internal client dùng cho demo/admin.
 
 Security Group được quản lý bằng Terraform state và review qua cùng pull-request
 path với application manifest. Không mở CIDR rộng trực tiếp vào workload; quyền
