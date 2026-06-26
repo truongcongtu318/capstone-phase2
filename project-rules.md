@@ -111,18 +111,21 @@ Hệ thống tuân thủ chặt chẽ nguyên tắc phân tách giữa Bộ Não
 ### 1. Khóa Cooldown Nghiệp vụ (DynamoDB Table: `tf-3-aiops-idempotency-lock`)
 Để ngăn chặn Alert Storm làm nghẽn hoặc sập hệ thống (ví dụ: pod OOMKilled liên tục bắn alert), Webhook Receiver bắt buộc phải thực hiện cơ chế khóa ghi có điều kiện (Conditional Write) xuống DynamoDB:
 *   **Khóa định danh (Lock Key):** `lock_key = SHA256(tenant_id + namespace + service_name + alert_name)`
+*   **Thời gian Cooldown Động theo Tenant Tier:**
+    *   *Basic Tier (`tenant-checkout`):* Cooldown 5 phút (300 giây).
+    *   *Pro Tier (`tenant-payment`):* Cooldown 3 phút (180 giây).
 *   **Cú pháp DynamoDB Write:**
     ```json
     {
       "TableName": "tf-3-aiops-idempotency-lock",
       "Item": {
         "lock_key": {"S": "d3b07384-d113-495f-9f58-20d18d357d75#tenant-payment#payment-api#OOMKilled"},
-        "expiration_time": {"N": "1782480000"}, // Current Epoch + 300 seconds
+        "expiration_time": {"N": "1782480000"}, // Current Epoch + Dynamic Cooldown (180s/300s)
         "status": {"S": "ACTIVE"}
       },
       "ConditionExpression": "attribute_not_exists(lock_key) OR expiration_time < :now",
       "ExpressionAttributeValues": {
-        ":now": {"N": "1782479700"}
+        ":now": {"N": "1782479820"}
       }
     }
     ```
@@ -132,6 +135,16 @@ Hệ thống tuân thủ chặt chẽ nguyên tắc phân tách giữa Bộ Não
 
 ### 2. Khóa Idempotency Giao dịch AI Engine (Bắt buộc theo API Contract)
 Khi Worker gọi API sang các endpoint của AI Engine (`/v1/detect`, `/v1/decide`, `/v1/verify`), bắt buộc phải truyền header `Idempotency-Key` dạng UUID v4 và header `X-Dry-Run-Mode` (dạng chuỗi `"true"` hoặc `"false"`). AI Engine sử dụng key này để ghi nhận trạng thái giao dịch bất biến, chống xử lý trùng lặp. Mọi payload request gửi sang AI Engine phải được validate cú pháp JSON Schema trước khi truyền đi để đảm bảo không bị trả lỗi 400 Bad Request. Dữ liệu nhạy cảm (credentials, password, token) xuất hiện trong application log trace bắt buộc phải được scrubbed (xóa/ẩn danh hóa) trước khi đóng gói thành telemetry gửi đi.
+
+### 3. Log Kiểm Toán Bất Biến (Audit Trail Compliance)
+*   **Mô tả:** Mọi hành động khắc phục sự cố (bắt đầu, kết thúc, kết quả) bắt buộc phải được ghi nhận bất biến (immutable logs) để phục vụ chứng chỉ SOC2 Type II.
+*   **Kênh truyền dẫn:** Worker sử dụng SDK Python ghi log trực tiếp vào AWS Kinesis Data Firehose delivery stream mang tên `tf3-cdo1-sandbox-audit-stream` thông qua IRSA Role `tf3-cdo1-sandbox-irsa-audit-writer`.
+*   **Lưu trữ bất biến:** Kinesis Firehose tự động chuyển tiếp log xuống S3 Audit Bucket `tf-3-aiops-audit-trail`. Bucket này được cấu hình **S3 Object Lock ở chế độ COMPLIANCE mode** với thời gian bảo vệ giữ lại tối thiểu **90 ngày**. Mọi quyền xóa/sửa đổi log trong thời gian này đều bị AWS chặn ở tầng vật lý, kể cả tài khoản root.
+
+### 4. Cơ chế Ngắt Mạch Tự Động (Circuit Breaker)
+*   **Ngưỡng ngắt mạch:** Nếu một dịch vụ của Tenant xảy ra lỗi và hành động tự vá lỗi (Direct Patch hoặc GitOps) thất bại liên tiếp **3 lần trong vòng 1 giờ**, hệ thống Circuit Breaker phải kích hoạt.
+*   **Logic xử lý:** Đánh dấu trạng thái `CIRCUIT_BREAKER_OPEN` của dịch vụ đó lên bảng DynamoDB lock. Chặn toàn bộ các hành động tự chữa lành tự động tiếp theo cho dịch vụ đó.
+*   **Escalation Path:** Tự động gọi SDK AWS SNS gửi tin nhắn khẩn cấp tới SNS Topic `tf3-cdo1-sandbox-alerts-escalation` để định tuyến cảnh báo trực tiếp về kênh Slack của đội ngũ on-call (TL/SRE) xử lý thủ công.
 
 ---
 
@@ -147,8 +160,8 @@ Hệ thống CDO-01 sử dụng mô hình **Bridge Isolation**: dùng chung hạ
 *   **FastAPI Zero Trust Middleware:** Khi nhận alert, Webhook tự động giải mã header `X-Tenant-Id` (UUID v4) và đối chiếu với namespace của pod bị lỗi trong payload.
 *   **Quy tắc cấm:** Nếu alert thuộc namespace `tenant-payment` nhưng lại gửi kèm `X-Tenant-Id` của `tenant-checkout` (UUID: `6c8b4b2b-4d45-4209-a1b4-4b532d56a31c`), hệ thống lập tức hủy request, ghi log lỗi bảo mật `SECURITY_VIOLATION` và từ chối xử lý.
 *   **Rate Limiting:** Middleware giới hạn số lượng alert tối đa/phút dựa theo Subscription Tier của Tenant:
-    *   *Basic Tier (`tnt-checkout-demo`):* Tối đa 10 requests/phút, Cooldown 5 phút.
-    *   *Pro Tier (`tnt-payment-demo`):* Tối đa 30 requests/phút, Cooldown 3 phút.
+    *   *Basic Tier (`tenant-checkout`):* Tối đa 10 requests/phút, Cooldown 5 phút (300 giây).
+    *   *Pro Tier (`tenant-payment`):* Tối đa 30 requests/phút, Cooldown 3 phút (180 giây).
 
 ---
 

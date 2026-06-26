@@ -219,10 +219,11 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
 *   **Member 1 (Cloud Network & Endpoints Lead):**
     *   Tái cấu trúc Phase 2: Thiết lập VPC, Private Subnets, Route Tables, và 12 Interface/Gateway Endpoints bảo mật kết nối nội bộ.
     *   *Đầu ra (Output):* `vpc_id`, `private_subnet_ids`, `public_subnet_ids`.
-*   **Member 2 (Cryptography & Security Group Lead):**
+*   **Member 2 (Cryptography, Security Group & Escalation Network Lead):**
     *   Cấu hình 5 KMS Keys (`alias/cdo-audit-kms`, `alias/cdo-app-data-kms`, `alias/cdo-secrets-kms`, `alias/cdo-infra-kms`, `alias/cdo-observability-kms`) kèm Key Policies chuẩn hóa.
     *   Cấu hình 5 Security Groups cốt lõi (`sg-alb-internal`, `sg-eks-workload`, `sg-eks-control-plane`, `sg-rds`, `sg-vpc-endpoint`) với Ingress/Egress nghiêm ngặt.
-    *   *Đầu ra (Output):* Tất cả KMS Key ARNs và Security Group IDs.
+    *   Thiết lập AWS SNS Topic `tf3-cdo1-sandbox-alerts-escalation` và cấu hình liên kết Chatbot/Webhook để gửi cảnh báo tự động về Slack khi Circuit Breaker bị kích hoạt.
+    *   *Đầu ra (Output):* Tất cả KMS Key ARNs, Security Group IDs và SNS Topic ARN.
 *   **Member 3 (Compute Cluster & Ingress Lead):**
     *   Tái cấu trúc Phase 3: EKS Cluster v1.28, Karpenter IAM Roles, OIDC provider, và Phase 4: AWS Load Balancer Controller (LBC).
     *   *Đầu ra (Output):* `cluster_name`, `cluster_endpoint`, `cluster_ca_data`, `oidc_provider_arn`.
@@ -266,6 +267,8 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
 *   **Member 6 (Action Execution & Git Committer Lead):**
     *   Viết module Python tương tác Kubernetes SDK (Patch limits, restart deployment).
     *   Viết module kết nối AWS CodeCommit Repo (Clone, modify YAML, commit, push).
+    *   Xây dựng logic **Circuit Breaker**: Đếm số lỗi liên tiếp của dịch vụ trên DynamoDB. Nếu lỗi lặp lại liên tiếp 3 lần trong vòng 1 giờ, chặn xử lý tự động và gọi SDK boto3 kích hoạt AWS SNS Topic báo động.
+    *   Xây dựng logic ghi log nghiệp vụ bất biến gửi trực tiếp về AWS Kinesis Data Firehose stream `tf3-cdo1-sandbox-audit-stream`.
     *   *Đầu ra (Deliverables):* Execution Python module, integration tests.
 
 ### 3. Giải pháp làm việc song song khi bị tắc nghẽn (Block Mitigation)
