@@ -33,7 +33,14 @@ gitops/
 │       ├── ai-engine-netpolicy.yaml  # NetworkPolicy cô lập container AI Engine
 │       └── webhook-netpolicy.yaml    # NetworkPolicy giới hạn Ingress webhook receiver
 │
-└── monitoring/                       # Giám sát & Dashboard (Prometheus Alertmanager configs)
+├── monitoring/                       # Giám sát & Dashboard (Prometheus Alertmanager configs)
+│
+└── tests-chaos/                      # 💥 Kịch bản Chaos Testing & Validation (Member 9 phụ trách)
+    ├── README.md                     # Hướng dẫn chi tiết chạy chaos tests
+    ├── oom-simulator.sh              # Script giả lập lỗi OOMKilled trên pod tenant
+    ├── queue-backlog-stress.sh       # Script tạo tải ảo giả lập nghẽn SQS Queue
+    ├── network-blockade.sh           # Script giả lập đứt kết nối giữa Worker và AI Engine
+    └── SLO_validation_report.md      # Template báo cáo chỉ số SLO và nghiệm thu tự chữa lành
 ```
 
 ---
@@ -54,3 +61,21 @@ Hệ thống tự chữa lành có tính năng tự động vá lỗi (Fast Lane
 2.  `spec.template.spec.containers[*].resources.limits` (Khi nâng cấu hình khắc phục lỗi OOMKilled).
 
 Bất kỳ hành động sửa đổi cấu hình K8s nào khác (ví dụ: thay đổi image name, sửa volume, thay đổi port...) do Worker hoặc AI Engine gửi lên EKS API đều sẽ bị Kyverno Admission Controller **từ chối (Block)** ngay lập tức.
+
+---
+
+## 💥 Chaos Testing & Kiểm Thử Độ Bền Bỉ (Member 9)
+
+**Member 9 (QA, Chaos & Validation Lead)** chịu trách nhiệm thiết kế, duy trì và thực thi các bài kiểm thử chaos nằm tại thư mục `gitops/tests-chaos/`. Các kịch bản chaos bao gồm:
+
+### 1. Giả lập OOMKilled (`oom-simulator.sh`):
+*   Sử dụng container chạy ứng dụng ngốn RAM (như `stress-ng`) deploy vào namespaces tenant (`tenant-payment` hoặc `tenant-checkout`) nhằm cưỡng ép hệ sinh thái Kubernetes bắn alert `PodOOMKilled`. 
+*   **Mục tiêu validation:** Kiểm tra xem Webhook có lock thành công, SQS nhận tin nhắn và Worker có patch limits x1.5 lần của pod lỗi lên EKS và CodeCommit đúng SLO hay không.
+
+### 2. Mô phỏng SQS Queue Backlog (`queue-backlog-stress.sh`):
+*   Tự động gửi liên tục hàng nghìn alert giả lập vào SQS Queue để tạo backlog lớn.
+*   **Mục tiêu validation:** Kiểm tra Prometheus kích hoạt cảnh báo, Worker tự động trigger Argo Workflow để nâng replicas (Slow Lane) khắc phục backlog, và tự động thu hẹp (scale-in) khi hàng chờ trống.
+
+### 3. Đứt kết nối mạng AI Engine (`network-blockade.sh`):
+*   Sử dụng NetworkPolicy tạm thời block cổng `8080` của AI Engine hoặc ngắt giao tiếp của SQS Worker.
+*   **Mục tiêu validation:** Thử nghiệm phản ứng của **Circuit Breaker** (phải tự động ngắt mạch sau 3 lần lỗi liên tiếp, chuyển sang trạng thái cảnh báo khẩn cấp lên Slack/SNS để kỹ sư trực vận hành on-call nhảy vào).
