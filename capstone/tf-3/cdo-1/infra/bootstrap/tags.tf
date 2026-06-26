@@ -4,7 +4,7 @@ locals {
       Project   = "self-heal-platform"
       TaskForce = "tf-3"
       Team      = "cdo-1"
-      Env       = "sandbox"
+      Env       = var.environment
       ManagedBy = "terraform"
     },
     { Component = "bootstrap" }
