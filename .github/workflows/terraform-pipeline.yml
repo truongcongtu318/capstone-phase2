@@ -1,0 +1,104 @@
+name: IaC Phase Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'capstone/tf-3/cdo-1/infra/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'capstone/tf-3/cdo-1/infra/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  # Job validate & plan chạy khi có PR
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        phase:
+          - '01-bootstrap'
+          - '02-core-platform'
+          - '03-compute-eks'
+          - '04-services'
+    defaults:
+      run:
+        working-directory: capstone/tf-3/cdo-1/infra/phases/${{ matrix.phase }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Configure AWS Credentials (Plan Role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::544011261607:role/tf3-cdo1-sandbox-github-ci-plan
+          aws-region: us-east-1
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -no-color -out=tfplan
+        
+  # Job apply chỉ chạy khi được merge vào main
+  apply:
+    name: Terraform Apply
+    needs: plan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Apply tuần tự từ phase 1 đến phase 4 để tránh race condition
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Configure AWS Credentials (Apply Role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::544011261607:role/tf3-cdo1-sandbox-github-ci-apply
+          aws-region: us-east-1
+
+      - name: Deploy Phase 1 - Bootstrap
+        working-directory: capstone/tf-3/cdo-1/infra/phases/01-bootstrap
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Deploy Phase 2 - Core Platform
+        working-directory: capstone/tf-3/cdo-1/infra/phases/02-core-platform
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Deploy Phase 3 - Compute EKS
+        working-directory: capstone/tf-3/cdo-1/infra/phases/03-compute-eks
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Deploy Phase 4 - Services
+        working-directory: capstone/tf-3/cdo-1/infra/phases/04-services
+        run: |
+          terraform init
+          terraform apply -auto-approve
