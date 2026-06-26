@@ -154,3 +154,19 @@ estrict-mutations.yaml khóa quyền API Server.
         *   `Wave -4`: Khởi tạo Namespace `self-heal-system` và `observability`.
         *   `Wave -3`: Áp dụng NetworkPolicies và Kyverno ClusterPolicy bảo mật cụm.
         *   `Wave 0`: Tự động pull Docker images từ ECR (do Sub-team 2 build bằng Commit SHA tag) để deploy Webhook và SQS Worker.
+---
+
+## 🔒 Override Kyverno Images trong GitOps Manifests
+
+Đối với các ứng dụng triển khai qua file manifest (`gitops/manifests/`), **Member 7** phải kiểm tra toàn bộ file YAML và bảo đảm trường `image` trỏ trực tiếp về AWS ECR Private:
+
+1.  **Kyverno Install YAML:** Sử dụng image mirrored trên ECR Private:
+    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/kyverno:v1.12.5`
+    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/kyvernopre:v1.12.5`
+    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/background-controller:v1.12.5`
+    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/cleanup-controller:v1.12.5`
+    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/reports-controller:v1.12.5`
+
+2.  **Cách thức kiểm tra (Validation):**
+    *   Chạy `git diff` và kiểm tra xem có bất kỳ dòng nào chứa các public domain registry (`ghcr.io`, `quay.io`, `docker.io`, `registry.k8s.io`) hay không.
+    *   Nếu có $ightarrow$ Sửa lại đường dẫn thành `544011261607.dkr.ecr.us-east-1.amazonaws.com/<repo>:<tag>`.

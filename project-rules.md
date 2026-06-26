@@ -190,3 +190,70 @@ Thư mục `infra/` cũ (Single-State) sẽ được giữ lại làm mã nguồ
 ### 2. Di chuyển các Manifests và App code (Sub-team 2 & 3 thực hiện):
 *   **App Code:** Chuyển toàn bộ code Python, Dockerfile, `requirements.txt` trong `infra/manifests/webhook-receiver/` ra một thư mục ứng dụng độc lập bên ngoài (ví dụ: `<root>/app/webhook-receiver/`) để phục vụ CI build image.
 *   **Kubernetes Manifests:** Chuyển toàn bộ file YAML cấu hình K8s (`k8s.yaml`, NetworkPolicies, Kyverno rules) từ `infra/manifests/` sang thư mục `<root>/gitops/` để ArgoCD quản lý.
+---
+
+## 🔒 Quy trình Mirror Container Images thủ công lên ECR Private (Hardcore NAT-less)
+
+Dự án CDO-01 tuân thủ nghiêm ngặt mô hình **NAT-less VPC** (Zero Internet Path). Toàn bộ container images phục vụ EKS Addons (ALBC, Karpenter, Kyverno, Prometheus Operator Stack) và Ứng dụng phải được **tải tay (pull/tag/push)** lên AWS ECR Private của dự án. Không sử dụng NAT Gateway.
+
+### 1. Danh sách Docker Images bắt buộc phải Mirror (Target Registry: `544011261607.dkr.ecr.us-east-1.amazonaws.com`)
+
+| Tên Service | Image Gốc (Public Registry) | Image Đích (ECR Private Override) |
+|---|---|---|
+| **AWS Load Balancer Controller** | `602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon/aws-load-balancer-controller:v2.8.1` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/amazon/aws-load-balancer-controller:v2.8.1` |
+| **Karpenter Controller** | `public.ecr.aws/karpenter/controller:v0.37.0` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/karpenter/controller:v0.37.0` |
+| **Prometheus Operator** | `quay.io/prometheus-operator/prometheus-operator:v0.74.0` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/prometheus-operator/prometheus-operator:v0.74.0` |
+| **Prometheus Server** | `quay.io/prometheus/prometheus:v2.52.0` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/prometheus/prometheus:v2.52.0` |
+| **Alertmanager** | `quay.io/prometheus/alertmanager:v0.27.0` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/prometheus/alertmanager:v0.27.0` |
+| **Grafana** | `docker.io/grafana/grafana:10.4.3` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/grafana/grafana:10.4.3` |
+| **Kube State Metrics** | `registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kube-state-metrics/kube-state-metrics:v2.12.0` |
+| **Node Exporter** | `quay.io/prometheus/node-exporter:v1.8.1` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/prometheus/node-exporter:v1.8.1` |
+| **K8s Sidecar (Grafana Config)** | `quay.io/kiwigrid/k8s-sidecar:1.27.4` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kiwigrid/k8s-sidecar:1.27.4` |
+| **Kyverno Controller** | `ghcr.io/kyverno/kyverno:v1.12.5` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/kyverno:v1.12.5` |
+| **Kyverno Pre-install** | `ghcr.io/kyverno/kyvernopre:v1.12.5` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/kyvernopre:v1.12.5` |
+| **Kyverno Background** | `ghcr.io/kyverno/background-controller:v1.12.5` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/background-controller:v1.12.5` |
+| **Kyverno Cleanup** | `ghcr.io/kyverno/cleanup-controller:v1.12.5` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/cleanup-controller:v1.12.5` |
+| **Kyverno Reports** | `ghcr.io/kyverno/reports-controller:v1.12.5` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/reports-controller:v1.12.5` |
+
+### 2. Lệnh thực hiện "Tải tay" (Run locally by Member 8/9 with Internet access)
+
+Thành viên được giao nhiệm vụ chạy script sau trên máy cá nhân để đẩy ảnh lên ECR Private:
+
+```bash
+# Đăng nhập AWS ECR Private
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 544011261607.dkr.ecr.us-east-1.amazonaws.com
+
+# Danh sách image cần sync
+declare -A images=(
+  ["amazon/aws-load-balancer-controller:v2.8.1"]="602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon/aws-load-balancer-controller:v2.8.1"
+  ["karpenter/controller:v0.37.0"]="public.ecr.aws/karpenter/controller:v0.37.0"
+  ["prometheus-operator/prometheus-operator:v0.74.0"]="quay.io/prometheus-operator/prometheus-operator:v0.74.0"
+  ["prometheus/prometheus:v2.52.0"]="quay.io/prometheus/prometheus:v2.52.0"
+  ["prometheus/alertmanager:v0.27.0"]="quay.io/prometheus/alertmanager:v0.27.0"
+  ["grafana/grafana:10.4.3"]="docker.io/grafana/grafana:10.4.3"
+  ["kube-state-metrics/kube-state-metrics:v2.12.0"]="registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0"
+  ["prometheus/node-exporter:v1.8.1"]="quay.io/prometheus/node-exporter:v1.8.1"
+  ["kiwigrid/k8s-sidecar:1.27.4"]="quay.io/kiwigrid/k8s-sidecar:1.27.4"
+  ["kyverno/kyverno:v1.12.5"]="ghcr.io/kyverno/kyverno:v1.12.5"
+  ["kyverno/kyvernopre:v1.12.5"]="ghcr.io/kyverno/kyvernopre:v1.12.5"
+  ["kyverno/background-controller:v1.12.5"]="ghcr.io/kyverno/background-controller:v1.12.5"
+  ["kyverno/cleanup-controller:v1.12.5"]="ghcr.io/kyverno/cleanup-controller:v1.12.5"
+  ["kyverno/reports-controller:v1.12.5"]="ghcr.io/kyverno/reports-controller:v1.12.5"
+)
+
+# Loop sync
+for local_repo in "${!images[@]}"; do
+  public_img="${images[$local_repo]}"
+  target_img="544011261607.dkr.ecr.us-east-1.amazonaws.com/${local_repo}"
+
+  echo "==> Syncing ${public_img} to ${target_img}..."
+  
+  # Tạo ECR repo tương ứng nếu chưa có
+  aws ecr create-repository --repository-name "${local_repo%%:*}" --region us-east-1 || true
+  
+  # Kéo, tag và đẩy ảnh
+  docker pull "${public_img}"
+  docker tag "${public_img}" "${target_img}"
+  docker push "${target_img}"
+done
+```

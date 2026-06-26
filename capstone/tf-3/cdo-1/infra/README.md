@@ -271,3 +271,70 @@ Hạ tầng của Sub-team 1 được triển khai theo mô hình **Multi-State*
     }
     ```
     Cách thiết lập này giúp Helm provider tự động nhận diện và kết nối cụm EKS thật một cách an toàn mà không cần ổ đĩa local phải có file kubeconfig.
+---
+
+## 🔒 Cấu hình Helm Releases trỏ về ECR Private (Manual Image Override Rules)
+
+Do hệ thống chạy **NAT-less**, các module `ingress` và `observability` khi khai báo `helm_release` bắt buộc phải ghi đè các tham số `repository` và `tag` để kéo trực tiếp từ AWS ECR Private thay vì địa chỉ public mặc định.
+
+### 1. Cấu hình cho AWS Load Balancer Controller (`ingress/main.tf`):
+```hcl
+resource "helm_release" "aws_load_balancer_controller" {
+  # ...
+  values = [
+    yamlencode({
+      image = {
+        repository = "544011261607.dkr.ecr.us-east-1.amazonaws.com/amazon/aws-load-balancer-controller"
+        tag        = "v2.8.1"
+      }
+      # ... cấu hình khác
+    })
+  ]
+}
+```
+
+### 2. Cấu hình cho Prometheus Operator Stack (`observability/main.tf`):
+```hcl
+resource "helm_release" "kube_prometheus_stack" {
+  # ...
+  values = [
+    yamlencode({
+      prometheusOperator = {
+        image = {
+          repository = "544011261607.dkr.ecr.us-east-1.amazonaws.com/prometheus-operator/prometheus-operator"
+          tag        = "v0.74.0"
+        }
+        prometheusConfigReloader = {
+          image = {
+            repository = "544011261607.dkr.ecr.us-east-1.amazonaws.com/prometheus-operator/prometheus-config-reloader"
+            tag        = "v0.74.0"
+          }
+        }
+      }
+      prometheus = {
+        prometheusSpec = {
+          image = {
+            repository = "544011261607.dkr.ecr.us-east-1.amazonaws.com/prometheus/prometheus"
+            tag        = "v2.52.0"
+          }
+        }
+      }
+      alertmanager = {
+        alertmanagerSpec = {
+          image = {
+            repository = "544011261607.dkr.ecr.us-east-1.amazonaws.com/prometheus/alertmanager"
+            tag        = "v0.27.0"
+          }
+        }
+      }
+      grafana = {
+        image = {
+          repository = "544011261607.dkr.ecr.us-east-1.amazonaws.com/grafana/grafana"
+          tag        = "10.4.3"
+        }
+      }
+      # Lưu ý: Cần override cả image cho kube-state-metrics, prometheus-node-exporter và k8s-sidecar
+    })
+  ]
+}
+```
