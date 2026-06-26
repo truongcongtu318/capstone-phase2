@@ -218,7 +218,9 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
 ### 2. Chi tiết phân chia công việc & Đầu ra (Deliverables)
 *   **Member 1 (Cloud Network & Endpoints Lead):**
     *   Tái cấu trúc Phase 2: Thiết lập VPC, Private Subnets, Route Tables, và 12 Interface/Gateway Endpoints bảo mật kết nối nội bộ.
-    *   *Đầu ra (Output):* `vpc_id`, `private_subnet_ids`, `public_subnet_ids`.
+    *   Cấu hình AWS OIDC Provider và IAM Roles (`github-ci-plan`/`github-ci-apply`) cho GitHub Actions kết nối AWS không dùng static key.
+    *   Chịu trách nhiệm cấu hình và sửa lỗi chạy `terraform plan/apply` trên pipeline `terraform-pipeline.yml` đối với Phase 1 & 2.
+    *   *Đầu ra (Output):* `vpc_id`, `private_subnet_ids`, `public_subnet_ids`, OIDC Roles.
 *   **Member 2 (Cryptography, Security Group & Escalation Network Lead):**
     *   Cấu hình 5 KMS Keys (`alias/cdo-audit-kms`, `alias/cdo-app-data-kms`, `alias/cdo-secrets-kms`, `alias/cdo-infra-kms`, `alias/cdo-observability-kms`) kèm Key Policies chuẩn hóa.
     *   Cấu hình 5 Security Groups cốt lõi (`sg-alb-internal`, `sg-eks-workload`, `sg-eks-control-plane`, `sg-rds`, `sg-vpc-endpoint`) với Ingress/Egress nghiêm ngặt.
@@ -226,6 +228,7 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
     *   *Đầu ra (Output):* Tất cả KMS Key ARNs, Security Group IDs và SNS Topic ARN.
 *   **Member 3 (Compute Cluster & Ingress Lead):**
     *   Tái cấu trúc Phase 3: EKS Cluster v1.28, Karpenter IAM Roles, OIDC provider, và Phase 4: AWS Load Balancer Controller (LBC).
+    *   Chịu trách nhiệm cấu hình và sửa lỗi chạy `terraform plan/apply` trên pipeline `terraform-pipeline.yml` đối với Phase 3 & 4.
     *   *Đầu ra (Output):* `cluster_name`, `cluster_endpoint`, `cluster_ca_data`, `oidc_provider_arn`.
 
 ### 3. Giải pháp làm việc song song khi bị tắc nghẽn (Block Mitigation)
@@ -258,11 +261,13 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
     *   Tích hợp DynamoDB Lock Cooldown logic.
     *   Thực hiện lọc bảo mật (Scrubbing Regex) loại bỏ credentials/tokens nhạy cảm khỏi telemetry trước khi gửi đi.
     *   Đẩy alert an toàn vào SQS Queue.
+    *   Cấu hình pipeline `app-pipeline.yml` phần Lint code (Ruff/Black) và Unit test (Pytest) chạy tự động cho Webhook.
     *   *Đầu ra (Deliverables):* FastAPI Docker Image, app code, unit tests.
 *   **Member 5 (SQS Worker & AI Client Lead):**
     *   Viết SQS Worker Daemon đọc tin nhắn từ SQS.
     *   Viết Client gọi API AI Engine theo đúng Contract `/v1/detect`, `/v1/decide` và `/v1/verify` (Header: `X-Tenant-Id`, `Idempotency-Key` UUID v4, `X-Correlation-Id`, `X-Dry-Run-Mode`).
     *   Xây dựng bộ lọc validate JSON Schema đối với response từ AI Engine.
+    *   Cấu hình pipeline `app-pipeline.yml` phần Build & Push Docker image (dùng Commit SHA làm Tag) của cả Webhook & SQS Worker lên AWS ECR.
     *   *Đầu ra (Deliverables):* Worker Docker Image, mock AI API test suite.
 *   **Member 6 (Action Execution & Git Committer Lead):**
     *   Viết module Python tương tác Kubernetes SDK (Patch limits, restart deployment).
@@ -307,7 +312,8 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
 *   **Member 7 (GitOps & Security Policy Lead):**
     *   Thiết lập cấu trúc thư mục repo `gitops/` (Argo App-of-Apps).
     *   Cấu hình External Secrets Operator (ESO) và các Kyverno ClusterPolicies bảo vệ cụm.
-    *   *Đầu ra (Deliverables):* GitOps Argo Manifests, Kyverno policy files.
+    *   Xây dựng pipeline `gitops-pipeline.yml` tự động chạy static check (kube-linter/Kubeval) đối với K8s manifests và tự động sync/push code sang AWS CodeCommit repository.
+    *   *Đầu ra (Deliverables):* GitOps Argo Manifests, Kyverno policy files, GitOps CI/CD pipeline code.
 *   **Member 8 (Observability & Audit Stream Lead):**
     *   Triển khai Kube-Prometheus-Stack qua Helm.
     *   Viết Prometheus Alert Rules (`OOMKilled`, `PodCrashLooping`, `QueueBacklog`).
