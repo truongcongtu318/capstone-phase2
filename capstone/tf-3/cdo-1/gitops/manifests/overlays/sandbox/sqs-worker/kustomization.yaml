@@ -1,0 +1,2 @@
+# Kustomization Sandbox Overlay config
+# TODO: Kustomize overlay trỏ về base và apply các files patch: patch-replicas.yaml.

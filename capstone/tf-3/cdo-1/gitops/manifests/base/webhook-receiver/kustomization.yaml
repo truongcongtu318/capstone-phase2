@@ -1,0 +1,2 @@
+# Kustomization Base config
+# TODO: Định nghĩa danh sách resources cơ sở cho Webhook Receiver: deployment.yaml, service.yaml.

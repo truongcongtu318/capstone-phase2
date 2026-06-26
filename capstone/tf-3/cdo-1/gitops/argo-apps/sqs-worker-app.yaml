@@ -1,0 +1,7 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sqs-worker
+  namespace: argocd
+spec:
+  # TODO: Cấu hình Application SQS Worker trỏ về gitops/manifests/overlays/sandbox/

@@ -1,0 +1,4 @@
+# ☸️ NetworkPolicy for AI Engine Isolation
+# TODO: Định nghĩa Kubernetes NetworkPolicy bảo vệ AI Engine pod.
+# - Mặc định block toàn bộ ingress/egress.
+# - Chỉ cho phép ingress port 8080 từ pods mang label app=sqs-worker hoặc app=webhook-receiver.
