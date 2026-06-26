@@ -180,12 +180,12 @@ Một ticket/tính năng chỉ được phép coi là hoàn thành (Done) khi đ
 
 Thư mục `infra/` cũ (Single-State) sẽ được giữ lại làm mã nguồn tham khảo và tiến hành refactor theo các bước sau để chuyển đổi sang mô hình Multi-State SDLC mới:
 
-### 1. Phân tách Single-State thành 4 Phases độc lập (Sub-team 1 thực hiện):
+### 1. Phân tách Single-State thành các Module hạ tầng độc lập (Sub-team 1 thực hiện):
 *   Tạo các thư mục môi trường tương ứng dưới `infra/environments/sandbox/`:
-    *   `phase2-networking/`: Chứa file `main.tf`, `variables.tf`, `outputs.tf` cấu hình VPC, subnets, route tables, KMS keys và Security Groups.
-    *   `phase3-compute/`: Chứa cấu hình EKS Cluster, Karpenter IAM Roles, NodeGroups. Sử dụng `terraform_remote_state` để đọc output `vpc_id` và `subnet_ids` từ `phase2-networking`.
-    *   `phase4-services/`: Chứa cấu hình Helm/Kubernetes provider để cài đặt Karpenter NodePool, AWS Load Balancer Controller, ADOT, Prometheus. Sử dụng `terraform_remote_state` để đọc output từ `phase3-compute`.
-*   Mỗi thư mục Phase trên phải định cấu hình một file `backend.tf` riêng biệt trỏ đến S3 Key độc lập trên S3 bucket `tf-3-aiops-audit-trail` để chia nhỏ Blast Radius.
+    *   `networking/`: Chứa file `main.tf`, `variables.tf`, `outputs.tf` cấu hình VPC, subnets, route tables, KMS keys và Security Groups.
+    *   `compute/`: Chứa cấu hình EKS Cluster, Karpenter IAM Roles, NodeGroups. Sử dụng `terraform_remote_state` để đọc output `vpc_id` và `subnet_ids` từ `networking`.
+    *   `services/`: Chứa cấu hình Helm/Kubernetes provider để cài đặt Karpenter NodePool, AWS Load Balancer Controller, ADOT, Prometheus. Sử dụng `terraform_remote_state` để đọc output từ `compute`.
+*   Mỗi thư mục trên phải định cấu hình một file `backend.tf` riêng biệt trỏ đến S3 Key độc lập trên S3 bucket `tf-3-aiops-audit-trail` để chia nhỏ Blast Radius.
 
 ### 2. Di chuyển các Manifests và App code (Sub-team 2 & 3 thực hiện):
 *   **App Code:** Chuyển toàn bộ code Python, Dockerfile, `requirements.txt` trong `infra/manifests/webhook-receiver/` ra một thư mục ứng dụng độc lập bên ngoài (ví dụ: `<root>/app/webhook-receiver/`) để phục vụ CI build image.
