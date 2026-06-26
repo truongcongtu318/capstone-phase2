@@ -276,6 +276,10 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
     *   Cài đặt **DynamoDB Local** (Docker image: `amazon/dynamodb-local`) chạy trên cổng `8000`.
     *   Cài đặt **LocalStack** chạy local SQS trên cổng `4566`.
     *   Chạy và test toàn bộ logic FastAPI, ghi lock DynamoDB, đẩy SQS hoàn toàn offline trên máy cá nhân.
+    *   **Nguyên tắc chuyển đổi nhanh (Zero Code Changes):** 
+        *   Sử dụng thư viện `boto3` trong Python để khởi tạo AWS Clients.
+        *   Ứng dụng phải đọc biến môi trường `DYNAMODB_ENDPOINT_URL` và `SQS_ENDPOINT_URL` để thiết lập endpoint tùy chỉnh nếu chạy local offline (ví dụ: `http://localhost:8000` và `http://localhost:4566`).
+        *   Khi deploy lên AWS EKS thật, ArgoCD / Helm chart sẽ **không truyền** các biến môi trường endpoint này. `boto3` sẽ tự động chuyển sang cơ chế Auto-Discovery sử dụng IAM Role từ IRSA ServiceAccount (`self-heal-executor`) để gọi trực tiếp các AWS VPC Endpoints nội bộ cụm.
 *   *Nếu AI Team chưa bàn giao AI Engine (Block Member 5 gọi API):*
     *   Tự viết một file FastAPI mock (`mock_ai_engine.py`) chạy cổng `8080` mô phỏng chính xác các phản hồi JSON của `/v1/detect`, `/v1/decide` và `/v1/verify` theo đúng API Contract.
 
