@@ -13,3 +13,7 @@ locals {
     ManagedBy = "terraform"
   }
 }
+variable "tags" {
+  type        = map(string)
+  description = "Cấu hình bộ tags chung bắt buộc của dự án cho INFRA-7"
+}
