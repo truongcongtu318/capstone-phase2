@@ -41,6 +41,48 @@ Do sử dụng mô hình **Multi-State Isolation**, hạ tầng sandbox được
 
 ---
 
+
+
+---
+
+## 🌀 Cơ chế Hoạt động của Multi-State IaC (Multi-State Deep Dive)
+
+Để đảm bảo an toàn vận hành, dự án CDO-01 không sử dụng một file State duy nhất cho toàn bộ hạ tầng. Thay vào đó, hạ tầng được chia thành **3 State độc lập** tương ứng với 3 folder con trong `environments/sandbox/`.
+
+### 1. Tại sao phải sử dụng Multi-State?
+*   **Giảm thiểu vùng ảnh hưởng (Blast Radius):** Nếu một lỗi cấu hình xảy ra trong quá trình cập nhật Kubernetes Services (Phase 4), file State của mạng (VPC/Subnet ở Phase 2) hoàn toàn không bị ảnh hưởng hay khóa (lock).
+*   **Tốc độ thực thi (Performance):** Terraform chỉ cần quét và quản lý một số lượng nhỏ tài nguyên trong từng State, giúp thời gian chạy `plan` và `apply` giảm từ vài chục phút xuống dưới 1-2 phút.
+*   **Phân quyền chặt chẽ (Privilege Separation):** CI/CD pipeline có thể cấp quyền ghi (Write) vào State Networking cho Member 1, nhưng chỉ cấp quyền Đọc (Read-only) cho Member 3.
+
+### 2. Luồng hoạt động & Cơ chế đồng bộ State (Mechanics)
+
+Mỗi thư mục Root Module (`networking`, `compute`, `services`) tự định nghĩa một `backend.tf` riêng biệt trỏ về các S3 State Key khác nhau:
+
+```text
+AWS S3 Bucket: tf-3-aiops-audit-trail (hoặc Bucket State chuyên dụng)
+ ├── sandbox/networking/terraform.tfstate  --> Quản lý VPC, SG, KMS, Endpoints
+ ├── sandbox/compute/terraform.tfstate     --> Quản lý EKS Cluster, Karpenter Roles
+ └── sandbox/services/terraform.tfstate    --> Quản lý Helm Releases, LBC, Prometheus
+```
+
+Khi một thư mục chạy `terraform apply`, cơ chế sau sẽ diễn ra:
+1.  **Idempotency Lock:** Terraform gửi yêu cầu Lock ID lên DynamoDB Table `tf-3-aiops-idempotency-lock`. Nếu có một pipeline hoặc thành viên khác đang chạy apply trên cùng thư mục đó, quá trình sẽ bị chặn lại để tránh ghi đè dữ liệu chéo.
+2.  **Remote State Reference:** Thư mục cấp dưới sẽ sử dụng block `data.terraform_remote_state` để kéo thông tin đầu ra (outputs) của thư mục cấp trên trực tiếp từ S3. Dữ liệu này là Read-Only, đảm bảo thư mục cấp dưới không thể vô tình sửa đổi tài nguyên của cấp trên.
+3.  **Unlock:** Sau khi apply thành công và ghi State mới lên S3, DynamoDB Lock sẽ tự động giải phóng.
+
+### 3. Quy trình chi tiết: Khi nào các State được Apply?
+
+Việc apply các State được quản lý tự động thông qua GitHub Actions pipeline (`terraform-pipeline.yml`) và kích hoạt dựa trên **sự thay đổi của các file trong thư mục tương ứng** (Path-based triggers) theo trình tự bắt buộc:
+
+| Thứ tự | Thành phần (State) | Điều kiện kích hoạt apply (Trigger) | Cơ chế đấu nối kết quả |
+| :---: | :--- | :--- | :--- |
+| **1** | **`networking`** | Khi có Pull Request merge vào `main` chứa thay đổi trong thư mục `infra/environments/sandbox/networking/` hoặc `infra/modules/networking/`. | Dựng xong khung mạng vật lý. Export các outputs cơ bản làm tham số đầu vào cho EKS Cluster. |
+| **2** | **`compute`** | Khi Phase 1 (`networking`) đã deploy thành công **VÀ** có thay đổi code trong thư mục `infra/environments/sandbox/compute/` hoặc `infra/modules/eks/`. | Đọc trực tiếp VPC ID và Subnet IDs từ Networking State qua S3 Remote State. Khởi tạo EKS Cluster Endpoint và CA. |
+| **3** | **`services`** | Khi Phase 2 (`compute`) đã ở trạng thái Active **VÀ** có thay đổi code trong thư mục `infra/environments/sandbox/services/` hoặc các modules Helm (`ingress`, `observability`). | Đọc EKS Cluster Endpoint và CA từ Compute State, kết hợp Security Groups từ Networking State để tạo kết nối Kubernetes provider, tiến hành cài đặt Ingress Controller và Prometheus. |
+
+*Lưu ý quan trọng:* **CẤM** thay đổi thứ tự apply. Nếu `networking` chưa được apply thành công trên AWS Cloud, toàn bộ các lượt apply của `compute` và `services` sẽ tự động thất bại ngay lập tức ở bước `terraform init` do không tìm thấy file remote state đích trên S3.
+
+
 ## 📜 Quy định Tệp tin trong các Thư mục (Terraform File Layout)
 
 Để đảm bảo code sạch, mỗi thư mục làm việc (ở cả `modules/` và `environments/`) bắt buộc phải được chia nhỏ thành các file chuyên trách:
