@@ -8,44 +8,147 @@ Môi trường chạy thử nghiệm Sandbox hỗ trợ 2 Tenants:
 
 ---
 
-## 📂 Sơ đồ cấu trúc toàn bộ Monorepo
+## 📂 Sơ đồ cấu trúc toàn bộ Monorepo (Chi tiết từng File)
 
-Dự án được quy hoạch thành một monorepo thống nhất phân chia trách nhiệm rõ ràng cho 3 sub-teams:
+Dự án được quy hoạch thành một monorepo thống nhất phân chia trách nhiệm rõ ràng cho 3 sub-teams. Để đảm bảo tính ngăn nắp, dễ mở rộng và tránh tình trạng dồn toàn bộ code vào một file duy nhất, các thành viên cam kết thực thi đúng sơ đồ cấu trúc chi tiết sau:
 
 ```text
 capstone/tf-3/cdo-1/
-├── assets/                          # Bản vẽ kiến trúc & Sơ đồ hạ tầng của dự án
+├── assets/                           # Bản vẽ kiến trúc & Sơ đồ hạ tầng của dự án
+│   ├── AWS Cloud Sandbox.png
+│   └── Network Diagram.png
 │
-├── contracts/                       # Các văn bản cam kết giao tiếp (API, Deployment, Telemetry)
-│   ├── ai-api-contract.md           # Hợp đồng gọi API tới AI Engine
-│   ├── deployment-contract.md       # Ràng buộc deploy ứng dụng Webhook & Worker
-│   └── telemetry-contract.md        # Ràng buộc format log bất biến & log scrubbing
+├── contracts/                        # Các văn bản cam kết giao tiếp (API, Deployment, Telemetry)
+│   ├── ai-api-contract.md            # Hợp đồng gọi API tới AI Engine
+│   ├── deployment-contract.md        # Ràng buộc deploy ứng dụng Webhook & Worker
+│   └── telemetry-contract.md         # Ràng buộc format log bất biến & log scrubbing
 │
-├── docs/                            # Tài liệu thiết kế hệ thống chi tiết (Kiến trúc, Bảo mật, Chi phí)
+├── docs/                             # Tài liệu thiết kế hệ thống chi tiết (Kiến trúc, Bảo mật, Chi phí)
+│   ├── 01_requirements_analysis.md
+│   ├── 02_infra_design.md
+│   ├── 03_security_design.md
+│   └── 04_deployment_design.md
 │
-├── infra/                           # 🏗️ IaC Terraform (Sub-team 1 - Platform & Cloud Infra)
-│   ├── bootstrap/                   # Tạo S3 State, DynamoDB Lock table & OIDC Roles cho GitHub Actions
-│   ├── modules/                     # Các Child Modules tái sử dụng (Networking, Security, EKS, Karpenter, Ingress, Observability)
-│   └── environments/                # Deployment Root Modules (Networking -> Compute -> Services)
+├── infra/                            # 🏗️ IaC Terraform (Sub-team 1 - Platform & Cloud Infra)
+│   ├── bootstrap/                    # Khởi tạo S3 backend, DynamoDB Lock table và OIDC Roles cho GitHub Actions
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   ├── versions.tf
+│   │   └── providers.tf
+│   │
+│   ├── modules/                      # Các child modules định nghĩa tài nguyên (Reusable Blueprints)
+│   │   ├── networking/               # VPC, Subnets, Gateway, Route Tables, VPC Endpoints
+│   │   │   ├── main.tf
+│   │   │   ├── endpoints.tf          # Cấu hình 12 AWS VPC Endpoints (S3, DynamoDB, SecretsManager...)
+│   │   │   ├── variables.tf
+│   │   │   └── outputs.tf
+│   │   ├── security/                 # KMS keys (secrets, logs, app data), Security Groups
+│   │   │   ├── main.tf
+│   │   │   ├── security-groups.tf    # Định nghĩa 5 Security Groups cốt lõi
+│   │   │   ├── variables.tf
+│   │   │   └── outputs.tf
+│   │   ├── eks/                      # EKS Cluster, OIDC integration, Node Groups và IAM roles
+│   │   │   ├── main.tf
+│   │   │   ├── iam.tf                # Khai báo IAM Roles & Policies cho Control plane & Nodes
+│   │   │   ├── variables.tf
+│   │   │   └── outputs.tf
+│   │   ├── karpenter/                # IAM Role, Controller Policies & Instance Profile cho Karpenter
+│   │   │   ├── main.tf
+│   │   │   ├── variables.tf
+│   │   │   └── outputs.tf
+│   │   ├── ingress/                  # AWS Load Balancer Controller Helm integration
+│   │   │   ├── main.tf
+│   │   │   ├── variables.tf
+│   │   │   └── outputs.tf
+│   │   └── observability/            # Prometheus Helm Stack & ADOT (Collector config)
+│   │       ├── main.tf
+│   │       ├── variables.tf
+│   │       └── outputs.tf
+│   │
+│   └── environments/                 # Triển khai thực tế theo môi trường (Root Modules)
+│       └── sandbox/                  # Môi trường kiểm thử Sandbox
+│           ├── networking/           # Gọi module networking & security (VPC, KMS, SGs)
+│           │   ├── main.tf
+│           │   ├── providers.tf
+│           │   ├── versions.tf
+│           │   ├── variables.tf
+│           │   ├── outputs.tf
+│           │   ├── backend.tf        # S3 backend key: sandbox/networking/terraform.tfstate
+│           │   └── terraform.tfvars
+│           ├── compute/              # Gọi module eks & karpenter (Dựng EKS, gán node roles)
+│           │   ├── main.tf
+│           │   ├── providers.tf
+│           │   ├── versions.tf
+│           │   ├── variables.tf
+│           │   ├── outputs.tf
+│           │   ├── backend.tf        # S3 backend key: sandbox/compute/terraform.tfstate
+│           │   └── terraform.tfvars
+│           └── services/             # Gọi module ingress & observability (Cài LBC & Prometheus)
+│               ├── main.tf
+│               ├── providers.tf
+│               ├── versions.tf
+│               ├── variables.tf
+│               ├── outputs.tf
+│               ├── backend.tf        # S3 backend key: sandbox/services/terraform.tfstate
+│               └── terraform.tfvars
 │
-├── app/                             # 💻 Application Source Code (Sub-team 2 - Application & AI Integration)
-│   ├── webhook-receiver/            # FastAPI Webhook tiếp nhận alerts (Port 8443, path /alerts)
-│   │   ├── src/                     # Logic chính (DynamoDB lock, Log scrubbing)
+├── app/                              # 💻 Application Source Code (Sub-team 2 - App & AI Integration)
+│   ├── webhook-receiver/             # 1. FastAPI Webhook tiếp nhận alerts (Port 8443)
+│   │   ├── src/                      # Logic module hóa
+│   │   │   ├── __init__.py
+│   │   │   ├── main.py               # FastAPI Entrypoint & Routes
+│   │   │   ├── config.py             # Đọc và validate biến môi trường (DYNAMODB_ENDPOINT_URL...)
+│   │   │   ├── security.py           # Log scrubbing regex sanitization middleware
+│   │   │   └── client_ddb.py         # DynamoDB client thực hiện Conditional Write lock
 │   │   ├── Dockerfile
 │   │   └── requirements.txt
-│   ├── sqs-worker/                  # SQS Worker xử lý tự vá lỗi (Đọc queue -> Gọi AI Engine -> Patch & Commit)
-│   │   ├── src/                     # Logic chính (Circuit Breaker, AI Client, Patch Executor, Audit Logger)
+│   │
+│   ├── sqs-worker/                   # 2. SQS Worker xử lý và điều phối luồng tự vá lỗi
+│   │   ├── src/                      # Logic module hóa
+│   │   │   ├── __init__.py
+│   │   │   ├── main.py               # Loop polling tin nhắn từ SQS Queue
+│   │   │   ├── config.py             # Quản lý cấu hình env (SQS_ENDPOINT_URL...)
+│   │   │   ├── ai_client.py          # Kết nối & gọi API AI Engine (/detect, /decide, /verify)
+│   │   │   ├── circuit_breaker.py    # Quản lý trạng thái ngắt mạch & bắn SNS alert
+│   │   │   ├── patch_executor.py     # Gọi K8s API patch & git push lên AWS CodeCommit
+│   │   │   └── audit_logger.py       # Logger đẩy log bất biến qua Kinesis Firehose lên S3
 │   │   ├── Dockerfile
 │   │   └── requirements.txt
-│   └── tests/                       # Bộ kiểm thử tập trung (Mock LocalStack & DynamoDB Local)
+│   │
+│   └── tests/                        # 🧪 Bộ kiểm thử tập trung (Pytest Suite)
+│       ├── conftest.py               # Thiết lập LocalStack & DynamoDB local fixtures
+│       ├── test_webhook.py           # Unit tests kiểm tra idempotency & cooldown
+│       └── test_worker.py            # Unit tests kiểm tra AI API headers, Circuit Breaker
 │
-├── gitops/                          # ☸️ Kubernetes Manifests & GitOps (Sub-team 3 - GitOps, Observability & Validation)
-│   ├── argo-apps/                   # Cấu hình ArgoCD App-of-Apps
-│   ├── manifests/                   # Kustomize Base & Overlays (sandbox, dev, prod)
-│   ├── security-policies/           # Kyverno ClusterPolicies & NetworkPolicies giới hạn traffic
-│   └── monitoring/                  # Prometheus Alertmanager & Grafana configurations
+├── gitops/                           # ☸️ Kubernetes Manifests & GitOps (Sub-team 3 - GitOps & Validation)
+│   ├── argo-apps/                    # Cấu hình ArgoCD App-of-Apps
+│   │   ├── root-application.yaml     # Root App quản lý toàn bộ các ứng dụng con
+│   │   ├── webhook-receiver-app.yaml
+│   │   ├── sqs-worker-app.yaml
+│   │   └── ai-engine-app.yaml        # Quản lý Deploy AI Engine Container
+│   │
+│   ├── manifests/                    # Kustomize Base & Overlays (sandbox)
+│   │   ├── base/                     # Cấu hình manifests nền (dùng chung)
+│   │   │   ├── webhook-receiver/     # deployment.yaml, service.yaml, kustomization.yaml
+│   │   │   ├── sqs-worker/           # deployment.yaml, serviceaccount.yaml (IRSA), kustomization.yaml
+│   │   │   └── ai-engine/            # deployment.yaml, service.yaml, external-secret.yaml, kustomization.yaml
+│   │   └── overlays/                 # Triển khai thực tế theo môi trường
+│   │       └── sandbox/              # Ghi đè cấu hình ECR tags, replica limits, env overrides cho Sandbox
+│   │           ├── webhook-receiver/ # patch-env.yaml, kustomization.yaml
+│   │           ├── sqs-worker/       # patch-replicas.yaml, kustomization.yaml
+│   │           ├── ai-engine/        # patch-image.yaml, kustomization.yaml
+│   │           └── kustomization.yaml
+│   │
+│   ├── security-policies/            # Kyverno Admission Controller & Network Policies
+│   │   ├── restrict-mutations.yaml   # Chặn mọi mutations ngoại trừ limits và replicas
+│   │   └── network-policies/         # Cách ly mạng nội bộ cụm EKS
+│   │       ├── ai-engine-netpolicy.yaml # Chỉ nhận traffic từ Webhook & Worker
+│   │       └── webhook-netpolicy.yaml
+│   │
+│   └── monitoring/                   # Cấu hình Alertmanager & Grafana dashboards
 │
-└── infra-old/                       # 📦 Thư viện tham khảo tĩnh (Legacy single-state code)
+└── infra-old/                        # 📦 Thư viện tham khảo tĩnh (Legacy single-state code)
 ```
 
 ---
