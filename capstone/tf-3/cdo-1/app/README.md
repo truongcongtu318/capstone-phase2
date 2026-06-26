@@ -70,3 +70,44 @@ Khi gọi API đến container AI Engine, bắt buộc phải truyền đầy đ
 *   `Idempotency-Key`: Khóa chống trùng lặp (UUIDv4 được tạo ngẫu nhiên cho mỗi phiên làm việc).
 *   `X-Correlation-Id`: ID theo vết phiên (UUIDv4 truyền từ Webhook sang Worker qua SQS).
 *   `X-Dry-Run-Mode`: Chế độ chạy thử nghiệm (Giá trị: `"true"` hoặc `"false"`).
+
+---
+
+## 👥 Phân Vai Chi Tiết Trong Sub-team 2 (Member Responsibilities)
+
+Để đảm bảo hiệu quả làm việc nhóm song song và tránh giẫm chân lên nhau, các thành viên Sub-team 2 được phân công nhiệm vụ cụ thể và tương ứng với từng file như sau:
+
+### 1. **Member 4 (App & AI API Lead) - Nhóm trưởng kỹ thuật ứng dụng**
+*   **Trách nhiệm chính:**
+    *   Thiết lập khung FastAPI Webhook, quản lý cấu hình tập trung.
+    *   Tích hợp HTTP client kết nối AI Engine và đảm bảo truyền chuẩn xác 4 Custom HTTP Headers.
+*   **Các file đảm nhiệm:**
+    *   `app/webhook-receiver/src/main.py` (FastAPI endpoints)
+    *   `app/webhook-receiver/src/config.py` & `app/sqs-worker/src/config.py` (Quản lý env/config)
+    *   `app/sqs-worker/src/ai_client.py` (AI API Client)
+    *   `app/webhook-receiver/Dockerfile` & `app/sqs-worker/Dockerfile`
+
+### 2. **Member 5 (Idempotency & Incident Flow Lead) - Chuyên gia luồng xử lý & DB**
+*   **Trách nhiệm chính:**
+    *   Thiết kế logic DynamoDB conditional write để ghi lock sự cố và xử lý thời gian cooldown.
+    *   Phát triển logic polling chính của SQS Worker và cơ chế Circuit Breaker (ngắt mạch khi lỗi 3 lần/giờ) kết hợp đẩy thông báo khẩn qua SNS.
+*   **Các file đảm nhiệm:**
+    *   `app/webhook-receiver/src/client_ddb.py` (DynamoDB locking logic)
+    *   `app/sqs-worker/src/main.py` (SQS Polling Loop)
+    *   `app/sqs-worker/src/circuit_breaker.py` (Circuit Breaker & SNS Alerts)
+
+### 3. **Member 6 (SOC2 Auditing & Platform Integration Lead) - Chuyên gia bảo mật & Tự vá EKS**
+*   **Trách nhiệm chính:**
+    *   Xây dựng bộ lọc log scrubbing tuân thủ SOC2 (lọc PII & secrets bằng Regex).
+    *   Tích hợp K8s Python SDK thực thi vá tài nguyên (limits, replicas) và Git push lên AWS CodeCommit (Dual Execution Path).
+    *   Phát triển module đẩy telemetry log bất biến qua Kinesis Data Firehose lên S3.
+*   **Các file đảm nhiệm:**
+    *   `app/webhook-receiver/src/security.py` (Log scrubbing middleware)
+    *   `app/sqs-worker/src/patch_executor.py` (K8s Patching & Git Commit logic)
+    *   `app/sqs-worker/src/audit_logger.py` (Kinesis Firehose integrations)
+
+### 4. **Hợp tác viết Unit Tests (`app/tests/`):**
+Cả 3 thành viên cùng phối hợp viết tests tương ứng với code mình phụ trách trong thư mục `app/tests/` (sử dụng fixture trong `conftest.py` làm mock AWS endpoints).
+*   Member 4 $\rightarrow$ `test_webhook.py` (FastAPI test).
+*   Member 5 $\rightarrow$ `test_webhook.py` & `test_worker.py` (DynamoDB Lock & Circuit Breaker tests).
+*   Member 6 $\rightarrow$ `test_worker.py` (Log scrubbing & execution tests).
