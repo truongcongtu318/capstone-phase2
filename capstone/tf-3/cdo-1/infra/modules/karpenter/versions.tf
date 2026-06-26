@@ -14,5 +14,11 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.31"
     }
+    kubectl = {
+      # gavinbunney/kubectl used for CRD-based resources (NodePool, EC2NodeClass)
+      # that the hashicorp/kubernetes provider cannot handle (unknown schema)
+      source  = "gavinbunney/kubectl"
+      version = "~> 1.14"
+    }
   }
 }

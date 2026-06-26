@@ -1,0 +1,14 @@
+# Ignore downloaded modules and providers during tfsec/checkov scans
+.terraform/
+
+# Ignore state files
+*.tfstate
+*.tfstate.*
+
+# Ignore variable files containing secrets to avoid fake credentials alerts
+*.tfvars
+*.tfvars.json
+
+# Ignore log files
+crash.log
+crash.*.log

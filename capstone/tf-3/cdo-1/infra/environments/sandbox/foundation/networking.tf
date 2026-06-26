@@ -2,5 +2,7 @@
 module "networking" {
   source = "../../../modules/networking"
 
-  tags = local.common_tags
+  sg_vpc_endpoint_id = module.security.sg_vpc_endpoint_id
+  tags               = local.common_tags
 }
+

@@ -7,5 +7,7 @@ module "karpenter" {
   oidc_provider_arn  = module.eks.oidc_provider_arn
   private_subnet_ids = module.networking.private_subnet_ids
   sg_eks_workload_id = module.security.sg_eks_workload_id
+  node_iam_role_arn  = module.eks.node_iam_role_arn
+  node_iam_role_name = module.eks.node_iam_role_name
   tags               = local.common_tags
 }

@@ -14,3 +14,8 @@ variable "github_repo" {
   description = "org/repo cho GitHub OIDC trust policy (CI auth) — vd \"truongcongtu318/capstone-phase2\""
   type        = string
 }
+variable "tags" {
+  type        = map(string)
+  description = "Map tags truyền từ root (để trống hoặc không dùng ở module bootstrap)"
+  default     = {}
+}

@@ -3,3 +3,13 @@
 CAPSTONE_EVIDENCE_PACK_FORMAT.md
 TF3_SELFHEAL_LEARNER.md
 .claude/
+
+# Terraform ignores
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+
