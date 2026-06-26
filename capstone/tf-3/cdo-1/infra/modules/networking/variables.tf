@@ -33,3 +33,10 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "sg_vpc_endpoint_id" {
+  description = "Security Group ID cho VPC Interface Endpoints (từ module.security)"
+  type        = string
+  default     = null
+}
+
