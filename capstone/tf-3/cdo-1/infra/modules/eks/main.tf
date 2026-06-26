@@ -257,8 +257,14 @@ resource "aws_eks_addon" "kube_proxy" {
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name = aws_eks_cluster.this.name
   addon_name   = "vpc-cni"
-  tags         = local.module_tags
-  depends_on   = [aws_eks_node_group.system]
+  # enableNetworkPolicy required for INFRA-8 Kubernetes NetworkPolicy enforcement
+  configuration_values = jsonencode({
+    env = {
+      ENABLE_NETWORK_POLICY = "true"
+    }
+  })
+  tags       = local.module_tags
+  depends_on = [aws_eks_node_group.system]
 }
 
 resource "aws_eks_addon" "pod_identity_agent" {

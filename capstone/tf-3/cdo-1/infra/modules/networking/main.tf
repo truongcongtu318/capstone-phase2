@@ -1,17 +1,19 @@
+data "aws_region" "current" {}
+
 locals {
   interface_services = {
-    sqs              = "com.amazonaws.us-east-1.sqs"
-    kinesis_firehose = "com.amazonaws.us-east-1.kinesis-firehose"
-    secretsmanager   = "com.amazonaws.us-east-1.secretsmanager"
-    kms              = "com.amazonaws.us-east-1.kms"
-    logs             = "com.amazonaws.us-east-1.logs"
-    monitoring       = "com.amazonaws.us-east-1.monitoring"
-    ecr_api          = "com.amazonaws.us-east-1.ecr.api"
-    ecr_dkr          = "com.amazonaws.us-east-1.ecr.dkr"
-    sts              = "com.amazonaws.us-east-1.sts"
-    git_codecommit   = "com.amazonaws.us-east-1.git-codecommit"
-    codecommit       = "com.amazonaws.us-east-1.codecommit"
-    sns              = "com.amazonaws.us-east-1.sns"
+    sqs              = "com.amazonaws.${data.aws_region.current.name}.sqs"
+    kinesis_firehose = "com.amazonaws.${data.aws_region.current.name}.kinesis-firehose"
+    secretsmanager   = "com.amazonaws.${data.aws_region.current.name}.secretsmanager"
+    kms              = "com.amazonaws.${data.aws_region.current.name}.kms"
+    logs             = "com.amazonaws.${data.aws_region.current.name}.logs"
+    monitoring       = "com.amazonaws.${data.aws_region.current.name}.monitoring"
+    ecr_api          = "com.amazonaws.${data.aws_region.current.name}.ecr.api"
+    ecr_dkr          = "com.amazonaws.${data.aws_region.current.name}.ecr.dkr"
+    sts              = "com.amazonaws.${data.aws_region.current.name}.sts"
+    git_codecommit   = "com.amazonaws.${data.aws_region.current.name}.git-codecommit"
+    codecommit       = "com.amazonaws.${data.aws_region.current.name}.codecommit"
+    sns              = "com.amazonaws.${data.aws_region.current.name}.sns"
   }
 }
 
@@ -103,9 +105,9 @@ resource "aws_route_table_association" "private" {
 # 6. Gateway VPC Endpoints (S3, DynamoDB)
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.this.id
-  service_name      = "com.amazonaws.us-east-1.s3"
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private.id, aws_route_table.public.id]
+  route_table_ids   = [aws_route_table.private.id]
 
   tags = merge(local.module_tags, {
     Name = "${var.name_prefix}-vpce-s3"
@@ -114,9 +116,9 @@ resource "aws_vpc_endpoint" "s3" {
 
 resource "aws_vpc_endpoint" "dynamodb" {
   vpc_id            = aws_vpc.this.id
-  service_name      = "com.amazonaws.us-east-1.dynamodb"
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.dynamodb"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = [aws_route_table.private.id, aws_route_table.public.id]
+  route_table_ids   = [aws_route_table.private.id]
 
   tags = merge(local.module_tags, {
     Name = "${var.name_prefix}-vpce-dynamodb"

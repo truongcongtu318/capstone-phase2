@@ -137,7 +137,62 @@ Implement 5 Security Groups + standalone SG rules + 5 KMS CMKs via `for_each`.
 
 ---
 
-## 5. Files đã tạo/sửa trong session này (branch `tan-1`)
+## 5. Bugs tìm được và đã fix sau khi pull main (post-merge review)
+
+Review toàn bộ modules sau khi merge tất cả PR. 4 bug đã fix, 1 bug cũ đã ghi nhận ở §4.
+
+### BUG-1 — CRITICAL, ĐÃ FIX: `networking/main.tf` — Reference đến resource bị comment out
+**File:** `modules/networking/main.tf`, cũ là line 108 + 118
+**Vấn đề:** Gateway VPC endpoints (S3, DynamoDB) có:
+```hcl
+route_table_ids = [aws_route_table.private.id, aws_route_table.public.id]
+```
+Nhưng `aws_route_table.public` bị **comment out** (sandbox NAT-less design không cần public route).
+`terraform apply` sẽ fail ngay với: `Reference to undeclared resource`.
+**Fix:** Bỏ `aws_route_table.public.id` khỏi cả 2 gateway endpoint — chỉ còn `[aws_route_table.private.id]`.
+
+### BUG-2 — CRITICAL, ĐÃ FIX: `networking/main.tf` — Hardcode `us-east-1` trong mọi VPC endpoint service name
+**File:** `modules/networking/main.tf`, locals block + service names S3/DynamoDB
+**Vấn đề:** Tất cả service name đều hardcode `"com.amazonaws.us-east-1.xxx"` thay vì dùng data source.
+Vi phạm CLAUDE.md §6 rule 3: "Không cho AI tự chọn region — luôn lấy qua var.*".
+**Fix:** Thêm `data "aws_region" "current" {}` và thay tất cả hardcode bằng
+`"com.amazonaws.${data.aws_region.current.name}.xxx"`.
+
+### BUG-3 — CRITICAL, ĐÃ FIX: `observability/main.tf` — Sai webhook receiver URL hoàn toàn
+**File:** `modules/observability/main.tf`, line 11
+**Vấn đề:** URL trong Alertmanager config là:
+`http://webhook-receiver.self-heal-system.svc.cluster.local:8000/alert`
+Nhưng service thật (tạo trong session này) là:
+- Service name: `patch-receiver` (không phải `webhook-receiver`)
+- Port: `8443` (không phải `8000`)
+- Path: `/alerts` (không phải `/alert`)
+Hệ quả: Alertmanager fire alert, không đến được receiver, pipeline self-heal không kích hoạt.
+**Fix:** Sửa thành `http://patch-receiver.self-heal-system.svc.cluster.local:8443/alerts`.
+
+### BUG-4 — IMPORTANT, ĐÃ FIX: `foundation/variables.tf` — `variable "tags"` không có default
+**File:** `environments/sandbox/foundation/variables.tf`
+**Vấn đề:** `variable "tags"` khai báo `type = map(string)` nhưng không có `default`. Trong Terraform
+v1.7+, biến không có default và không được cung cấp qua tfvars sẽ prompt interactive hoặc fail CI.
+Thực tế tất cả module call dùng `local.common_tags`, biến này không được reference ở đâu.
+**Fix:** Thêm `default = {}`.
+
+### BUG-5 — ADVISORY, ĐÃ FIX: `eks/main.tf` — vpc-cni addon thiếu `enableNetworkPolicy: true`
+**File:** `modules/eks/main.tf`, addon `vpc-cni`
+**Vấn đề:** Không có `configuration_values`. Nếu thiếu, K8s NetworkPolicy (INFRA-8) không được
+enforce bởi vpc-cni plugin → policy tạo ra nhưng silently ignored → trust model "Local Trust" bị
+phá vỡ.
+**Fix:** Thêm `configuration_values = jsonencode({env = {ENABLE_NETWORK_POLICY = "true"}})`.
+
+### BUG-6 — CRITICAL, ĐÃ FIX: `observability/main.tf` — Duplicate `module_tags` local value
+**File:** `modules/observability/main.tf`
+**Vấn đề:** `locals` block trong `main.tf` tự định nghĩa `module_tags`, trùng với định nghĩa
+trong `tags.tf` (đúng theo CLAUDE.md §4). `terraform validate` báo lỗi:
+`Duplicate local value definition at tags.tf:4`.
+**Fix:** Xóa `module_tags` khỏi `main.tf`, giữ nguyên `tags.tf`.
+
+---
+
+## 6. Files đã tạo/sửa trong session này (branch `tan-1`)
 
 ### `manifests/ai-engine/service.yaml` — sửa comment
 Ghi đúng trust model: HTTP nội bộ thuần, đã bỏ SigV4, mTLS chỉ tùy chọn,
@@ -186,7 +241,7 @@ E2E test với Alertmanager → receiver → AI Engine.
 
 ---
 
-## 6. Nơi nên xem khi review/debug
+## 7. Nơi nên xem khi review/debug
 
 | Vấn đề | Xem ở đâu |
 |---|---|
@@ -201,7 +256,7 @@ E2E test với Alertmanager → receiver → AI Engine.
 
 ---
 
-## 7. Câu lệnh hay dùng
+## 8. Câu lệnh hay dùng
 
 ```bash
 # Xem PR đang mở

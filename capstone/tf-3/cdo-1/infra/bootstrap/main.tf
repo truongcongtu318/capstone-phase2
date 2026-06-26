@@ -1,6 +1,6 @@
-# INFRA-1: Bootstrap — State Backend + GitHub Actions OIDC
+# INFRA-1: Bootstrap - State Backend + GitHub Actions OIDC
 # Theo docs/04_deployment_design.md §1.1 và §1.3
-# Không phụ thuộc module nào khác — apply đầu tiên bằng local backend.
+# Không phụ thuộc module nào khác - apply đầu tiên bằng local backend.
 #
 # SAU KHI apply xong, copy output vào environments/sandbox/foundation/backend.tf
 
@@ -8,12 +8,12 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 # ─────────────────────────────────────────────
-# 1. KMS KEY — mã hóa Terraform state bucket
+# 1. KMS KEY - mã hóa Terraform state bucket
 #    Riêng biệt với 5 KMS key của app (security module)
 # ─────────────────────────────────────────────
 
 resource "aws_kms_key" "state" {
-  description             = "KMS key for Terraform state bucket — ${var.name_prefix}-${var.environment}"
+  description             = "KMS key for Terraform state bucket - ${var.name_prefix}-${var.environment}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -44,13 +44,13 @@ resource "aws_kms_alias" "state" {
 }
 
 # ─────────────────────────────────────────────
-# 2. S3 BUCKET — Terraform state storage
+# 2. S3 BUCKET - Terraform state storage
 #    Naming: tf3-cdo1-<env>-tfstate-<account_id>
 #    Theo CLAUDE.md §4: tf3-cdo1-sandbox-<component>
 # ─────────────────────────────────────────────
 
 resource "aws_s3_bucket" "state" {
-  # Tên bucket phải globally unique — thêm account id để tránh conflict
+  # Tên bucket phải globally unique - thêm account id để tránh conflict
   bucket = "${var.name_prefix}-${var.environment}-tfstate-${data.aws_caller_identity.current.account_id}"
 
   # Bảo vệ khỏi xóa nhầm (state bucket là critical)
@@ -88,7 +88,7 @@ resource "aws_s3_bucket_public_access_block" "state" {
   restrict_public_buckets = true
 }
 
-# DenyInsecureTransport — theo docs/03_security_design.md §4.2
+# DenyInsecureTransport - theo docs/03_security_design.md §4.2
 resource "aws_s3_bucket_policy" "state_deny_http" {
   bucket = aws_s3_bucket.state.id
 
@@ -97,7 +97,7 @@ resource "aws_s3_bucket_policy" "state_deny_http" {
 
   # Bucket policy chỉ chứa DenyInsecureTransport.
   # Quyền S3 cho GitHub Actions được cấp qua IAM identity-based policy
-  # (aws_iam_role_policy.*) — không cần Allow ở đây.
+  # (aws_iam_role_policy.*) - không cần Allow ở đây.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -121,7 +121,7 @@ resource "aws_s3_bucket_policy" "state_deny_http" {
 }
 
 # ─────────────────────────────────────────────
-# 3. DYNAMODB TABLE — Terraform state lock
+# 3. DYNAMODB TABLE - Terraform state lock
 #    KHÔNG nhầm với tf-3-aiops-idempotency-lock (app)
 #    Theo CLAUDE.md §1: bảng app lock đặt tên riêng
 # ─────────────────────────────────────────────
@@ -136,7 +136,7 @@ resource "aws_dynamodb_table" "state_lock" {
     type = "S"
   }
 
-  # Mã hóa bằng KMS state key — theo docs/03_security_design.md §4.1
+  # Mã hóa bằng KMS state key - theo docs/03_security_design.md §4.1
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.state.arn
@@ -161,15 +161,15 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 # ─────────────────────────────────────────────
-# 4a. IAM Role: CI PLAN — Read-only, trust mọi ref
+# 4a. IAM Role: CI PLAN - Read-only, trust mọi ref
 #     Dùng cho: Lint / Test / Scan / Plan (docs §2.1)
 #     Bất kỳ branch/tag/PR nào trong repo đều có thể assume role này
-#     vì chỉ có quyền đọc — không thể thay đổi state hay push image.
+#     vì chỉ có quyền đọc - không thể thay đổi state hay push image.
 # ─────────────────────────────────────────────
 
 resource "aws_iam_role" "github_actions_plan" {
   name        = "${var.name_prefix}-${var.environment}-github-ci-plan"
-  description = "GitHub Actions OIDC role — plan/validate only, any ref — ${var.github_repo}"
+  description = "GitHub Actions OIDC role - plan/validate only, any ref - ${var.github_repo}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -182,7 +182,7 @@ resource "aws_iam_role" "github_actions_plan" {
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
-          # Cho phép mọi branch/tag/PR — role này chỉ có quyền đọc
+          # Cho phép mọi branch/tag/PR - role này chỉ có quyền đọc
           StringLike = {
             "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:*"
           }
@@ -262,15 +262,15 @@ resource "aws_iam_role_policy" "plan_tfstate_read" {
 }
 
 # ─────────────────────────────────────────────
-# 4b. IAM Role: CI APPLY — Write ops, chỉ trust main branch
+# 4b. IAM Role: CI APPLY - Write ops, chỉ trust main branch
 #     Dùng cho: Terraform Apply + ECR Push + Smoke test (docs §2.1)
-#     CHỈ main branch được assume role này —
+#     CHỈ main branch được assume role này -
 #     PR từ fork hoặc feature branch KHÔNG thể mutate state hay push image.
 # ─────────────────────────────────────────────
 
 resource "aws_iam_role" "github_actions_apply" {
   name        = "${var.name_prefix}-${var.environment}-github-ci-apply"
-  description = "GitHub Actions OIDC role — apply/push, main branch only — ${var.github_repo}"
+  description = "GitHub Actions OIDC role - apply/push, main branch only - ${var.github_repo}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -334,7 +334,7 @@ resource "aws_iam_role_policy" "apply_tfstate_write" {
   })
 }
 
-# Apply role: ECR push — Stage "Publish" (docs §2.1)
+# Apply role: ECR push - Stage "Publish" (docs §2.1)
 resource "aws_iam_role_policy" "apply_ecr_push" {
   name = "ecr-push"
   role = aws_iam_role.github_actions_apply.id
@@ -368,7 +368,7 @@ resource "aws_iam_role_policy" "apply_ecr_push" {
   })
 }
 
-# Apply role: EKS describe — Terraform provider config + smoke test
+# Apply role: EKS describe - Terraform provider config + smoke test
 resource "aws_iam_role_policy" "apply_eks_describe" {
   name = "eks-describe"
   role = aws_iam_role.github_actions_apply.id
