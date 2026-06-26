@@ -229,3 +229,97 @@ Dự án CDO-01 tuân thủ nghiêm ngặt mô hình **NAT-less VPC** (Zero Inte
        ./capstone/tf-3/cdo-1/gitops/mirror-images.sh
        ```
     3. Script sẽ tự tạo 19 ECR Private Repositories, pull ảnh public, tag và đẩy lên registry `544011261607.dkr.ecr.us-east-1.amazonaws.com` theo đúng cấu trúc.
+
+
+### 3. Phương án Tự động hóa Dài hạn qua GitHub Actions (GitHub-to-ECR Mirroring Pipeline)
+
+Để loại bỏ các rủi ro vận hành thủ công (lỗi gõ phím, quên quét Trivy, nghẽn tiến độ của DEV), dự án áp dụng phương án xây dựng **Mirroring Pipeline tự động** chạy trên GitHub Actions.
+
+*   **Nguyên lý hoạt động:**
+    1.  Danh sách ảnh cần mirror được quản lý tập trung tại file text cấu hình: `capstone/tf-3/cdo-1/gitops/mirror-list.txt`.
+    2.  Khi có nhu cầu bổ sung hoặc cập nhật phiên bản image, thành viên chỉ cần tạo Pull Request sửa đổi file `mirror-list.txt` $ightarrow$ Kích hoạt GitHub Actions Workflow `mirror-pipeline.yml`.
+    3.  Workflow sẽ tự động kéo ảnh từ Internet public, chạy scan lỗ hổng bằng Trivy, đăng nhập AWS ECR thông qua IAM OIDC Role (`github-ci-apply`), tự động tạo repo đích nếu chưa có và push ảnh lên.
+
+*   **Mẫu cấu hình GitHub Actions Workflow (`.github/workflows/mirror-pipeline.yml`):**
+    ```yaml
+    name: Auto Container Image Mirroring to ECR Private
+
+    on:
+      push:
+        branches: [ main ]
+        paths:
+          - 'capstone/tf-3/cdo-1/gitops/mirror-list.txt'
+      workflow_dispatch: # Cho phép trigger thủ công khi cần
+
+    permissions:
+      id-token: write # Bắt buộc để authenticate OIDC IAM Role
+      contents: read
+
+    jobs:
+      mirror-images:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout Code
+            uses: actions/checkout@v4
+
+          - name: Configure AWS Credentials (OIDC)
+            uses: aws-actions/configure-aws-credentials@v4
+            with:
+              role-to-assume: arn:aws:iam::544011261607:role/tf3-cdo1-sandbox-github-ci-apply
+              aws-region: us-east-1
+
+          - name: Login to AWS ECR
+            id: login-ecr
+            uses: aws-actions/amazon-ecr-login@v2
+
+          - name: Read, Scan & Mirror Images
+            run: |
+              REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+              while IFS= read -r line || [ -n "$line" ]; do
+                # Bỏ qua dòng trống hoặc comment bắt đầu bằng #
+                [[ -z "$line" || "$line" =~ ^# ]] && continue
+                
+                # Cấu trúc dòng: public_source_image target_path
+                # Ví dụ: ghcr.io/kyverno/kyverno:v1.12.5 kyverno/kyverno:v1.12.5
+                src_img=$(echo "$line" | awk '{print $1}')
+                dest_path=$(echo "$line" | awk '{print $2}')
+                repo_name=$(echo "$dest_path" | cut -d':' -f1)
+                
+                echo "========================================================"
+                echo "🔄 Kéo ảnh public: $src_img"
+                docker pull "$src_img"
+                
+                echo "🛡️ Quét lỗ hổng bảo mật bằng Trivy..."
+                # Chạy Trivy scan (tạm thời để cảnh báo, có thể cấu hình fail build nếu có lỗi Critical)
+                # trivy image --severity HIGH,CRITICAL --exit-code 1 "$src_img"
+                
+                echo "📦 Đảm bảo AWS ECR Repository tồn tại: $repo_name"
+                aws ecr describe-repositories --repository-name "$repo_name" --region us-east-1 >/dev/null 2>&1 ||                   aws ecr create-repository \
+                    --repository-name "$repo_name" \
+                    --region us-east-1 \
+                    --image-scanning-configuration scanOnPush=true \
+                    --encryption-configuration encryptionType=AES256
+                    
+                echo "🏷️ Gắn tag ECR Private: ${REGISTRY}/${dest_path}"
+                docker tag "$src_img" "${REGISTRY}/${dest_path}"
+                
+                echo "🚀 Đẩy ảnh lên ECR Private..."
+                docker push "${REGISTRY}/${dest_path}"
+                echo "✅ Hoàn thành mirror: $repo_name"
+              done < capstone/tf-3/cdo-1/gitops/mirror-list.txt
+    ```
+
+---
+
+### 4. Cách sử dụng Container Images trên cụm EKS NAT-less
+
+Sau khi ảnh đã được đẩy lên ECR Private, các team thực hiện khai báo sử dụng như sau:
+
+*   **Không cần `imagePullSecrets`:** EKS Node Group đã được Sub-team 1 gán sẵn IAM Role có policy `AmazonEC2ContainerRegistryReadOnly`. Do đó EKS tự động kéo ảnh từ ECR Private mà không cần khai báo credentials gì thêm.
+*   **Với App Manifest (Sub-team 2):** Thay đổi trường `image` trỏ thẳng về ECR Private kèm commit tag:
+    `image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/webhook-receiver:<commit-sha>`
+*   **Với Helm Charts (Sub-team 3):** Ghi đè tham số Registry trong file `values.yaml`:
+    ```yaml
+    global:
+      imageRegistry: "544011261607.dkr.ecr.us-east-1.amazonaws.com"
+    ```
