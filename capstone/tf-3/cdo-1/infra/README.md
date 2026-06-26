@@ -12,9 +12,9 @@ Cấu trúc bám theo `docs/04_deployment_design.md` §1.2. Mỗi module = 1 Jir
 | INFRA-5 | Ingress (ALB internal) | `modules/ingress/` | INFRA-4 |
 | INFRA-6 | Observability (Prometheus/Grafana) | `modules/observability/` | INFRA-4 |
 | INFRA-7 | **Cost Allocation Tagging** (mới — Component tag mỗi module + activate ở Cost Explorer) | `*/tags.tf`, `cost-allocation-tags.tf` | INFRA-1 (chạy song song, không block ai) |
+| INFRA-8 | **NetworkPolicy AI Engine** (mới — sau khi AI bỏ SigV4 + đổi HTTPS→HTTP nội bộ, NetworkPolicy là lớp trust DUY NHẤT; impl §5.A/§5.B của `deployment-contract.md` + bật NetworkPolicy enforcement trên cluster) | `manifests/ai-engine/networkpolicy.yaml` | INFRA-4 |
 
-7 ticket cho 8 người — 1 người dư ra nên pair với INFRA-4 (nặng nhất) hoặc làm
-floater. Smoke test cuối cùng PM tự chia riêng (xem mục "Cố tình chưa làm").
+8 ticket cho 8 người. Smoke test cuối cùng PM tự chia riêng (xem mục "Cố tình chưa làm").
 
 Sau khi INFRA-1→4 chạy xong, đọc `INTEGRATION_WITH_AI.md` để dựng AI Engine demo
 lên cluster và test API thật (`manifests/ai-engine/`).
