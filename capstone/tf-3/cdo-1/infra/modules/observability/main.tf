@@ -5,15 +5,9 @@ locals {
   namespace       = "observability"
   grafana_service = "kube-prometheus-stack-grafana"
 
-  # FIX lỗi 4: "patch-receiver" không có Service backing
-  # CLAUDE.md §2: Webhook Receiver = FastAPI, namespace self-heal-system
-  # port: 8000 (FastAPI default), path: /alert (không phải /alerts)
-  alert_receiver_url = "http://webhook-receiver.self-heal-system.svc.cluster.local:8000/alert"
-
-  # CLAUDE.md §4: Component tag cho Cost Explorer
-  module_tags = merge(var.tags, {
-    Component = "observability"
-  })
+  # Alertmanager → webhook receiver (manifests/webhook-receiver/k8s.yaml)
+  # Service name: patch-receiver, port 8443, path /alerts
+  alert_receiver_url = "http://patch-receiver.self-heal-system.svc.cluster.local:8443/alerts"
 }
 
 # FIX lỗi 2: Terraform tạo log group TRƯỚC khi EKS enable logging

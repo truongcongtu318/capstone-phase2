@@ -6,7 +6,7 @@ variable "name_prefix" {
 variable "cluster_version" {
   description = "EKS version — chốt theo docs/02_infra_design.md §2 Component table"
   type        = string
-  default     = "1.28"
+  default     = "1.32"
 }
 
 variable "vpc_id" {

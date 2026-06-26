@@ -1,0 +1,120 @@
+# Webhook Receiver — Pack #1 minimal deployment.
+# Nhận alert từ Alertmanager (namespace observability) → gọi AI Engine (ClusterIP 8080).
+#
+# Label strategy:
+#   app: cdo-self-heal-controller  → khớp ai-engine-allow-ingress NetworkPolicy,
+#                                    cho phép pod này gọi ai-engine:8080
+#   component: patch-receiver      → để NetworkPolicy riêng của receiver target đúng pod này
+#
+# TODO trước khi apply: thay <ECR_RECEIVER_IMAGE_URI> bằng image thật (xem hướng dẫn build bên dưới)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patch-receiver
+  namespace: self-heal-system
+  labels:
+    app: cdo-self-heal-controller
+    component: patch-receiver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: patch-receiver
+  template:
+    metadata:
+      labels:
+        app: cdo-self-heal-controller
+        component: patch-receiver
+    spec:
+      containers:
+        - name: receiver
+          image: "<ECR_RECEIVER_IMAGE_URI>:latest"
+          ports:
+            - containerPort: 8443
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8443
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8443
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: patch-receiver
+  namespace: self-heal-system
+spec:
+  selector:
+    component: patch-receiver
+  ports:
+    - port: 8443
+      targetPort: 8443
+      protocol: TCP
+  type: ClusterIP
+---
+# NetworkPolicy: cho phép Alertmanager (namespace observability) gọi vào port 8443.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: patch-receiver-allow-ingress
+  namespace: self-heal-system
+spec:
+  podSelector:
+    matchLabels:
+      component: patch-receiver
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - protocol: TCP
+          port: 8443
+---
+# NetworkPolicy: cho phép patch-receiver gọi ra DNS + ai-engine:8080.
+# Default-deny (ai-engine-default-deny) đã chặn toàn bộ egress trong namespace,
+# nên cần policy này để receiver gọi được AI Engine.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: patch-receiver-allow-egress
+  namespace: self-heal-system
+spec:
+  podSelector:
+    matchLabels:
+      component: patch-receiver
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app: ai-engine
+      ports:
+        - protocol: TCP
+          port: 8080

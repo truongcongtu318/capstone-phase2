@@ -21,5 +21,6 @@ locals {
 }
 variable "tags" {
   type        = map(string)
-  description = "Cấu hình bộ tags chung bắt buộc của dự án cho INFRA-7"
+  description = "Override tags — nếu không truyền, module dùng local.common_tags trực tiếp"
+  default     = {}
 }
