@@ -193,3 +193,39 @@ Các output của module con không được đổi tên để bảo đảm kế
     *   `infra/modules/ingress/*`
     *   `infra/environments/sandbox/compute/*`
     *   `infra/environments/sandbox/services/*`
+---
+
+## 🔌 Quy trình chuyển đổi & Kết nối tích hợp (Transition & Integration Path)
+
+Hạ tầng của Sub-team 1 được triển khai theo mô hình **Multi-State** để tránh xung đột. Trình tự đấu nối và giải phóng phụ thuộc (dependencies) thực hiện như sau:
+
+### 1. Vấn đề phụ thuộc (Dependencies)
+*   **Networking (Phase 2)** hoàn toàn độc lập, có thể deploy ngay.
+*   **Compute (Phase 3)** phụ thuộc vào VPC ID, Subnet IDs và Security Group IDs của Phase 2.
+*   **Services (Phase 4)** phụ thuộc vào EKS Cluster Endpoint, CA Data và OIDC Provider của Phase 3.
+
+### 2. Giải pháp chuyển đổi & Kết nối (Integration Steps)
+*   **Bước 1 (Giải phóng Phase 2 -> 3):** Member 3 khi viết code compute/main.tf sử dụng data source:
+    ```hcl
+    data "terraform_remote_state" "networking" {
+      backend = "s3"
+      config = {
+        bucket = var.tf_state_bucket
+        key    = "sandbox/networking/terraform.tfstate"
+        region = var.aws_region
+      }
+    }
+    ```
+    Trỏ trực tiếp các biến vpc_id và subnet_ids vào output của data source này. Khi Member 1 chạy pipeline deploy xong Networking, Member 3 mới kích hoạt pipeline deploy Compute.
+*   **Bước 2 (Giải phóng Phase 3 -> 4):** Member 3 cấu hình providers.tf của services/ kế thừa động CA cert và token của EKS Cluster:
+    ```hcl
+    data "aws_eks_cluster_auth" "this" {
+      name = data.terraform_remote_state.compute.outputs.cluster_name
+    }
+    provider "kubernetes" {
+      host                   = data.terraform_remote_state.compute.outputs.cluster_endpoint
+      cluster_ca_certificate = base64decode(data.terraform_remote_state.compute.outputs.cluster_ca_data)
+      token                  = data.aws_eks_cluster_auth.this.token
+    }
+    ```
+    Cách thiết lập này giúp Helm provider tự động nhận diện và kết nối cụm EKS thật một cách an toàn mà không cần ổ đĩa local phải có file kubeconfig.

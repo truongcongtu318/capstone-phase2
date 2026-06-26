@@ -132,3 +132,25 @@ estrict-mutations.yaml khóa quyền API Server.
     *   Tệp báo cáo SLO chứa kết quả đo đạc thời gian tự chữa lành thực tế.
 *   **Các file đảm nhiệm:**
     *   gitops/tests-chaos/*
+---
+
+## 🔌 Quy trình giải phóng phụ thuộc & Đấu nối Cluster (Integration & GitOps Steps)
+
+**Sub-team 3** chịu trách nhiệm cài đặt ArgoCD, Prometheus và Kyverno lên cụm EKS. Quy trình xử lý dependencies và đấu nối hệ thống diễn ra như sau:
+
+### 1. Khi chưa có EKS Cluster của Sub-team 1
+*   **Vấn đề:** Không có Kubernetes cluster để test YAML manifest, NetworkPolicies và Kyverno policies.
+*   **Giải pháp:** 
+    *   Tự dựng cụm **Kind** (Kubernetes in Docker) hoặc **Minikube** cục bộ trên máy cá nhân.
+    *   Cài đặt ArgoCD và Prometheus Stack lên cụm local để kiểm tra cú pháp YAML, kiểm nghiệm tính năng Admission Control của Kyverno và luồng đồng bộ Argo CD Sync Waves.
+    *   Mọi check-in code YAML phải chạy qua pipeline kiểm thử tự động `gitops-pipeline.yml` (sử dụng `kube-linter` và `pluto` để quét lỗi cấu trúc/version API lỗi thời).
+
+### 2. Quy trình đấu nối khi EKS Cluster sẵn sàng
+*   **Vấn đề:** Đồng bộ mã nguồn ứng dụng và cấu hình an toàn lên Sandbox EKS.
+*   **Giải pháp (Staged Cluster Bootstrap):**
+    *   **Bước 1:** Sau khi Sub-team 1 hoàn thành Phase 3 (EKS), Member 7 áp dụng Helm release cài đặt ArgoCD thông qua Data remote state.
+    *   **Bước 2:** Đăng ký Repository của AWS CodeCommit vào ArgoCD làm nguồn Manifest chính thống.
+    *   **Bước 3:** Khởi tạo ArgoCD Root Application (`root-application.yaml`) để tự động quét thư mục `gitops/argo-apps/` và tạo các ứng dụng con theo đúng thứ tự Sync Waves:
+        *   `Wave -4`: Khởi tạo Namespace `self-heal-system` và `observability`.
+        *   `Wave -3`: Áp dụng NetworkPolicies và Kyverno ClusterPolicy bảo mật cụm.
+        *   `Wave 0`: Tự động pull Docker images từ ECR (do Sub-team 2 build bằng Commit SHA tag) để deploy Webhook và SQS Worker.

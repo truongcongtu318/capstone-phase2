@@ -111,3 +111,23 @@ Cả 3 thành viên cùng phối hợp viết tests tương ứng với code mì
 *   Member 4 $\rightarrow$ `test_webhook.py` (FastAPI test).
 *   Member 5 $\rightarrow$ `test_webhook.py` & `test_worker.py` (DynamoDB Lock & Circuit Breaker tests).
 *   Member 6 $\rightarrow$ `test_worker.py` (Log scrubbing & execution tests).
+---
+
+## 🔌 Giải pháp xử lý Phụ thuộc & Đấu nối hệ thống (Dependencies & Integration Steps)
+
+Do **Sub-team 2** bị phụ thuộc hoàn toàn vào hạ tầng EKS/VPC của Sub-team 1 và API của team AI, quy trình code và đấu nối được phân rã như sau:
+
+### 1. Khi chưa có EKS Cluster & DynamoDB thật (Chạy Local-First)
+*   **Vấn đề:** Không có môi trường cloud thật để test Webhook Receiver và SQS Worker.
+*   **Giải pháp:** 
+    *   Sử dụng **DynamoDB Local** (Docker) để chạy và test conditional write lock.
+    *   Sử dụng **LocalStack** để giả lập SQS queue, SNS topic và Firehose audit stream.
+    *   Kích hoạt các biến môi trường `DYNAMODB_ENDPOINT_URL=http://localhost:8000` và `SQS_ENDPOINT_URL=http://localhost:4566` trong file cấu hình local.
+    *   Sử dụng code mock AI Engine (`mock_ai_engine.py` chạy trên port `8080`) để giả lập các phản hồi API.
+
+### 2. Quy trình đấu nối lên EKS (Transition to AWS Cloud)
+*   **Vấn đề:** Khi deploy lên cụm thật, làm sao để code tự động chuyển hướng kết nối sang tài nguyên AWS mà không phải sửa code?
+*   **Giải pháp (Auto-Discovery):**
+    *   Trong file `config.py`, chỉ khởi tạo `endpoint_url` trong boto3 client **nếu** biến môi trường tương ứng có giá trị. Nếu rỗng, boto3 sẽ tự động sử dụng AWS SDK credential chain mặc định.
+    *   Khi viết Dockerfile và Helm chart deploy lên Sandbox EKS, **Sub-team 3** sẽ không truyền các biến endpoint local. 
+    *   Pods chạy trên EKS sẽ tự động sử dụng **IAM Roles for Service Accounts (IRSA)** thông qua ServiceAccount `sa-patch-controller` để phân quyền và tự động route thông qua các VPC PrivateLink Endpoints nội bộ cụm.
