@@ -1,2 +1,4 @@
-# Placeholders to prevent git from ignoring empty directories
-# To be filled by Sub-team 1 (Member 3)
+# 🌐 TODO: Root Module - Sandbox Services
+# Đọc remote state từ `compute` env để cấu hình kubernetes và helm providers.
+# Gọi module ingress & observability để cài đặt controller/monitoring tools.
+# Tham khảo logic từ `infra-old/environments/sandbox/foundation/`.

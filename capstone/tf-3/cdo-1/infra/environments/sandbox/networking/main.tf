@@ -1,2 +1,3 @@
-# Placeholders to prevent git from ignoring empty directories
-# To be filled by Sub-team 1 (Member 1 & 2)
+# 🌐 TODO: Root Module - Sandbox Networking
+# Gọi module networking & security từ modules/ để khởi tạo VPC, KMS, SGs.
+# Tham khảo logic từ `infra-old/environments/sandbox/foundation/`.
