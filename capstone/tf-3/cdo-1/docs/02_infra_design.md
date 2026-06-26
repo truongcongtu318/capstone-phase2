@@ -284,16 +284,20 @@ Hệ thống triển khai 5 cơ chế phòng vệ độc lập để ngăn chặ
 | **Node consolidation** | — | Node có thể bin-pack sang node khác | Best-effort (< 5 phút) | Karpenter: Drain + terminate node |
 | **Spot interruption** | AWS thu hồi Spot instance | — | Ngay lập tức (2 min notice) | Karpenter: Cordon, drain, reschedule |
 
-## 7. Failure modes + recovery
+## 7. Failure Modes & Recovery
+
+Hệ thống thiết kế các phương án phòng vệ chủ động nhằm đảm bảo tính toàn vẹn dữ liệu đa thuê thuê (Multi-tenancy), duy trì chuỗi audit trail tuân thủ SOC2 và kiểm soát triệt để phạm vi ảnh hưởng (blast radius) khi có sự cố thảm họa xảy ra.
 
 | Failure (Sự cố) | Detection (Cách phát hiện) | Recovery (Cơ chế khôi phục) | RTO | RPO |
 | :--- | :--- | :--- | :--- | :--- |
-| **FastAPI Receiver pod crash** | K8s probe / Argo AnalysisTemplate alert | K8s tự động restart Pod. Argo Rollouts tự động abort và rollback traffic về stable version nếu metrics vi phạm. | < 60s (Auto-abort) | 0 |
-| **Karpenter Spot Node bị thu hồi** | AWS Spot Interruption Notice (SQS) | Karpenter tự động cordon, drain node và provision node mới để reschedule pod sang node an toàn trước 2 phút. | < 120s (Không downtime) | 0 |
-| **Git / ArgoCD API down (GitOps path)** | Webhook Receiver connection timeout | Nếu bị sập, chỉ có urgent patterns (lỗi khẩn cấp) được bypass sang Direct Patch (nếu được cho phép bởi blast-radius policy). Các deferred patterns (như queue backlog) sẽ được retry trong SQS hoặc escalated; không tự ý Direct Patch. | < 30s | 0 |
-| **RDS PostgreSQL (Single-AZ) fail** | CloudWatch RDS event / TCP timeout | AWS tự động reboot instance hoặc recreate instance mới, mount lại EBS Volume cũ (Production sẽ dùng Aurora Multi-AZ để failover < 60s). | < 10 phút | < 5 phút (từ daily snapshot/WAL) |
-| **AZ Outage (Sập 1 Availability Zone)** | CloudWatch cluster alarm | Karpenter tự động provision nodes ở AZ còn hoạt động; các Deployments (chạy Multi-AZ) tự động được schedule lại. | < 5 phút | 0 |
-
+| **FastAPI Receiver pod crash** | K8s liveness/readiness probe fail / Prometheus alert. | K8s tự động khởi động lại Pod nội bộ. Nhờ cơ chế lưu trữ tin nhắn không mất mát của **Amazon SQS**, các sự cố đang xếp hàng đợi sẽ không bị mất dữ liệu. | < 60s | 0 |
+| **Karpenter Spot Node bị thu hồi** | AWS Spot Interruption Notice đẩy qua SQS. | Karpenter tự động kích hoạt quá trình `cordon` (ngăn cấp pod mới), `drain` (trục xuất pod cũ) và lập tức provision một EC2 node Spot mới để reschedule pod sang vùng an toàn trước thời hạn 2 phút của AWS. | < 120s (Không downtime) | 0 |
+| **Git / ArgoCD API down (GitOps path)** | Webhook Receiver connection timeout / ArgoCD sync error log. | Các sự cố khẩn cấp (Urgent patterns như OOM, Service stuck) được định tuyến bypass để **Direct Patch Engine** can thiệp trực tiếp nội bộ cụm. Các sự cố thông thường (Deferred patterns như queue backlog) được giữ lại an toàn trong hàng đợi SQS để retry theo hàm mũ hoặc chuyển sang trạng thái `Escalated` báo cho SRE. | < 30s | 0 |
+| **RDS PostgreSQL (Single-AZ) fail** | CloudWatch RDS event / DB TCP timeout / Engine alert. | AWS tự động reboot instance hoặc tái tạo instance mới, thực hiện mount lại ổ đĩa EBS Volume cũ (Môi trường Production target sẽ nâng cấp lên RDS Aurora Multi-AZ để failover tự động < 60s). | < 10 phút | < 5 phút (khôi phục từ daily snapshot và WAL logs) |
+| **AZ Outage (Sập hoàn toàn 1 Availability Zone)** | CloudWatch cluster alarm / EKS Node unreachable alert. | Cấu hình các Deployments phân rã Multi-AZ tự động cân bằng tải. Karpenter nhận biết vùng lỗi, tự động loại bỏ AZ sập và kích hoạt provision thêm các EC2 Spot nodes mới tại các AZ còn lại đang hoạt động tốt ổn định. | < 5 phút | 0 |
+| **DynamoDB State Machine / Lock Store nghẽn tải** | CloudWatch `ThrottledRequests` alarm / Conditional Write timeout. | Hệ thống tự động kích hoạt cơ chế phòng vệ **Circuit Breaker** (Cầu dao an toàn), tạm thời ngắt toàn bộ các hành động tự chữa lành tự động. Chuyển dịch toàn bộ luồng sự cố sang trạng thái `Escalated` bắn mã thông báo kèm Context Bundle về Slack để SRE can thiệp thủ công. | < 10s (Kích hoạt cầu dao) | 0 |
+| **Kinesis Data Firehose / S3 Audit Layer bị ngắt** | CloudWatch `DeliveryToS3.Success` metric drop / Kinesis API error log. | Controller nhận tín hiệu lỗi stream ghi log audit trail. Tuân thủ nghiêm ngặt quy định SOC2, Controller lập tức **đóng băng mọi hành động can thiệp sửa lỗi** để tránh vi phạm quy định audit bất biến (Không tự ý sửa lỗi nếu hành động đó không thể được ghi vết kiểm toán an toàn). | < 15s (Tự động đóng băng) | 0 |
+| **AWS Secrets Manager bị Access Denied / Lỗi đồng bộ** | External Secrets Operator (ESO) `SecretSynced` status = False. | Hệ thống giữ nguyên các K8s Secrets hiện tại được lưu cache nội bộ từ phiên đồng bộ gần nhất, đảm bảo Webhook Receiver và Engine không bị mất quyền truy cập Token AI hoặc Git Deploy Key đột ngột trong khi chờ kết nối lại. | < 5s (Bảo toàn cache) | 0 |
 ## Related documents
 
 - [`03_security_design.md`](03_security_design.md)
