@@ -14,5 +14,14 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.14"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
+    kubectl = {
+      # gavinbunney/kubectl — used by modules/karpenter for NodePool + EC2NodeClass CRDs
+      source  = "gavinbunney/kubectl"
+      version = "~> 1.14"
+    }
   }
 }
