@@ -42,23 +42,51 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
     *   `tenant-checkout` $\rightarrow$ `6c8b4b2b-4d45-4209-a1b4-4b532d56a31c`
 *   `Idempotency-Key`: UUID v4 sinh mới cho mỗi chu kỳ giao dịch.
 *   `X-Correlation-Id`: UUID v4 dùng để trace log xuyên suốt hệ thống.
+*   `X-Dry-Run-Mode`: Chuỗi `"true"` hoặc `"false"` để xác định chế độ chạy thử nghiệm (simulation/dry-run).
 
 #### Bước 2.1: Gọi `/v1/detect` (Kiểm tra xem alert có phải là sự cố cần xử lý)
 *   **Request Method:** `POST`
-*   **Request Payload:**
+*   **Request Payload JSON Schema:**
     ```json
     {
-      "tenant_id": "d3b07384-d113-495f-9f58-20d18d357d75",
-      "alert_payload": { ... } // Nguyên văn alert object từ Prometheus
+      "correlation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "idempotency_key": "d3b07384-d113-495f-9f58-20d18d357d75",
+      "dry_run_mode": false,
+      "telemetry_window": [
+        {
+          "ts": "2026-06-25T10:00:00.123Z",
+          "tenant_id": "d3b07384-d113-495f-9f58-20d18d357d75",
+          "service": "payment-api",
+          "signal_name": "pod_oom_event",
+          "value": 1.0,
+          "labels": { 
+            "system": "CDO-PAYMENT",
+            "namespace": "tenant-payment",
+            "deployment": "payment-api",
+            "pod_name": "payment-api-7dbf8c495c-xyz12",
+            "container": "payment-container"
+          }
+        }
+      ]
     }
     ```
 *   **Response Payload (200 OK):**
     ```json
     {
-      "is_incident": true,
-      "incident_id": "inc-oom-payment-20260626",
-      "detected_pattern": "OOMKilled",
-      "confidence_score": 0.98
+      "anomaly_detected": true,
+      "severity": 0.85,
+      "anomaly_context": {
+        "target_service": "payment-api",
+        "suspected_fault_type": "oom_killed",
+        "system": "CDO-PAYMENT",
+        "namespace": "tenant-payment",
+        "deployment": "payment-api",
+        "trigger_metric": "pod_oom_event",
+        "trigger_value": 1.0
+      },
+      "confidence": 0.92,
+      "reasoning": "Container payment-container in pod payment-api-7dbf8c495c-xyz12 was OOMKilled. Memory limit exceeded.",
+      "correlation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
     }
     ```
 
@@ -67,27 +95,51 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
 *   **Request Payload:**
     ```json
     {
-      "incident_id": "inc-oom-payment-20260626",
-      "tenant_id": "d3b07384-d113-495f-9f58-20d18d357d75",
-      "telemetry": {
-        "cpu_usage": "150m",
-        "memory_usage": "257Mi",
-        "memory_limit": "256Mi"
+      "correlation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "idempotency_key": "d3b07384-d113-495f-9f58-20d18d357d75",
+      "dry_run_mode": false,
+      "anomaly_context": {
+        "target_service": "payment-api",
+        "suspected_fault_type": "oom_killed",
+        "system": "CDO-PAYMENT",
+        "namespace": "tenant-payment",
+        "deployment": "payment-api"
       }
     }
     ```
 *   **Response Payload (200 OK):**
     ```json
     {
-      "incident_id": "inc-oom-payment-20260626",
-      "decision": "PATCH_MEMORY_LIMIT",
-      "parameters": {
-        "namespace": "tenant-payment",
-        "deployment": "payment-api",
-        "container": "payment-container",
-        "patch_value": "384Mi" // Tăng 1.5 lần
+      "matched_runbook": "MemoryLimitTuningRunbook",
+      "pattern_type": "urgent",
+      "action_plan": [
+        {
+          "step": 1,
+          "action": "PATCH_MEMORY_LIMIT",
+          "target": "deployment/payment-api",
+          "params": {
+            "namespace": "tenant-payment",
+            "container": "payment-container",
+            "memory_request_mb": 256,
+            "memory_limit_mb": 384
+          }
+        }
+      ],
+      "blast_radius_config": {
+        "max_pod_impact_pct": 25,
+        "circuit_breaker_error_rate": 0.20,
+        "allowed_namespaces": ["tenant-payment"]
       },
-      "execution_lane": "FAST_LANE"
+      "verify_policy": {
+        "window_seconds": 120,
+        "success_conditions": [
+          "pod_ready == true",
+          "restart_count_no_increase == true"
+        ]
+      },
+      "correlation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "idempotency_key": "d3b07384-d113-495f-9f58-20d18d357d75",
+      "dry_run_mode": false
     }
     ```
 
@@ -96,13 +148,29 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
 *   **Request Payload:**
     ```json
     {
-      "incident_id": "inc-oom-payment-20260626",
-      "tenant_id": "d3b07384-d113-495f-9f58-20d18d357d75",
-      "action_taken": "PATCH_MEMORY_LIMIT",
-      "verification_telemetry": {
-        "pod_status": "Running",
-        "memory_limit_active": "384Mi"
-      }
+      "correlation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "idempotency_key": "d3b07384-d113-495f-9f58-20d18d357d75",
+      "dry_run_mode": false,
+      "action_executed": {
+        "action": "PATCH_MEMORY_LIMIT",
+        "target": "deployment/payment-api",
+        "status": "COMPLETED",
+        "execution_time_seconds": 12
+      },
+      "post_telemetry_window": [
+        {
+          "ts": "2026-06-25T10:02:00.123Z",
+          "tenant_id": "d3b07384-d113-495f-9f58-20d18d357d75",
+          "service": "payment-api",
+          "signal_name": "container_restart_count",
+          "value": 0.0,
+          "labels": {
+            "system": "CDO-PAYMENT",
+            "namespace": "tenant-payment",
+            "deployment": "payment-api"
+          }
+        }
+      ]
     }
     ```
 *   **Response Payload (200 OK):**
@@ -187,11 +255,13 @@ Sub-team 2 gọi sang AI Engine chạy tại `http://ai-engine.self-heal-system.
 *   **Member 4 (FastAPI Webhook & Deduplication Lead):**
     *   Viết Webhook Receiver (FastAPI, Port 8443, Path `/alerts`).
     *   Tích hợp DynamoDB Lock Cooldown logic.
+    *   Thực hiện lọc bảo mật (Scrubbing Regex) loại bỏ credentials/tokens nhạy cảm khỏi telemetry trước khi gửi đi.
     *   Đẩy alert an toàn vào SQS Queue.
     *   *Đầu ra (Deliverables):* FastAPI Docker Image, app code, unit tests.
 *   **Member 5 (SQS Worker & AI Client Lead):**
     *   Viết SQS Worker Daemon đọc tin nhắn từ SQS.
-    *   Viết Client gọi API AI Engine theo đúng Contract `/v1/detect`, `/v1/decide` và `/v1/verify` (Header: `X-Tenant-Id`, `Idempotency-Key` UUID v4, `X-Correlation-Id`).
+    *   Viết Client gọi API AI Engine theo đúng Contract `/v1/detect`, `/v1/decide` và `/v1/verify` (Header: `X-Tenant-Id`, `Idempotency-Key` UUID v4, `X-Correlation-Id`, `X-Dry-Run-Mode`).
+    *   Xây dựng bộ lọc validate JSON Schema đối với response từ AI Engine.
     *   *Đầu ra (Deliverables):* Worker Docker Image, mock AI API test suite.
 *   **Member 6 (Action Execution & Git Committer Lead):**
     *   Viết module Python tương tác Kubernetes SDK (Patch limits, restart deployment).
