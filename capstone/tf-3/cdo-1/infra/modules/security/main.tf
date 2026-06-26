@@ -11,7 +11,7 @@ resource "aws_security_group" "alb_internal" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "Allow HTTPS inbound from VPC (VPN/Client CIDR)"
+    description = "Allow HTTPS inbound from VPC (VPN/Client CIDR) - TODO: Thu hẹp nguồn truy cập khi có SG của Alert Relay"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -183,6 +183,17 @@ resource "aws_security_group_rule" "control_plane_egress_to_workload" {
   protocol                 = "tcp"
   security_group_id        = aws_security_group.eks_control_plane.id
   source_security_group_id = aws_security_group.eks_workload.id
+}
+
+# Control Plane Outbound to Endpoints (docs/03_security_design.md §1.2 hàng 38)
+resource "aws_security_group_rule" "control_plane_egress_to_endpoints" {
+  type                     = "egress"
+  description              = "Allow HTTPS outbound to VPC Endpoints"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.eks_control_plane.id
+  source_security_group_id = aws_security_group.vpc_endpoint.id
 }
 
 # =============================================================================
