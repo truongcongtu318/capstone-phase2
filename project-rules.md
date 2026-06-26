@@ -215,45 +215,17 @@ Dự án CDO-01 tuân thủ nghiêm ngặt mô hình **NAT-less VPC** (Zero Inte
 | **Kyverno Cleanup** | `ghcr.io/kyverno/cleanup-controller:v1.12.5` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/cleanup-controller:v1.12.5` |
 | **Kyverno Reports** | `ghcr.io/kyverno/reports-controller:v1.12.5` | `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/reports-controller:v1.12.5` |
 
-### 2. Lệnh thực hiện "Tải tay" (Run locally by Member 8/9 with Internet access)
+### 2. Lệnh thực hiện "Tải tay" & Quản lý Phân Vai (Run locally with Internet access)
 
-Thành viên được giao nhiệm vụ chạy script sau trên máy cá nhân để đẩy ảnh lên ECR Private:
-
-```bash
-# Đăng nhập AWS ECR Private
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 544011261607.dkr.ecr.us-east-1.amazonaws.com
-
-# Danh sách image cần sync
-declare -A images=(
-  ["amazon/aws-load-balancer-controller:v2.8.1"]="602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon/aws-load-balancer-controller:v2.8.1"
-  ["karpenter/controller:v0.37.0"]="public.ecr.aws/karpenter/controller:v0.37.0"
-  ["prometheus-operator/prometheus-operator:v0.74.0"]="quay.io/prometheus-operator/prometheus-operator:v0.74.0"
-  ["prometheus/prometheus:v2.52.0"]="quay.io/prometheus/prometheus:v2.52.0"
-  ["prometheus/alertmanager:v0.27.0"]="quay.io/prometheus/alertmanager:v0.27.0"
-  ["grafana/grafana:10.4.3"]="docker.io/grafana/grafana:10.4.3"
-  ["kube-state-metrics/kube-state-metrics:v2.12.0"]="registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0"
-  ["prometheus/node-exporter:v1.8.1"]="quay.io/prometheus/node-exporter:v1.8.1"
-  ["kiwigrid/k8s-sidecar:1.27.4"]="quay.io/kiwigrid/k8s-sidecar:1.27.4"
-  ["kyverno/kyverno:v1.12.5"]="ghcr.io/kyverno/kyverno:v1.12.5"
-  ["kyverno/kyvernopre:v1.12.5"]="ghcr.io/kyverno/kyvernopre:v1.12.5"
-  ["kyverno/background-controller:v1.12.5"]="ghcr.io/kyverno/background-controller:v1.12.5"
-  ["kyverno/cleanup-controller:v1.12.5"]="ghcr.io/kyverno/cleanup-controller:v1.12.5"
-  ["kyverno/reports-controller:v1.12.5"]="ghcr.io/kyverno/reports-controller:v1.12.5"
-)
-
-# Loop sync
-for local_repo in "${!images[@]}"; do
-  public_img="${images[$local_repo]}"
-  target_img="544011261607.dkr.ecr.us-east-1.amazonaws.com/${local_repo}"
-
-  echo "==> Syncing ${public_img} to ${target_img}..."
-  
-  # Tạo ECR repo tương ứng nếu chưa có
-  aws ecr create-repository --repository-name "${local_repo%%:*}" --region us-east-1 || true
-  
-  # Kéo, tag và đẩy ảnh
-  docker pull "${public_img}"
-  docker tag "${public_img}" "${target_img}"
-  docker push "${target_img}"
-done
-```
+*   **Vị trí file script:** Toàn bộ logic chạy tự động hóa pull/push và auto-create ECR private repository được lưu tại tệp: `capstone/tf-3/cdo-1/gitops/mirror-images.sh`.
+*   **Thành viên chịu trách nhiệm thực thi:**
+    *   **Sub-team 3 — Member 8 & 9 (Observability, Audit & QA Lead):** Chịu trách nhiệm kéo, quét bảo mật qua Trivy, và push các images thuộc nhóm Observability (Prometheus Stack), Kyverno, Stress-NG (Chaos), Alpine/BusyBox.
+    *   **Sub-team 1 — Member 3 (Compute Cluster & Ingress Lead):** Chịu trách nhiệm push images ALB Controller và Karpenter Controller phục vụ bootstrap hạ tầng ban đầu.
+*   **Cách thức thực hiện:**
+    1. Đảm bảo AWS CLI local đã cấu hình đúng credentials có quyền Admin/PowerUser ECR.
+    2. Cấp quyền và chạy file script:
+       ```bash
+       chmod +x capstone/tf-3/cdo-1/gitops/mirror-images.sh
+       ./capstone/tf-3/cdo-1/gitops/mirror-images.sh
+       ```
+    3. Script sẽ tự tạo 19 ECR Private Repositories, pull ảnh public, tag và đẩy lên registry `544011261607.dkr.ecr.us-east-1.amazonaws.com` theo đúng cấu trúc.

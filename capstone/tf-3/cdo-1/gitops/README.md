@@ -169,4 +169,23 @@ estrict-mutations.yaml khóa quyền API Server.
 
 2.  **Cách thức kiểm tra (Validation):**
     *   Chạy `git diff` và kiểm tra xem có bất kỳ dòng nào chứa các public domain registry (`ghcr.io`, `quay.io`, `docker.io`, `registry.k8s.io`) hay không.
-    *   Nếu có $ightarrow$ Sửa lại đường dẫn thành `544011261607.dkr.ecr.us-east-1.amazonaws.com/<repo>:<tag>`.
+    *   Nếu có $
+ightarrow$ Sửa lại đường dẫn thành `544011261607.dkr.ecr.us-east-1.amazonaws.com/<repo>:<tag>`.
+
+
+---
+
+## 🌀 Hướng dẫn Tự động hóa Tải tay (Manual Mirror Script)
+
+Để hỗ trợ công việc tải tay ảnh Docker của **Member 8 & 9 (Sub-team 3)** và **Member 3 (Sub-team 1)**, một script tự động hóa toàn bộ quá trình docker pull -> ws ecr create-repository -> docker tag -> docker push đã được viết và lưu tại:
+👉 gitops/mirror-images.sh
+
+### Hướng dẫn chạy script:
+1. Máy chạy cần có quyền Admin/PowerUser AWS (đặc biệt là quyền ECR Write: ecr:CreateRepository, ecr:BatchCheckLayerAvailability, ecr:PutImage, ecr:InitiateLayerUpload...).
+2. Đảm bảo docker daemon đang chạy cục bộ trên máy.
+3. Cấp quyền thực thi và chạy:
+   `ash
+   chmod +x gitops/mirror-images.sh
+   ./gitops/mirror-images.sh
+   `
+Script sẽ tự động quét, kéo và tạo repo đầy đủ cho 19 images hệ thống và chaos testing trên vùng ECR Private 544011261607.dkr.ecr.us-east-1.amazonaws.com!
