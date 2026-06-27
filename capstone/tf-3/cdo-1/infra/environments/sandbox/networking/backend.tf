@@ -1,7 +1,9 @@
-# 🌐 TODO: Cấu hình Backend State riêng biệt cho Networking
-# Key: "sandbox/networking/terraform.tfstate"
 terraform {
   backend "s3" {
-    # Tự động import bucket & lock table từ bootstrap
+    bucket         = "tf3-cdo1-sandbox-tfstate-474013238625"
+    key            = "sandbox/networking/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "tf3-cdo1-sandbox-tfstate-lock"
+    encrypt        = true
   }
 }
