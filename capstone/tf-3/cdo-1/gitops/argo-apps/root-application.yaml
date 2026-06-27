@@ -1,0 +1,8 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-application
+  namespace: argocd
+spec:
+  # TODO: Cấu hình Root ArgoCD App-of-Apps kết nối AWS CodeCommit repository.
+  # Tự động đồng bộ các K8s Application con: webhook-receiver, sqs-worker, ai-engine.
