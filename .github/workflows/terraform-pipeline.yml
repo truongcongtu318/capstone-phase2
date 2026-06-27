@@ -6,7 +6,7 @@ on:
     paths:
       - 'capstone/tf-3/cdo-1/infra/**'
   pull_request:
-    branches: [ main ]
+    branches: [ main, infra/platform-base ]
     paths:
       - 'capstone/tf-3/cdo-1/infra/**'
 
