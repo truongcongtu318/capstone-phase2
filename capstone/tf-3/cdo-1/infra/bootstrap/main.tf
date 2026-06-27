@@ -210,7 +210,8 @@ resource "aws_iam_role_policy" "plan_tfstate_read" {
           "s3:ListBucket",
           "s3:GetBucketVersioning",
           "s3:GetEncryptionConfiguration",
-          "s3:GetBucketPolicy"
+          "s3:GetBucketPolicy",
+          "s3:GetBucketAcl"
         ]
         Resource = [
           aws_s3_bucket.state.arn,
@@ -231,7 +232,7 @@ resource "aws_iam_role_policy" "plan_tfstate_read" {
       {
         Sid      = "KMSDecryptForRead"
         Effect   = "Allow"
-        Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey", "kms:GetKeyPolicy"]
+        Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey", "kms:GetKeyPolicy", "kms:GetKeyRotationStatus"]
         Resource = aws_kms_key.state.arn
       },
       {
@@ -241,7 +242,7 @@ resource "aws_iam_role_policy" "plan_tfstate_read" {
           "iam:GetRole", "iam:GetRolePolicy",
           "iam:ListRolePolicies", "iam:ListAttachedRolePolicies",
           "iam:GetOpenIDConnectProvider", "iam:ListOpenIDConnectProviders",
-          "kms:DescribeKey", "kms:ListAliases", "kms:GetKeyPolicy",
+          "kms:DescribeKey", "kms:ListAliases", "kms:GetKeyPolicy", "kms:GetKeyRotationStatus",
           "ec2:DescribeVpcs", "ec2:DescribeSubnets",
           "ec2:DescribeSecurityGroups", "ec2:DescribeRouteTables",
           "ec2:DescribeVpcEndpoints",
@@ -297,7 +298,8 @@ resource "aws_iam_role_policy" "apply_tfstate_write" {
         Action = [
           "s3:GetObject", "s3:PutObject", "s3:DeleteObject",
           "s3:ListBucket", "s3:GetBucketVersioning",
-          "s3:GetEncryptionConfiguration", "s3:GetBucketPolicy"
+          "s3:GetEncryptionConfiguration", "s3:GetBucketPolicy",
+          "s3:GetBucketAcl"
         ]
         Resource = [
           aws_s3_bucket.state.arn,
@@ -316,7 +318,7 @@ resource "aws_iam_role_policy" "apply_tfstate_write" {
       {
         Sid      = "KMSStateOps"
         Effect   = "Allow"
-        Action   = ["kms:GenerateDataKey", "kms:Decrypt", "kms:DescribeKey", "kms:GetKeyPolicy"]
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt", "kms:DescribeKey", "kms:GetKeyPolicy", "kms:GetKeyRotationStatus"]
         Resource = aws_kms_key.state.arn
       }
     ]
