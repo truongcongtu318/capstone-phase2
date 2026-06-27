@@ -1,10 +1,10 @@
 output "state_bucket_name" {
-  description = "Copy giá trị này vào environments/sandbox/foundation/backend.tf sau khi apply"
+  description = "Copy giá trị này vào environments/sandbox/*/backend.tf"
   value       = aws_s3_bucket.state.id
 }
 
 output "state_lock_table_name" {
-  description = "DynamoDB table cho Terraform state lock (KHÔNG phải tf-3-aiops-idempotency-lock)"
+  description = "DynamoDB table cho Terraform state lock"
   value       = aws_dynamodb_table.state_lock.id
 }
 
@@ -14,18 +14,16 @@ output "state_kms_key_arn" {
 }
 
 output "github_oidc_provider_arn" {
-  description = "OIDC Provider ARN của GitHub Actions — tham khảo khi tạo thêm role CI"
+  description = "OIDC Provider ARN của GitHub Actions"
   value       = aws_iam_openid_connect_provider.github.arn
 }
 
-# ── 2 role tách biệt theo mức quyền ──
-
 output "github_ci_plan_role_arn" {
-  description = "IAM Role cho CI Plan/Validate — any branch/PR có thể assume, chỉ read-only. Gán vào GitHub secret AWS_ROLE_ARN_PLAN"
+  description = "IAM Role cho CI Plan/Validate"
   value       = aws_iam_role.github_actions_plan.arn
 }
 
 output "github_ci_apply_role_arn" {
-  description = "IAM Role cho CI Apply/Push — CHỈ main branch. Gán vào GitHub secret AWS_ROLE_ARN_APPLY"
+  description = "IAM Role cho CI Apply/Push"
   value       = aws_iam_role.github_actions_apply.arn
 }

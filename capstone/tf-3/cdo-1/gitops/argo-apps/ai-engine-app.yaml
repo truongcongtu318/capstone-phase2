@@ -1,0 +1,7 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-engine
+  namespace: argocd
+spec:
+  # TODO: Cấu hình Application AI Engine trỏ về gitops/manifests/overlays/sandbox/

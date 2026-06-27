@@ -1,0 +1,37 @@
+name: GitOps & Manifests Validation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'capstone/tf-3/cdo-1/gitops/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'capstone/tf-3/cdo-1/gitops/**'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-manifests:
+    name: Lint & Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Kube-linter
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/stackrox/kube-linter/main/scripts/install.sh | sh
+          echo "$HOME/.kube-linter/bin" >> $GITHUB_PATH
+
+      - name: Run Kube-linter
+        run: |
+          # Quét cấu trúc manifest đảm bảo an toàn bảo mật, resource limits
+          kube-linter lint capstone/tf-3/cdo-1/gitops/
+
+      - name: Validate YAML Syntax
+        run: |
+          # Check định dạng YAML
+          python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('capstone/tf-3/cdo-1/gitops/**/*.yaml', recursive=True)]"

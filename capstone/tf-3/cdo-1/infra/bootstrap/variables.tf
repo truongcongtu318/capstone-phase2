@@ -1,5 +1,5 @@
 variable "name_prefix" {
-  description = "Prefix cho resource name — theo CLAUDE.md §4 pattern: tf3-cdo1-sandbox-<component>"
+  description = "Prefix cho resource name"
   type        = string
   default     = "tf3-cdo1"
 }
@@ -11,18 +11,19 @@ variable "aws_region" {
 }
 
 variable "github_repo" {
-  description = "org/repo cho GitHub OIDC trust policy (CI auth) — vd \"truongcongtu318/capstone-phase2\""
+  description = "org/repo cho GitHub OIDC trust policy"
   type        = string
+  default     = "truongcongtu318/capstone-phase2"
 }
 
 variable "environment" {
-  description = "Environment name — dùng trong resource naming và tagging"
+  description = "Environment name"
   type        = string
   default     = "sandbox"
 }
 
 variable "tags" {
-  description = "Map tags truyền từ root (để trống hoặc không dùng ở module bootstrap)"
+  description = "Map tags"
   type        = map(string)
   default     = {}
 }

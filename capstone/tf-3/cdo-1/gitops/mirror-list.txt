@@ -1,4 +1,43 @@
+# Danh sách container images cần mirror lên AWS ECR Private Registry cho CDO-01
+# Định dạng: <public_source_image> <target_path_with_tag>
+# Sử dụng để chạy tự động qua GitHub Actions mirror-pipeline.yml hoặc chạy tay qua mirror-images.sh
+
+# ==============================================================================
+# A. AWS Load Balancer Controller (1 Image)
+# ==============================================================================
+602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon/aws-load-balancer-controller:v2.8.1 amazon/aws-load-balancer-controller:v2.8.1
+
+# ==============================================================================
+# B. Karpenter Node Provisioner (1 Image)
+# ==============================================================================
+public.ecr.aws/karpenter/controller:v0.37.0 karpenter/controller:v0.37.0
+
+# ==============================================================================
+# C. Kyverno Admission Controller (5 Images)
+# ==============================================================================
+ghcr.io/kyverno/kyverno:v1.12.5 kyverno/kyverno:v1.12.5
+ghcr.io/kyverno/kyvernopre:v1.12.5 kyverno/kyvernopre:v1.12.5
+ghcr.io/kyverno/background-controller:v1.12.5 kyverno/background-controller:v1.12.5
+ghcr.io/kyverno/cleanup-controller:v1.12.5 kyverno/cleanup-controller:v1.12.5
+ghcr.io/kyverno/reports-controller:v1.12.5 kyverno/reports-controller:v1.12.5
+
+# ==============================================================================
+# D. Kube-Prometheus-Stack (9 Images)
+# ==============================================================================
+quay.io/prometheus-operator/prometheus-operator:v0.74.0 prometheus-operator/prometheus-operator:v0.74.0
+quay.io/prometheus-operator/prometheus-config-reloader:v0.74.0 prometheus-operator/prometheus-config-reloader:v0.74.0
+quay.io/prometheus/prometheus:v2.52.0 prometheus/prometheus:v2.52.0
+quay.io/prometheus/alertmanager:v0.27.0 prometheus/alertmanager:v0.27.0
+docker.io/grafana/grafana:10.4.3 grafana/grafana:10.4.3
+registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0 kube-state-metrics/kube-state-metrics:v2.12.0
+quay.io/prometheus/node-exporter:v1.8.1 prometheus/node-exporter:v1.8.1
+quay.io/kiwigrid/k8s-sidecar:1.27.4 kiwigrid/k8s-sidecar:1.27.4
+registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.4.1 ingress-nginx/kube-webhook-certgen:v1.4.1
+
+# ==============================================================================
+# E. Chaos Testing & Debugging (3 Images)
+# ==============================================================================
 # TODO: pin stress-ng image digest/version before final EKS run.
-ghcr.io/colinianking/stress-ng:latest stress-ng:latest
-docker.io/library/alpine:3.20 alpine:3.20
+docker.io/alexeiled/stress-ng:latest alexeiled/stress-ng:latest
+docker.io/library/alpine:3.19 alpine:3.19
 docker.io/library/busybox:1.36 busybox:1.36

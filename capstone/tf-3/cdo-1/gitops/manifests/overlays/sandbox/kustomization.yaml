@@ -1,0 +1,3 @@
+# Global Kustomization Overlay for Sandbox
+# TODO: Tập hợp tất cả các components overlays con: webhook-receiver, sqs-worker, ai-engine.
+# Định nghĩa namespace chung `self-heal-system` cho toàn bộ sandbox environment.

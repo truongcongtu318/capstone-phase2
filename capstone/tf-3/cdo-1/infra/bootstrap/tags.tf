@@ -1,3 +1,4 @@
+# tags.tf
 locals {
   module_tags = merge(
     {

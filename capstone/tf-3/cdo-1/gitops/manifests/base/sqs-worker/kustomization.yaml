@@ -1,0 +1,2 @@
+# Kustomization Base config
+# TODO: Định nghĩa danh sách resources cơ sở cho SQS Worker: deployment.yaml, serviceaccount.yaml.

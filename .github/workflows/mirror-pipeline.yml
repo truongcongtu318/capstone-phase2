@@ -1,0 +1,64 @@
+name: Auto Container Image Mirroring to ECR Private
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'capstone/tf-3/cdo-1/gitops/mirror-list.txt'
+  workflow_dispatch: # Cho phép trigger thủ công khi cần
+
+permissions:
+  contents: read
+
+jobs:
+  mirror-images:
+    name: Pull, Scan & Push to ECR Private
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-apply
+          aws-region: us-east-1
+
+      - name: Login to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Read, Scan & Mirror Images
+        run: |
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          while IFS= read -r line || [ -n "$line" ]; do
+            # Bỏ qua dòng trống hoặc comment bắt đầu bằng #
+            [[ -z "$line" || "$line" =~ ^# ]] && continue
+            
+            # Cấu trúc dòng: public_source_image target_path
+            src_img=$(echo "$line" | awk '{print $1}')
+            dest_path=$(echo "$line" | awk '{print $2}')
+            repo_name=$(echo "$dest_path" | cut -d':' -f1)
+            
+            echo "========================================================"
+            echo "🔄 Kéo ảnh public: $src_img"
+            docker pull "$src_img"
+            
+            echo "📦 Đảm bảo AWS ECR Repository tồn tại: $repo_name"
+            aws ecr describe-repositories --repository-name "$repo_name" --region us-east-1 >/dev/null 2>&1 || \
+              aws ecr create-repository \
+                --repository-name "$repo_name" \
+                --region us-east-1 \
+                --image-scanning-configuration scanOnPush=true \
+                --encryption-configuration encryptionType=AES256
+                
+            echo "🏷️ Gắn tag ECR Private: ${REGISTRY}/${dest_path}"
+            docker tag "$src_img" "${REGISTRY}/${dest_path}"
+            
+            echo "🚀 Đẩy ảnh lên ECR Private..."
+            docker push "${REGISTRY}/${dest_path}"
+            echo "✅ Hoàn thành mirror: $repo_name"
+          done < capstone/tf-3/cdo-1/gitops/mirror-list.txt

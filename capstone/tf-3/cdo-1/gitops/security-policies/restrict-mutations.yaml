@@ -1,0 +1,6 @@
+# ☸️ Kyverno Admission Controller Guardrails Policy
+# TODO: Viết Kyverno ClusterPolicy khóa cứng quyền mutations.
+# Chỉ cho phép thay đổi:
+# - spec.replicas
+# - spec.template.spec.containers[*].resources.limits
+# Chặn đứng mọi nỗ lực sửa đổi cấu hình K8s khác trong namespace `self-heal-system`.

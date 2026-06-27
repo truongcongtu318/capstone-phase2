@@ -1,0 +1,87 @@
+name: Application CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'capstone/tf-3/cdo-1/apps/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'capstone/tf-3/cdo-1/apps/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-lint:
+    name: Lint and Unit Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Run Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest httpx fastapi uvicorn
+          if [ -f capstone/tf-3/cdo-1/apps/requirements.txt ]; then pip install -r capstone/tf-3/cdo-1/apps/requirements.txt; fi
+
+      - name: Run Ruff Linter
+        run: ruff check capstone/tf-3/cdo-1/apps/
+
+      - name: Run Unit Tests
+        run: |
+          # Chạy pytest và xuất độ phủ coverage (yêu cầu >= 70%)
+          python -m pytest capstone/tf-3/cdo-1/apps/ --cov=capstone/tf-3/cdo-1/apps/ --cov-fail-under=70
+
+  build-and-publish:
+    name: Build & Push ECR
+    needs: test-and-lint
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        app: [ 'webhook-receiver', 'self-heal-worker' ]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-apply
+          aws-region: us-east-1
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag and Push Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: tf-3-${{ matrix.app }}
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          cd capstone/tf-3/cdo-1/apps/${{ matrix.app }}
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # Ghi đè file manifest bằng image digest mới vừa build để ArgoCD sync
+          echo "Built $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
