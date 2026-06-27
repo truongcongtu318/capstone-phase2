@@ -221,7 +221,9 @@ resource "aws_iam_role_policy" "plan_tfstate_read" {
           "s3:GetBucketTagging",
           "s3:GetBucketWebsite",
           "s3:GetLifecycleConfiguration",
-          "s3:GetReplicationConfiguration"
+          "s3:GetReplicationConfiguration",
+          "s3:GetAccelerateConfiguration",
+          "s3:GetBucketPublicAccessBlock"
         ]
         Resource = [
           aws_s3_bucket.state.arn,
@@ -235,7 +237,10 @@ resource "aws_iam_role_policy" "plan_tfstate_read" {
           "dynamodb:DescribeTable",
           "dynamodb:GetItem",
           "dynamodb:PutItem",
-          "dynamodb:DeleteItem"
+          "dynamodb:DeleteItem",
+          "dynamodb:DescribeContinuousBackups",
+          "dynamodb:DescribeTimeToLive",
+          "dynamodb:ListTagsOfResource"
         ]
         Resource = aws_dynamodb_table.state_lock.arn
       },
@@ -256,7 +261,7 @@ resource "aws_iam_role_policy" "plan_tfstate_read" {
           "ec2:DescribeVpcs", "ec2:DescribeSubnets",
           "ec2:DescribeSecurityGroups", "ec2:DescribeRouteTables",
           "ec2:DescribeVpcEndpoints",
-          "dynamodb:DescribeTable", "dynamodb:ListTables",
+          "dynamodb:DescribeTable", "dynamodb:ListTables", "dynamodb:DescribeContinuousBackups", "dynamodb:DescribeTimeToLive", "dynamodb:ListTagsOfResource",
           "eks:DescribeCluster", "eks:ListClusters",
           "ecr:DescribeRepositories"
         ]
@@ -314,7 +319,8 @@ resource "aws_iam_role_policy" "apply_tfstate_write" {
           "s3:GetBucketNotification", "s3:GetBucketObjectLockConfiguration",
           "s3:GetBucketRequestPayment", "s3:GetBucketTagging",
           "s3:GetBucketWebsite", "s3:GetLifecycleConfiguration",
-          "s3:GetReplicationConfiguration"
+          "s3:GetReplicationConfiguration", "s3:GetAccelerateConfiguration",
+          "s3:GetBucketPublicAccessBlock"
         ]
         Resource = [
           aws_s3_bucket.state.arn,
@@ -326,7 +332,9 @@ resource "aws_iam_role_policy" "apply_tfstate_write" {
         Effect = "Allow"
         Action = [
           "dynamodb:GetItem", "dynamodb:PutItem",
-          "dynamodb:DeleteItem", "dynamodb:DescribeTable"
+          "dynamodb:DeleteItem", "dynamodb:DescribeTable",
+          "dynamodb:DescribeContinuousBackups", "dynamodb:DescribeTimeToLive",
+          "dynamodb:ListTagsOfResource"
         ]
         Resource = aws_dynamodb_table.state_lock.arn
       },
