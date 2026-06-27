@@ -1,2 +1,5 @@
-# Kustomization Base config
-# TODO: Định nghĩa danh sách resources cơ sở cho SQS Worker: deployment.yaml, serviceaccount.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - serviceaccount.yaml

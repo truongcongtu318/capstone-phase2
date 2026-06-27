@@ -1,2 +1,13 @@
-# Kustomization Sandbox Overlay config
-# TODO: Kustomize overlay trỏ về base và apply các files patch: patch-image.yaml.
+# ============================================================
+# overlays/sandbox/ai-engine/kustomization.yaml
+# Sở hữu: Member 7 — chưa patch gì, trỏ thẳng base/ để test sync.
+# ============================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base/ai-engine
+# patches:
+#   - path: patch-image.yaml
+#     target:
+#       kind: Deployment
+#       name: ai-engine

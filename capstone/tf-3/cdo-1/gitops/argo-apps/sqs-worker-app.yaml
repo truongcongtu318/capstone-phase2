@@ -1,7 +1,32 @@
+# ============================================================
+# sqs-worker-app.yaml
+# Sở hữu: Member 7
+# Sync Wave: "0"
+#
+# LƯU Ý: serviceaccount.yaml trong base/sqs-worker/ phải gắn
+# annotation IRSA (eks.amazonaws.com/role-arn) khi deploy lên EKS
+# thật - không cần thiết trên Kind local (IRSA chỉ có ý nghĩa trên
+# AWS EKS, Kind sẽ bỏ qua annotation này một cách an toàn).
+# ============================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: sqs-worker
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
-  # TODO: Cấu hình Application SQS Worker trỏ về gitops/manifests/overlays/sandbox/
+  project: default
+  source:
+    repoURL: https://github.com/truongcongtu318/capstone-phase2.git
+    targetRevision: infra/refactor-multi-state-sdlc
+    path: capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/sqs-worker
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: self-heal-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

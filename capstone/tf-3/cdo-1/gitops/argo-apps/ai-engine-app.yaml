@@ -1,7 +1,33 @@
+# ============================================================
+# ai-engine-app.yaml
+# Sở hữu: Member 7
+# Sync Wave: "0"
+#
+# QUAN TRỌNG (Zero Trust - Brain vs Hands): pod AI Engine TUYỆT ĐỐI
+# không có kubeconfig/kubectl/K8s SDK, không ServiceAccount có quyền
+# sửa cluster. Đây là ràng buộc ở base/ai-engine/deployment.yaml,
+# không phải ở file Application này - nhưng Member 7 cần review lại
+# manifest base trước khi merge để đảm bảo ràng buộc này không bị phá.
+# ============================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: ai-engine
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
-  # TODO: Cấu hình Application AI Engine trỏ về gitops/manifests/overlays/sandbox/
+  project: default
+  source:
+    repoURL: https://github.com/truongcongtu318/capstone-phase2.git
+    targetRevision: infra/refactor-multi-state-sdlc
+    path: capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/ai-engine
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: self-heal-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

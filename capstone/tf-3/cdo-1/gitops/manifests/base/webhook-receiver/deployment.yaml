@@ -1,0 +1,41 @@
+# ============================================================
+# deployment.yaml - webhook-receiver (base)
+# Sở hữu: Member 7 (khung manifest) — code thật do Member 4 (Sub-team 2)
+#
+# ĐÂY LÀ PLACEHOLDER: dùng nginx tạm để ArgoCD sync thành công và
+# test được Sync Wave/RBAC/NetworkPolicy ngay hôm nay. Khi Member 4
+# build xong image thật, đổi lại:
+#   image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/webhook-receiver:<commit-sha>
+#   containerPort: 8443 (thay vì 80 của nginx)
+#   command/args nếu cần
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-receiver
+  labels:
+    app: webhook-receiver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-receiver
+  template:
+    metadata:
+      labels:
+        app: webhook-receiver
+    spec:
+      serviceAccountName: patch-receiver
+      containers:
+        - name: webhook-receiver
+          # TODO: đổi sang image ECR Private khi Sub-team 2 build xong
+          image: nginx:1.25
+          ports:
+            - containerPort: 80 # TODO: đổi thành 8443 khi có code thật
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
