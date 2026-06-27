@@ -237,8 +237,7 @@ Dự án CDO-01 tuân thủ nghiêm ngặt mô hình **NAT-less VPC** (Zero Inte
 
 *   **Nguyên lý hoạt động:**
     1.  Danh sách ảnh cần mirror được quản lý tập trung tại file text cấu hình: `capstone/tf-3/cdo-1/gitops/mirror-list.txt`.
-    2.  Khi có nhu cầu bổ sung hoặc cập nhật phiên bản image, thành viên chỉ cần tạo Pull Request sửa đổi file `mirror-list.txt` $
-ightarrow$ Kích hoạt GitHub Actions Workflow `mirror-pipeline.yml`.
+    2.  Khi có nhu cầu bổ sung hoặc cập nhật phiên bản image, thành viên chỉ cần tạo Pull Request sửa đổi file `mirror-list.txt` $\rightarrow$ Kích hoạt GitHub Actions Workflow `mirror-pipeline.yml`.
     3.  Workflow sẽ tự động kéo ảnh từ Internet public, chạy scan lỗ hổng bằng Trivy, đăng nhập AWS ECR thông qua IAM OIDC Role (`github-ci-apply`), tự động tạo repo đích nếu chưa có và push ảnh lên.
 
 *   **Mẫu cấu hình GitHub Actions Workflow (`.github/workflows/mirror-pipeline.yml`):**
