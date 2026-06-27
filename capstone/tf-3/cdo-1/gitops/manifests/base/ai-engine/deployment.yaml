@@ -14,6 +14,9 @@ metadata:
   name: ai-engine
   labels:
     app: ai-engine
+  annotations:
+    ignore-check.kube-linter.io/no-read-only-root-fs: "Nginx placeholder requires writeable cache"
+    ignore-check.kube-linter.io/run-as-non-root: "Nginx placeholder requires root privileges for port 80"
 spec:
   replicas: 1
   selector:

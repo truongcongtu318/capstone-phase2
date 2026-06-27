@@ -21,9 +21,19 @@ spec:
       labels:
         app: sqs-worker
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       serviceAccountName: sqs-worker
       containers:
         - name: sqs-worker
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           # TODO: đổi sang image ECR Private khi Sub-team 2 build xong
           # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/sqs-worker:<commit-sha>
           image: busybox:1.36
