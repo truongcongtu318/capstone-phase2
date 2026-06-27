@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-# Default ECR repository to mirror images to
+# Default ECR registry to mirror images to
 ECR_REGISTRY=${ECR_REGISTRY:-"544011261607.dkr.ecr.us-east-1.amazonaws.com"}
 
 # Ensure aws cli is authenticated or docker login is performed before running this script
-# aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REGISTRY
+echo "Logging into ECR..."
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
 LIST_FILE="mirror-list.txt"
 if [ ! -f "$LIST_FILE" ]; then
@@ -26,10 +27,19 @@ while read -r source_image dest_image; do
     echo "  1. Pulling $source_image..."
     docker pull "$source_image"
     
-    echo "  2. Tagging..."
+    echo "  2. Ensuring ECR repository exists..."
+    repo_name="$(echo "$dest_image" | cut -d: -f1)"
+    aws ecr describe-repositories --repository-name "$repo_name" --region us-east-1 >/dev/null 2>&1 || \
+    aws ecr create-repository \
+      --repository-name "$repo_name" \
+      --region us-east-1 \
+      --image-scanning-configuration scanOnPush=true \
+      --encryption-configuration encryptionType=AES256
+
+    echo "  3. Tagging..."
     docker tag "$source_image" "$ECR_REGISTRY/$dest_image"
     
-    echo "  3. Pushing..."
+    echo "  4. Pushing..."
     docker push "$ECR_REGISTRY/$dest_image"
     
     echo "  Done mirroring $source_image"

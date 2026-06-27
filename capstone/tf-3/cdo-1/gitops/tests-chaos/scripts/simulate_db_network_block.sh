@@ -3,8 +3,16 @@ set -e
 
 NAMESPACE=${NAMESPACE:-tenant-payment}
 APP_LABEL=${APP_LABEL:-payment-api}
-DB_CIDR=${DB_CIDR:-10.42.0.0/16}
+DB_CIDR=${DB_CIDR:?DB_CIDR is required, example: 10.42.12.34/32}
 POLICY_NAME=${POLICY_NAME:-chaos-deny-db-egress}
+
+cleanup() {
+  if [[ "${AUTO_CLEANUP:-false}" == "true" ]]; then
+    echo "Cleaning up NetworkPolicy..."
+    kubectl delete networkpolicy "$POLICY_NAME" -n "$NAMESPACE" --ignore-not-found
+  fi
+}
+trap cleanup EXIT
 
 echo "Applying NetworkPolicy to block DB traffic..."
 echo "Namespace: $NAMESPACE"
@@ -38,4 +46,4 @@ echo "--- EVIDENCE ---"
 echo "1. NetworkPolicy Status:"
 kubectl describe networkpolicy $POLICY_NAME -n $NAMESPACE || true
 
-echo "To cleanup run: kubectl delete networkpolicy $POLICY_NAME -n $NAMESPACE"
+echo "To cleanup manually run (or set AUTO_CLEANUP=true): kubectl delete networkpolicy $POLICY_NAME -n $NAMESPACE"

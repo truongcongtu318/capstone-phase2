@@ -31,7 +31,7 @@ spec:
   - name: stress-ng
     image: $IMAGE
     command: ["stress-ng"]
-    args: ["--vm", "1", "--vm-bytes", "128M", "--vm-keep"]
+    args: ["--vm", "1", "--vm-bytes", "128M", "--vm-keep", "--timeout", "60s"]
     resources:
       limits:
         memory: "$MEM_LIMIT"
@@ -44,15 +44,25 @@ echo "Waiting for pod to be created..."
 sleep 5
 
 echo "Pod Status:"
-kubectl get pod $APP_NAME -n $NAMESPACE
+kubectl get pod $APP_NAME -n $NAMESPACE || true
 
 echo "Waiting for pod to be OOMKilled..."
-kubectl wait --for=condition=Ready pod/$APP_NAME -n $NAMESPACE --timeout=60s || true
+for i in {1..60}; do
+  REASON=$(kubectl get pod "$APP_NAME" -n "$NAMESPACE" \
+    -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || true)
+
+  if [[ "$REASON" == "OOMKilled" ]]; then
+    echo "OOMKilled detected"
+    break
+  fi
+
+  sleep 2
+done
 
 # Check evidence
 echo "--- EVIDENCE ---"
 echo "1. Pod Status:"
-kubectl get pod $APP_NAME -n $NAMESPACE
+kubectl get pod $APP_NAME -n $NAMESPACE || true
 echo "2. Events:"
 kubectl get events -n $NAMESPACE --sort-by=.lastTimestamp | grep $APP_NAME || true
 echo "3. Describe Pod:"
