@@ -1,0 +1,41 @@
+# ============================================================
+# analysis-template.yaml - webhook-receiver-analysis
+# Sở hữu: Member 7
+# Sync Wave: "-1"
+#
+# Định nghĩa Argo Rollouts AnalysisTemplate để đánh giá chất lượng
+# bản deploy mới của Webhook Receiver trong quá trình Canary Rollout.
+# Nếu tỷ lệ lỗi > 1% hoặc P99 latency > 800ms, tự động abort canary.
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: webhook-receiver-analysis
+  namespace: self-heal-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  metrics:
+    # 1. Đo lường tỷ lệ lỗi HTTP 5xx (Phải dưới 1%)
+    - name: http-error-rate
+      interval: 1m
+      successCondition: result[0] < 0.01
+      failureLimit: 3
+      provider:
+        prometheus:
+          address: http://prometheus-operated.observability.svc.cluster.local:9090
+          query: |
+            sum(rate(nginx_ingress_controller_requests{status=~"5..", ingress="webhook-receiver"}[1m])) 
+            / 
+            sum(rate(nginx_ingress_controller_requests{ingress="webhook-receiver"}[1m]))
+            
+    # 2. Đo lường P99 Latency (Phải dưới 800ms)
+    - name: latency-p99
+      interval: 1m
+      successCondition: result[0] < 0.8
+      failureLimit: 3
+      provider:
+        prometheus:
+          address: http://prometheus-operated.observability.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.99, sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{ingress="webhook-receiver"}[1m])) by (le))

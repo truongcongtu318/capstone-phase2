@@ -4,6 +4,8 @@ metadata:
   name: ai-engine
   labels:
     app: ai-engine
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   type: ClusterIP
   selector:
