@@ -7,3 +7,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - serviceaccount.yaml
+  - configmap.yaml
+  - fake-source-secret.yaml
+  - secretstore.yaml
+  - external-secret.yaml

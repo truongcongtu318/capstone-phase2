@@ -1,0 +1,18 @@
+# ============================================================
+# configmap.yaml - ai-engine
+# Sở hữu: Member 7 (khung) — nội dung thật do AI team
+# Sync Wave: "-2"
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-engine-config
+  labels:
+    app: ai-engine
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  PLACEHOLDER_KEY: "placeholder-value"
+  # Ví dụ field thật sẽ cần:
+  # BEDROCK_MODEL_ID: "anthropic.claude-3-..."
+  # AWS_REGION: "us-east-1"
