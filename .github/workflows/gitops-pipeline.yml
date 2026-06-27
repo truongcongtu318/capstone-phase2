@@ -2,13 +2,13 @@ name: GitOps & Manifests Validation
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'capstone/tf-3/cdo-1/gitops/**'
+      - "capstone/tf-3/cdo-1/gitops/**"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'capstone/tf-3/cdo-1/gitops/**'
+      - "capstone/tf-3/cdo-1/gitops/**"
 
 permissions:
   contents: read
@@ -30,9 +30,9 @@ jobs:
           echo "$HOME/.kube-linter/bin" >> $GITHUB_PATH
 
       - name: Run Kube-linter
-        run: |
-          # Quét cấu trúc manifest đảm bảo an toàn bảo mật, resource limits
-          kube-linter lint capstone/tf-3/cdo-1/gitops/
+        uses: stackrox/kube-linter-action@v1.0.4
+        with:
+          directory: capstone/tf-3/cdo-1/gitops/
 
       - name: Validate YAML Syntax
         run: |
