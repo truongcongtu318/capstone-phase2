@@ -11,7 +11,6 @@ on:
       - 'capstone/tf-3/cdo-1/apps/**'
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -52,6 +51,9 @@ jobs:
     needs: test-and-lint
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     strategy:
       matrix:
         app: [ 'webhook-receiver', 'self-heal-worker' ]
@@ -65,7 +67,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::544011261607:role/tf3-cdo1-sandbox-github-ci-apply
+          role-to-assume: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-apply
           aws-region: us-east-1
 
       - name: Log in to Amazon ECR
