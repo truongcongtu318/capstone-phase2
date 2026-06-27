@@ -130,4 +130,4 @@ Do **Sub-team 2** bị phụ thuộc hoàn toàn vào hạ tầng EKS/VPC của 
 *   **Giải pháp (Auto-Discovery):**
     *   Trong file `config.py`, chỉ khởi tạo `endpoint_url` trong boto3 client **nếu** biến môi trường tương ứng có giá trị. Nếu rỗng, boto3 sẽ tự động sử dụng AWS SDK credential chain mặc định.
     *   Khi viết Dockerfile và Helm chart deploy lên Sandbox EKS, **Sub-team 3** sẽ không truyền các biến endpoint local. 
-    *   Pods chạy trên EKS sẽ tự động sử dụng **IAM Roles for Service Accounts (IRSA)** thông qua ServiceAccount `sa-patch-controller` để phân quyền và tự động route thông qua các VPC PrivateLink Endpoints nội bộ cụm.
+    *   Pods chạy trên EKS sẽ tự động sử dụng **IAM Roles for Service Accounts (IRSA)** thông qua ServiceAccount `self-heal-executor` để phân quyền và tự động route thông qua các VPC PrivateLink Endpoints nội bộ cụm.
