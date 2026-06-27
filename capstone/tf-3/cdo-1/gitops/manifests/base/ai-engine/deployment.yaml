@@ -6,8 +6,7 @@
 #
 # QUAN TRỌNG (Zero Trust): khi đổi sang image thật, PHẢI verify image
 # đó KHÔNG chứa kubeconfig, KHÔNG cài kubectl/K8s SDK. ServiceAccount
-# dưới đây CHƯA gắn RBAC nào (đúng ý đồ - AI Engine không cần quyền
-# sửa cluster, chỉ cần gọi Bedrock qua IRSA).
+# dưới đây CHƯA gắn RBAC nào (đúng ý đồ).
 # ============================================================
 apiVersion: apps/v1
 kind: Deployment

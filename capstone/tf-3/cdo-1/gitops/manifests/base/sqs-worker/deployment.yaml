@@ -3,8 +3,7 @@
 # Sở hữu: Member 7 (khung) — code thật do Member 5/6 (Sub-team 2)
 #
 # PLACEHOLDER: dùng busybox sleep tạm (không cần expose port, vì
-# sqs-worker là background daemon, không phải HTTP server) để test
-# Sync Wave/RBAC. Đổi image khi Sub-team 2 build xong.
+# sqs-worker là background daemon, không phải HTTP server).
 # ============================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -22,7 +21,7 @@ spec:
       labels:
         app: sqs-worker
     spec:
-      serviceAccountName: self-heal-executor
+      serviceAccountName: sqs-worker
       containers:
         - name: sqs-worker
           # TODO: đổi sang image ECR Private khi Sub-team 2 build xong
