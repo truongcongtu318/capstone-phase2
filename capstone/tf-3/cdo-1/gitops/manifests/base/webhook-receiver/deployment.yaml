@@ -7,7 +7,6 @@
 # build xong image thật, đổi lại:
 #   image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/webhook-receiver:<commit-sha>
 #   containerPort: 8443 (thay vì 80 của nginx)
-#   command/args nếu cần
 # ============================================================
 apiVersion: apps/v1
 kind: Deployment

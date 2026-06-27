@@ -128,14 +128,17 @@ spec:
               - kind: ServiceAccount
                 name: self-heal-executor
                 namespace: self-heal-system
+              - kind: ServiceAccount
+                name: sqs-worker
+                namespace: self-heal-system
       validate:
         message: >-
-          Chỉ ServiceAccount self-heal-executor (namespace self-heal-system)
+          Chỉ ServiceAccount self-heal-executor hoặc sqs-worker (namespace self-heal-system)
           mới có quyền sửa đổi Deployment/StatefulSet của tenant.
         deny: {}
 
     # --------------------------------------------------------
-    # Rule 3: Cấm tuyệt đối mọi mutation trong namespace hệ thống từ self-heal-executor
+    # Rule 3: Cấm tuyệt đối mọi mutation trong namespace hệ thống từ self-heal-executor / sqs-worker
     #
     # ĐÃ XÁC NHẬN (test thật trên Kyverno v1.12.5 và v1.18.1): Kyverno có configmap
     # `resourceFilters` mặc định loại trừ TOÀN BỘ resource trong
@@ -146,7 +149,7 @@ spec:
     # observability (không bị filter mặc định).
     #
     # Lớp bảo vệ thật cho kube-system là RBAC K8s, không phải Kyverno:
-    # ServiceAccount self-heal-executor chỉ được cấp quyền patch trên
+    # ServiceAccount self-heal-executor / sqs-worker chỉ được cấp quyền patch trên
     # tenant-payment, tenant-checkout (xem ma trận RBAC trong project-rules.md
     # mục IV.2) - không có quyền gì trên kube-system, nên dù Kyverno không
     # chặn được, RBAC vẫn chặn.
@@ -168,6 +171,9 @@ spec:
             subjects:
               - kind: ServiceAccount
                 name: self-heal-executor
+                namespace: self-heal-system
+              - kind: ServiceAccount
+                name: sqs-worker
                 namespace: self-heal-system
       validate:
         message: >-
