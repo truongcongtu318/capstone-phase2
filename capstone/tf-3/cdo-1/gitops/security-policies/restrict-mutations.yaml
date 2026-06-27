@@ -73,6 +73,38 @@ spec:
               - key: "{{ request.object.spec.template.spec.containers[].image || [] }}"
                 operator: NotEquals
                 value: "{{ request.oldObject.spec.template.spec.containers[].image || [] }}"
+              # Chặn đổi command
+              - key: "{{ request.object.spec.template.spec.containers[].command || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].command || [] }}"
+              # Chặn đổi args
+              - key: "{{ request.object.spec.template.spec.containers[].args || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].args || [] }}"
+              # Chặn đổi env
+              - key: "{{ request.object.spec.template.spec.containers[].env || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].env || [] }}"
+              # Chặn đổi ports
+              - key: "{{ request.object.spec.template.spec.containers[].ports || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].ports || [] }}"
+              # Chặn đổi serviceAccountName
+              - key: "{{ request.object.spec.template.spec.serviceAccountName || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.serviceAccountName || '' }}"
+              # Chặn đổi livenessProbe
+              - key: "{{ request.object.spec.template.spec.containers[].livenessProbe || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].livenessProbe || [] }}"
+              # Chặn đổi readinessProbe
+              - key: "{{ request.object.spec.template.spec.containers[].readinessProbe || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].readinessProbe || [] }}"
+              # Chặn đổi resources.requests
+              - key: "{{ request.object.spec.template.spec.containers[].resources.requests || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].resources.requests || [] }}"
 
     # --------------------------------------------------------
     # Rule 2: Chỉ self-heal-executor mới được PATCH/UPDATE
@@ -103,9 +135,9 @@ spec:
         deny: {}
 
     # --------------------------------------------------------
-    # Rule 3: Cấm tuyệt đối mọi mutation trong namespace hệ thống
+    # Rule 3: Cấm tuyệt đối mọi mutation trong namespace hệ thống từ self-heal-executor
     #
-    # ĐÃ XÁC NHẬN (test thật trên Kyverno v1.18.1): Kyverno có configmap
+    # ĐÃ XÁC NHẬN (test thật trên Kyverno v1.12.5 và v1.18.1): Kyverno có configmap
     # `resourceFilters` mặc định loại trừ TOÀN BỘ resource trong
     # kube-system khỏi admission webhook ([*/*,kube-system,*]) - đây là
     # hành vi mặc định AN TOÀN của chính Kyverno (tránh tự treo cluster
@@ -114,10 +146,10 @@ spec:
     # observability (không bị filter mặc định).
     #
     # Lớp bảo vệ thật cho kube-system là RBAC K8s, không phải Kyverno:
-    # ServiceAccount self-heal-executor / sa/patch-controller chỉ được
-    # cấp quyền patch trên tenant-payment, tenant-checkout (xem ma trận
-    # RBAC trong project-rules.md mục IV.2) - không có quyền gì trên
-    # kube-system, nên dù Kyverno không chặn được, RBAC vẫn chặn.
+    # ServiceAccount self-heal-executor chỉ được cấp quyền patch trên
+    # tenant-payment, tenant-checkout (xem ma trận RBAC trong project-rules.md
+    # mục IV.2) - không có quyền gì trên kube-system, nên dù Kyverno không
+    # chặn được, RBAC vẫn chặn.
     # --------------------------------------------------------
     - name: deny-system-namespace-mutation
       match:
@@ -127,16 +159,16 @@ spec:
                 - Deployment
                 - StatefulSet
                 - DaemonSet
+              namespaces:
+                - argocd
+                - observability
               operations:
                 - UPDATE
                 - DELETE
-      preconditions:
-        all:
-          - key: "{{ request.namespace }}"
-            operator: AnyIn
-            value:
-              - argocd
-              - observability
+            subjects:
+              - kind: ServiceAccount
+                name: self-heal-executor
+                namespace: self-heal-system
       validate:
         message: >-
           Không hành động tự chữa lành nào được phép sửa đổi resource

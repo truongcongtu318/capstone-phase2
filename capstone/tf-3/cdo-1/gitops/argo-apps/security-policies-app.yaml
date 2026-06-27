@@ -1,0 +1,28 @@
+# ============================================================
+# security-policies-app.yaml
+# Sở hữu: Member 7
+# Sync Wave: "-3" — deploy sau Namespace(-4), trước Config(-2)
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: security-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/truongcongtu318/capstone-phase2.git
+    targetRevision: infra/refactor-multi-state-sdlc
+    path: capstone/tf-3/cdo-1/gitops/security-policies
+  destination:
+    server: https://kubernetes.default.svc
+    # Không set namespace chung ở đây để giữ nguyên namespace khai báo trong rbac.yaml 
+    # (tenant-payment, tenant-checkout) thay vì bị override toàn bộ về self-heal-system.
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

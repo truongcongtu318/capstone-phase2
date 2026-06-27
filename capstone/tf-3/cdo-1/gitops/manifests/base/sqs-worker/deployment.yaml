@@ -22,7 +22,7 @@ spec:
       labels:
         app: sqs-worker
     spec:
-      serviceAccountName: sqs-worker
+      serviceAccountName: self-heal-executor
       containers:
         - name: sqs-worker
           # TODO: đổi sang image ECR Private khi Sub-team 2 build xong
