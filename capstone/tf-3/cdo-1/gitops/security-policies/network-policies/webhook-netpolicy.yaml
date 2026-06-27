@@ -1,3 +1,43 @@
-# ☸️ NetworkPolicy for Webhook Receiver
-# TODO: Định nghĩa NetworkPolicy bảo vệ Webhook receiver.
-# - Cho phép ingress từ Prometheus/Alertmanager hoặc Ingress Controller tới port 8443.
+# ============================================================
+# webhook-netpolicy.yaml
+# Sở hữu: Member 7
+# Sync Wave: "-3"
+#
+# Webhook Receiver mở port 8443 (theo contract chính thức /alerts —
+# GIẢ ĐỊNH TẠM, chưa confirm với Sub-team 2, xem README gốc).
+# Chỉ nhận Ingress từ Alertmanager (namespace observability).
+#
+# LƯU Ý: label pod thật của Alertmanager do Helm chart
+# kube-prometheus-stack tự sinh ra (thường là
+# app=alertmanager + app.kubernetes.io/instance=<release-name>).
+# Member 8 PHẢI xác nhận lại label thật sau khi Helm install xong,
+# rồi cập nhật namespaceSelector/podSelector dưới đây nếu khác.
+#
+# Test case: pod KHÔNG nằm trong namespace observability,
+# curl webhook-receiver.self-heal-system.svc.cluster.local:8443
+# PHẢI bị reject/timeout.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webhook-netpolicy
+  namespace: self-heal-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  podSelector:
+    matchLabels:
+      app: webhook-receiver
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app: alertmanager # TODO: xác nhận lại label thật sau khi Helm install
+      ports:
+        - protocol: TCP
+          port: 8443
