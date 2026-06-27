@@ -1,4 +1,61 @@
-# ☸️ NetworkPolicy for AI Engine Isolation
-# TODO: Định nghĩa Kubernetes NetworkPolicy bảo vệ AI Engine pod.
-# - Mặc định block toàn bộ ingress/egress.
-# - Chỉ cho phép ingress port 8080 từ pods mang label app=sqs-worker hoặc app=webhook-receiver.
+# ============================================================
+# ai-engine-netpolicy.yaml
+# Sở hữu: Member 7
+# Sync Wave: "-3"
+#
+# Cách ly AI Engine (Brain): chỉ cho phép Ingress port 8080 từ pod
+# có label app=sqs-worker HOẶC app=webhook-receiver trong namespace
+# self-heal-system. Egress chỉ cho phép ra ngoài qua VPC Endpoint
+# (cổng 443) để gọi Bedrock — CIDR thật cần xác nhận với Sub-team 1
+# (sg-vpc-endpoint), tạm để rule egress mở tới port 443 trong cluster
+# DNS resolve nội bộ, sẽ siết lại bằng IPBlock khi có CIDR thật.
+#
+# Test case: pod trong cùng namespace KHÔNG có 2 label trên,
+# curl ai-engine.self-heal-system.svc.cluster.local:8080 PHẢI timeout.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-engine-netpolicy
+  namespace: self-heal-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-engine
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: self-heal-system
+          podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - sqs-worker
+                  - webhook-receiver
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # DNS resolution (CoreDNS) - cần thiết để pod hoạt động
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Egress ra VPC Endpoint (Bedrock qua PrivateLink) - port 443.
+    # TODO: thay namespaceSelector: {} bằng ipBlock CIDR thật của
+    # sg-vpc-endpoint khi Sub-team 1 cung cấp, để siết chặt hơn.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
