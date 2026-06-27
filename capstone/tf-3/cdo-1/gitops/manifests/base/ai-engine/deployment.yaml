@@ -1,0 +1,42 @@
+# ============================================================
+# deployment.yaml - ai-engine (base)
+# Sở hữu: Member 7 (khung) — model/code thật do AI team
+#
+# PLACEHOLDER: nginx tạm, lắng nghe port 80 thay cho 8080 thật.
+#
+# QUAN TRỌNG (Zero Trust): khi đổi sang image thật, PHẢI verify image
+# đó KHÔNG chứa kubeconfig, KHÔNG cài kubectl/K8s SDK. ServiceAccount
+# dưới đây CHƯA gắn RBAC nào (đúng ý đồ - AI Engine không cần quyền
+# sửa cluster, chỉ cần gọi Bedrock qua IRSA).
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-engine
+  labels:
+    app: ai-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-engine
+  template:
+    metadata:
+      labels:
+        app: ai-engine
+    spec:
+      serviceAccountName: ai-engine
+      containers:
+        - name: ai-engine
+          # TODO: đổi sang image ECR Private khi AI team build xong
+          # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/ai-engine:<commit-sha>
+          image: nginx:1.25
+          ports:
+            - containerPort: 80 # TODO: đổi thành 8080 khi có code thật
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
