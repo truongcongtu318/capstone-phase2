@@ -23,8 +23,8 @@ jobs:
 
       - name: Install Kube-linter
         run: |
-          curl -sSfL https://raw.githubusercontent.com/stackrox/kube-linter/main/scripts/install.sh | sh
-          echo "$HOME/.kube-linter/bin" >> $GITHUB_PATH
+          curl -sL "https://github.com/stackrox/kube-linter/releases/latest/download/kube-linter-linux.tar.gz" | tar -xz
+          sudo mv kube-linter /usr/local/bin/
 
       - name: Run Kube-linter
         run: |
