@@ -1,1 +1,29 @@
-# 🛠️ TODO: Định nghĩa Variables cho bootstrap
+variable "name_prefix" {
+  description = "Prefix cho resource name"
+  type        = string
+  default     = "tf3-cdo1"
+}
+
+variable "aws_region" {
+  description = "AWS region cho toàn bộ sandbox"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "github_repo" {
+  description = "org/repo cho GitHub OIDC trust policy"
+  type        = string
+  default     = "truongcongtu318/capstone-phase2"
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "sandbox"
+}
+
+variable "tags" {
+  description = "Map tags"
+  type        = map(string)
+  default     = {}
+}
