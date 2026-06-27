@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 # Default ECR registry to mirror images to
 ECR_REGISTRY=${ECR_REGISTRY:-"544011261607.dkr.ecr.us-east-1.amazonaws.com"}
+AWS_REGION=${AWS_REGION:-us-east-1}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIST_FILE="$SCRIPT_DIR/mirror-list.txt"
 
 # Ensure aws cli is authenticated or docker login is performed before running this script
-echo "Logging into ECR..."
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+echo "Logging into ECR in region $AWS_REGION..."
+aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
-LIST_FILE="mirror-list.txt"
 if [ ! -f "$LIST_FILE" ]; then
-    echo "Error: $LIST_FILE not found in the current directory."
+    echo "Error: $LIST_FILE not found."
     exit 1
 fi
 
@@ -29,10 +32,10 @@ while read -r source_image dest_image; do
     
     echo "  2. Ensuring ECR repository exists..."
     repo_name="$(echo "$dest_image" | cut -d: -f1)"
-    aws ecr describe-repositories --repository-name "$repo_name" --region us-east-1 >/dev/null 2>&1 || \
+    aws ecr describe-repositories --repository-name "$repo_name" --region "$AWS_REGION" >/dev/null 2>&1 || \
     aws ecr create-repository \
       --repository-name "$repo_name" \
-      --region us-east-1 \
+      --region "$AWS_REGION" \
       --image-scanning-configuration scanOnPush=true \
       --encryption-configuration encryptionType=AES256
 

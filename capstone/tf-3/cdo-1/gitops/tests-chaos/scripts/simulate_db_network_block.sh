@@ -40,6 +40,7 @@ spec:
 EOF
 
 echo "NetworkPolicy $POLICY_NAME applied."
+echo "WARNING: This test only blocks DB egress if no other NetworkPolicy allows the same DB CIDR for this pod."
 echo "Waiting for app to report DB connection failure..."
 
 echo "--- EVIDENCE ---"

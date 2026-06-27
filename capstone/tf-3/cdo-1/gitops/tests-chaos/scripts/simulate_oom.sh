@@ -47,17 +47,26 @@ echo "Pod Status:"
 kubectl get pod $APP_NAME -n $NAMESPACE || true
 
 echo "Waiting for pod to be OOMKilled..."
+OOM_DETECTED=false
 for i in {1..60}; do
-  REASON=$(kubectl get pod "$APP_NAME" -n "$NAMESPACE" \
+  REASON_LAST=$(kubectl get pod "$APP_NAME" -n "$NAMESPACE" \
     -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || true)
+  REASON_CURR=$(kubectl get pod "$APP_NAME" -n "$NAMESPACE" \
+    -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' 2>/dev/null || true)
 
-  if [[ "$REASON" == "OOMKilled" ]]; then
+  if [[ "$REASON_LAST" == "OOMKilled" || "$REASON_CURR" == "OOMKilled" ]]; then
     echo "OOMKilled detected"
+    OOM_DETECTED=true
     break
   fi
 
   sleep 2
 done
+
+if [ "$OOM_DETECTED" = false ]; then
+  echo "Error: OOMKilled not detected within timeout."
+  exit 1
+fi
 
 # Check evidence
 echo "--- EVIDENCE ---"
