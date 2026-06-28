@@ -1,5 +1,5 @@
 # ============================================================
-# rbac.yaml - self-heal-executor (sqs-worker)
+# rbac.yaml - self-heal-executor
 # Sở hữu: Member 7
 #
 # Cấp quyền cho self-heal-executor ServiceAccount để thực hiện
