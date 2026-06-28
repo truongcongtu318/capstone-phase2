@@ -69,7 +69,7 @@ resource "aws_s3_bucket" "state" {
   object_lock_enabled = true
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
@@ -78,7 +78,7 @@ resource "aws_s3_bucket_object_lock_configuration" "state" {
 
   rule {
     default_retention {
-      mode = "COMPLIANCE"
+      mode = "GOVERNANCE"
       days = 90
     }
   }
