@@ -62,10 +62,15 @@ Khi các thành viên đã merge code hoàn chỉnh vào nhánh `infra/platform-
 
 ---
 
-## 📋 Phân Chia Công Việc Cụ Thể (Sub-team 1)
+## 📋 Phân Chia Công Việc Theo Phase (Sub-team 1)
 
-| Vai trò | Thành viên | Phạm vi file thực thi (`capstone/tf-3/cdo-1/`) |
-| :--- | :--- | :--- |
-| **Networking & Security Lead** | **Thành viên A** | 📂 `infra/modules/networking/` (VPC, Subnets, 12 VPC Endpoints)<br>📂 `infra/modules/security/` (KMS Keys, Security Groups)<br>📂 `infra/environments/sandbox/networking/` |
-| **Compute & Karpenter Lead** | **Thành viên B** | 📂 `infra/modules/eks/` (EKS Cluster, Nodes, IAM)<br>📂 `infra/modules/karpenter/` (IAM, Provisioner template)<br>📂 `infra/environments/sandbox/compute/` |
-| **Services & Observability Lead** | **Thành viên C** | 📂 `infra/modules/ingress/` (AWS Load Balancer Controller)<br>📂 `infra/modules/observability/` (Prometheus Helm Stack, ADOT)<br>📂 `infra/environments/sandbox/services/` |
+Việc phát triển hạ tầng sandbox được chia nhỏ thành các Phase độc lập và triển khai tuần tự theo đúng thứ tự phụ thuộc (Phase 2 ➡️ Phase 3 ➡️ Phase 4):
+
+| Thứ tự Phase | Tên State (Thành phần) | Vai trò chịu trách nhiệm | Thành viên | Phạm vi file thực thi (`capstone/tf-3/cdo-1/`) | Cơ chế đấu nối kết quả (Outputs & State) |
+| :---: | :--- | :--- | :---: | :--- | :--- |
+| **Phase 1** | **`bootstrap`** | **Tech Lead** | Anh Tú | 📂 `infra/bootstrap/` | Khởi tạo S3 state bucket, DynamoDB Lock table và các OIDC Roles cho GitHub Actions (Đã hoàn thành). |
+| **Phase 2** | **`networking`** | **Networking & Security Lead** | Thành viên A | 📂 `infra/modules/networking/` (VPC, Subnets, Route Tables, 12 VPC Endpoints)<br>📂 `infra/modules/security/` (KMS Keys, Security Groups)<br>📂 `infra/environments/sandbox/networking/` | Dựng xong khung mạng vật lý. Export các outputs cơ bản làm tham số đầu vào cho EKS Cluster. |
+| **Phase 3** | **`compute`** | **Compute & Karpenter Lead** | Thành viên B | 📂 `infra/modules/eks/` (EKS Cluster, OIDC integration, Node Groups, IAM)<br>📂 `infra/modules/karpenter/` (IAM, Provisioner template)<br>📂 `infra/environments/sandbox/compute/` | Đọc trực tiếp VPC ID, Subnet IDs, Security Groups từ Networking State qua S3 Remote State. Khởi tạo EKS Cluster Endpoint, CA và Node IAM roles. |
+| **Phase 4** | **`services`** | **Services & Observability Lead** | Thành viên C | 📂 `infra/modules/ingress/` (AWS Load Balancer Controller Helm integration)<br>📂 `infra/modules/observability/` (Prometheus Helm Stack, ADOT)<br>📂 `infra/environments/sandbox/services/` | Đọc EKS Endpoint & CA từ Compute State, kết hợp Security Groups từ Networking State để tạo kết nối Kubernetes & Helm providers, tiến hành cài đặt Ingress Controller và Prometheus. |
+
+*Lưu ý quan trọng:* **CẤM** thay đổi thứ tự apply. Nếu `networking` chưa được apply thành công trên AWS Cloud, toàn bộ các lượt apply của `compute` và `services` sẽ tự động thất bại ngay lập tức ở bước `terraform init` do không tìm thấy file remote state đích trên S3.

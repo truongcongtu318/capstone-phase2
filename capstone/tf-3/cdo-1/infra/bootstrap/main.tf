@@ -61,14 +61,26 @@ resource "aws_kms_alias" "state" {
 }
 
 # ─────────────────────────────────────────────
-# 2. S3 BUCKET - Terraform state storage
+# 2. S3 BUCKET - Terraform state storage & Audit Logs
 # ─────────────────────────────────────────────
 
 resource "aws_s3_bucket" "state" {
-  bucket = "${var.name_prefix}-${var.environment}-tfstate-${data.aws_caller_identity.current.account_id}"
+  bucket              = "tf-3-aiops-audit-trail"
+  object_lock_enabled = true
 
   lifecycle {
     prevent_destroy = true
+  }
+}
+
+resource "aws_s3_bucket_object_lock_configuration" "state" {
+  bucket = aws_s3_bucket.state.id
+
+  rule {
+    default_retention {
+      mode = "COMPLIANCE"
+      days = 90
+    }
   }
 }
 
@@ -128,11 +140,11 @@ resource "aws_s3_bucket_policy" "state_deny_http" {
 }
 
 # ─────────────────────────────────────────────
-# 3. DYNAMODB TABLE - Terraform state lock
+# 3. DYNAMODB TABLE - Terraform state lock & SQS Idempotency Lock
 # ─────────────────────────────────────────────
 
 resource "aws_dynamodb_table" "state_lock" {
-  name         = "${var.name_prefix}-${var.environment}-tfstate-lock"
+  name         = "tf-3-aiops-idempotency-lock"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 

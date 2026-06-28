@@ -1,9 +1,9 @@
 terraform {
   backend "s3" {
-    bucket         = "tf3-cdo1-sandbox-tfstate-474013238625"
+    bucket         = "tf-3-aiops-audit-trail"
     key            = "sandbox/compute/terraform.tfstate"
     region         = "us-east-1"
-    dynamodb_table = "tf3-cdo1-sandbox-tfstate-lock"
+    dynamodb_table = "tf-3-aiops-idempotency-lock"
     encrypt        = true
   }
 }

@@ -1,0 +1,47 @@
+# ============================================================
+# deployment.yaml - sqs-worker (base)
+# Sở hữu: Member 7 (khung) — code thật do Member 5/6 (Sub-team 2)
+#
+# PLACEHOLDER: dùng busybox sleep tạm (không cần expose port, vì
+# sqs-worker là background daemon, không phải HTTP server).
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sqs-worker
+  labels:
+    app: sqs-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sqs-worker
+  template:
+    metadata:
+      labels:
+        app: sqs-worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      serviceAccountName: sqs-worker
+      containers:
+        - name: sqs-worker
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          # TODO: đổi sang image ECR Private khi Sub-team 2 build xong
+          # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/sqs-worker:<commit-sha>
+          image: busybox:1.36
+          command: ["sleep", "infinity"]
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
