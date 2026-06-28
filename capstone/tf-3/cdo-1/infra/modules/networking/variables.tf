@@ -4,6 +4,12 @@ variable "name_prefix" {
   default     = "tf3-cdo1-sandbox"
 }
 
+variable "environment" {
+  description = "Environment name used for standard resource tags"
+  type        = string
+  default     = "sandbox"
+}
+
 variable "vpc_cidr" {
   description = "CIDR block cho VPC"
   type        = string
@@ -32,6 +38,12 @@ variable "sg_vpc_endpoint_id" {
   description = "Security group ID cho Interface VPC endpoints (tu module security)"
   type        = string
   default     = null
+}
+
+variable "enable_vpc_endpoints" {
+  description = "Whether to create NAT-less Gateway and Interface VPC endpoints"
+  type        = bool
+  default     = false
 }
 
 variable "tags" {
