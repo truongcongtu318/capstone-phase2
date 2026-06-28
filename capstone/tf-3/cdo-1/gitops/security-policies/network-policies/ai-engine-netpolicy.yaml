@@ -60,9 +60,9 @@ spec:
     # Sử dụng ipBlock chứa các subnet CIDR của VPC Endpoint (private subnets)
     - to:
         - ipBlock:
-            cidr: 10.42.32.0/20
+            cidr: 10.42.0.0/20
         - ipBlock:
-            cidr: 10.42.48.0/20
+            cidr: 10.42.16.0/20
       ports:
         - protocol: TCP
           port: 443
