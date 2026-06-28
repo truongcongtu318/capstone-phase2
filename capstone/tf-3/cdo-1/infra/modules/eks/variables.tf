@@ -32,7 +32,7 @@ variable "cluster_name" {
 variable "eks_version" {
   description = "EKS Kubernetes version"
   type        = string
-  default     = "1.28"
+  default     = "1.30"
 }
 
 variable "global_tags" {
