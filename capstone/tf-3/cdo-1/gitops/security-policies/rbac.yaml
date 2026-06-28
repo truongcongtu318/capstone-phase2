@@ -1,5 +1,5 @@
 # ============================================================
-# rbac.yaml - self-heal-executor (sqs-worker)
+# rbac.yaml - self-heal-executor
 # Sở hữu: Member 7
 #
 # Cấp quyền cho self-heal-executor ServiceAccount để thực hiện
@@ -10,6 +10,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: self-heal-executor-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "statefulsets"]
@@ -26,12 +28,11 @@ kind: RoleBinding
 metadata:
   name: self-heal-executor-binding
   namespace: tenant-payment
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 subjects:
   - kind: ServiceAccount
     name: self-heal-executor
-    namespace: self-heal-system
-  - kind: ServiceAccount
-    name: sqs-worker
     namespace: self-heal-system
 roleRef:
   kind: ClusterRole
@@ -43,12 +44,11 @@ kind: RoleBinding
 metadata:
   name: self-heal-executor-binding
   namespace: tenant-checkout
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
 subjects:
   - kind: ServiceAccount
     name: self-heal-executor
-    namespace: self-heal-system
-  - kind: ServiceAccount
-    name: sqs-worker
     namespace: self-heal-system
 roleRef:
   kind: ClusterRole
