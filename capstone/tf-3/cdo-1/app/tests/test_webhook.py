@@ -1,14 +1,24 @@
 # 🧪 FastAPI & Idempotency Unit Tests
-# TODO: Viết unit tests kiểm tra FastAPI `/alerts` route:
-# - Test nhận alert payload thành công.
-# - Test cơ chế conditional write của DynamoDB lock (nhận alert trùng lặp trong thời gian cooldown -> block).
 import pytest
 import json
+import sys
+import os
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
+
+# Clear cached src modules and set path specifically for webhook-receiver
+for mod in list(sys.modules.keys()):
+    if mod == 'src' or mod.startswith('src.'):
+        del sys.modules[mod]
+
+app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+webhook_path = os.path.join(app_dir, 'webhook-receiver')
+if webhook_path in sys.path:
+    sys.path.remove(webhook_path)
+sys.path.insert(0, webhook_path)
+
 from src.main import app
-
-
+from src import main as webhook_main
 
 client = TestClient(app)
 
@@ -28,10 +38,9 @@ VALID_HEADERS = {
     "X-Tenant-Id": "d3b07384-d113-495f-9f58-20d18d357d75"
 }
 
-
 # Test 1: Alert hợp lệ → 202
-@patch("src.main._push_sqs")
-@patch("src.main.acquire_lock", return_value=True)
+@patch.object(webhook_main, "_push_sqs")
+@patch.object(webhook_main, "acquire_lock", return_value=True)
 def test_valid_alert_returns_202(mock_lock, mock_sqs):
     response = client.post("/alerts", json=VALID_PAYLOAD, headers=VALID_HEADERS)
     assert response.status_code == 202
@@ -39,7 +48,7 @@ def test_valid_alert_returns_202(mock_lock, mock_sqs):
     assert mock_sqs.called         # SQS push đã được gọi
 
 # Test 2: Alert trùng (đang cooldown) → 409
-@patch("src.main.acquire_lock", return_value=False)
+@patch.object(webhook_main, "acquire_lock", return_value=False)
 def test_duplicate_alert_returns_409(mock_lock):
     response = client.post("/alerts", json=VALID_PAYLOAD, headers=VALID_HEADERS)
     assert response.status_code == 409
