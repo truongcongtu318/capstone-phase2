@@ -2,7 +2,7 @@
 
 # sg-alb-internal: Inbound 443 từ client/VPN. Outbound 8443 đến workload pods.
 resource "aws_security_group" "alb_internal" {
-  name        = "sg-alb-internal"
+  name        = "${var.name_prefix}-alb-internal"
   description = "Security group for Internal ALB"
   vpc_id      = var.vpc_id
 
@@ -24,7 +24,7 @@ resource "aws_security_group" "alb_internal" {
 
 # sg-eks-workload: Workload pods inbound 8443 từ ALB.
 resource "aws_security_group" "eks_workload" {
-  name        = "sg-eks-workload"
+  name        = "${var.name_prefix}-eks-workload"
   description = "Security group for EKS workload pods"
   vpc_id      = var.vpc_id
 
@@ -38,7 +38,7 @@ resource "aws_security_group" "eks_workload" {
 
 # sg-eks-control-plane: EKS Master node control plane.
 resource "aws_security_group" "eks_control_plane" {
-  name        = "sg-eks-control-plane"
+  name        = "${var.name_prefix}-eks-control-plane"
   description = "Security group for EKS control plane ENI"
   vpc_id      = var.vpc_id
 
@@ -52,7 +52,7 @@ resource "aws_security_group" "eks_control_plane" {
 
 # sg-rds: Inbound 5432 từ Workload. No outbound.
 resource "aws_security_group" "rds" {
-  name        = "sg-rds"
+  name        = "${var.name_prefix}-rds"
   description = "Security group for RDS PostgreSQL Sandbox DB"
   vpc_id      = var.vpc_id
 
@@ -74,7 +74,7 @@ resource "aws_security_group" "rds" {
 
 # sg-vpc-endpoint: Interface endpoints inbound 443 từ Workload và Control Plane.
 resource "aws_security_group" "vpc_endpoint" {
-  name        = "sg-vpc-endpoint"
+  name        = "${var.name_prefix}-vpc-endpoint"
   description = "Security group for Interface VPC endpoints"
   vpc_id      = var.vpc_id
 
