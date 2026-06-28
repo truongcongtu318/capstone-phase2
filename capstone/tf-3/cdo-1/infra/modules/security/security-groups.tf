@@ -202,3 +202,25 @@ resource "aws_security_group_rule" "control_plane_egress_to_endpoints" {
   security_group_id        = aws_security_group.eks_control_plane.id
   source_security_group_id = aws_security_group.vpc_endpoint.id
 }
+
+# Workload Self-Communication (node-to-node, pod-to-pod, CoreDNS)
+resource "aws_security_group_rule" "workload_ingress_self" {
+  type              = "ingress"
+  description       = "Allow node-to-node and pod-to-pod communication"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  security_group_id = aws_security_group.eks_workload.id
+  self              = true
+}
+
+# Admission Webhooks: Control Plane → Workload (Karpenter 8443, Kyverno 9443)
+resource "aws_security_group_rule" "workload_ingress_webhooks_from_control_plane" {
+  type                     = "ingress"
+  description              = "Allow admission webhooks (Karpenter 8443, Kyverno 9443) from control plane"
+  from_port                = 443
+  to_port                  = 9443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.eks_workload.id
+  source_security_group_id = aws_security_group.eks_control_plane.id
+}

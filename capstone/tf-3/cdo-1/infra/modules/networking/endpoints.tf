@@ -19,6 +19,8 @@ locals {
 
 # 1. Gateway VPC Endpoints (S3, DynamoDB)
 resource "aws_vpc_endpoint" "s3" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id            = aws_vpc.this.id
   service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
   vpc_endpoint_type = "Gateway"
@@ -30,6 +32,8 @@ resource "aws_vpc_endpoint" "s3" {
 }
 
 resource "aws_vpc_endpoint" "dynamodb" {
+  count = var.enable_vpc_endpoints ? 1 : 0
+
   vpc_id            = aws_vpc.this.id
   service_name      = "com.amazonaws.${data.aws_region.current.name}.dynamodb"
   vpc_endpoint_type = "Gateway"
@@ -42,13 +46,13 @@ resource "aws_vpc_endpoint" "dynamodb" {
 
 # 2. Interface VPC Endpoints (Internal communications)
 resource "aws_vpc_endpoint" "interfaces" {
-  for_each = local.interface_services
+  for_each = var.enable_vpc_endpoints ? local.interface_services : {}
 
   vpc_id              = aws_vpc.this.id
   service_name        = each.value
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private[*].id
-  security_group_ids  = var.sg_vpc_endpoint_id != null ? [var.sg_vpc_endpoint_id] : []
+  security_group_ids  = [var.sg_vpc_endpoint_id]
   private_dns_enabled = true
 
   tags = merge(local.module_tags, {
