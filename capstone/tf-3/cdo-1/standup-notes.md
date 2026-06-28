@@ -26,3 +26,29 @@
 - Team 2 phụ trách phần app 
 - Team 3 phụ trách phần gitops 
 - PM thống nhất lại các luật để tất cả thành viên trong team đều nắm cũng như thời gian hoàn thành task của mỗi nhóm để đảm bảo tiến độ. Đồng thời task trên jira cũng thay đổi và cập nhật thường xuyên, các thành viên phải thường xuyên check trên jira để không bỏ sót phần công việc được giao làm ảnh hưởng tiến độ của team
+
+## 28/06
+
+### 🚀 Tiến độ các nhóm
+
+* **Team 1 (85%):**
+  * Đang rà soát lại IAM Role, Policy, Security Group.
+  * Sẽ destroy + re-deploy hạ tầng theo chuẩn **Least Privilege** (bỏ quyền Admin).
+  * 🎯 *Target:* Hoàn thành trước 12h00 trưa mai.
+
+* **Team 2:**
+  * **Tấn:** Xong Webhook Receiver -> Chờ Team 3 gửi Alert để test | Cần hỏi Tech Lead về Tenant Name.
+  * **Dũng:** Xong API & Mock test -> Cần Sub-lead hỗ trợ review + giải thích code flow.
+  * **Hiếu:** Xong Audit Logger (Kinesis) & Path Executor (Fast/Slow Lane).
+
+* **Team 3 (Gần xong, Tuấn Anh 80%):**
+  * Đã mock test ngon lành trên Local (ArgoCD, Prometheus, Grafana, Chaos Test...).
+  * ➡️ *Next:* Gửi cấu hình Alert cho Team 2 kiểm tra.
+
+---
+
+### 📌 Action Items (Công việc phối hợp)
+
+1. **Team 3:** Check xem Kyverno có đang block luồng Fast Lane không.
+2. **Team 1:** Tạo và cấp IAM Role giới hạn (chỉ mở DynamoDB, SNS, SQS, Firehose... trong namespace `tenant-payment` và `checkout`) cho Team 2 & 3.
+3. **Team 2 + 3:** Phối hợp test thông Alert & Webhook trước khi deploy env chung.
