@@ -1,3 +1,8 @@
+variable "sg_vpc_endpoint_id" {
+  description = "Security group ID for VPC Endpoints to configure Egress rules for Cluster SG"
+  type        = string
+}
+
 variable "vpc_id" {
   description = "VPC ID"
   type        = string

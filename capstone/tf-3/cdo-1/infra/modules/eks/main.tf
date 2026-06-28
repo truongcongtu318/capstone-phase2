@@ -63,6 +63,18 @@ resource "aws_iam_openid_connect_provider" "this" {
 
 # ── Addons ───────────────────────────────────────────────────────────────────
 
+# Egress rule cho phép Cluster Security Group (được EKS tự động gán vào Nodes)
+# gọi HTTPS (443) tới VPC Endpoints để nodes bootstrap/join cluster thành công.
+resource "aws_security_group_rule" "cluster_egress_to_vpc_endpoints" {
+  type                     = "egress"
+  description              = "Allow EKS Cluster SG outbound to VPC Endpoints"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  source_security_group_id = var.sg_vpc_endpoint_id
+}
+
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name                = aws_eks_cluster.this.name
   addon_name                  = "vpc-cni"
