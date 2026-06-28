@@ -27,6 +27,24 @@ Cluster checks: SKIP
 
 Cluster checks are still skipped because no reachable kubeconfig / cluster context is configured. Therefore, static manifest checks, shell syntax checks, and dry-run script paths are PR-ready, while full E2E runtime validation remains pending EKS cluster access.
 
+## Infra-Derived Runtime Inputs
+
+| Input | Status | Repo evidence |
+|---|---|---|
+| AWS region | KNOWN | `.github/workflows/terraform-pipeline.yml` sets `AWS_REGION=us-east-1` |
+| CI plan/apply roles | KNOWN | `arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-plan/apply` |
+| ECR registry for chaos images | KNOWN | `544011261607.dkr.ecr.us-east-1.amazonaws.com` |
+| VPC CIDR | KNOWN | `10.42.0.0/16` |
+| Private subnet CIDRs / endpoint CIDRs | KNOWN | `10.42.0.0/20`, `10.42.16.0/20` |
+| SQS queue name | PARTIAL | monitoring uses `tf3-cdo1-sandbox-alert-queue` |
+| EKS cluster name | MISSING | `infra/environments/sandbox/compute` and `infra/modules/eks` are still TODO |
+| kubeconfig command | MISSING | no concrete `aws eks update-kubeconfig` command is present |
+| Member runtime AWS profile/role | MISSING | CI roles exist, but no member-local access role/profile is defined |
+| DB CIDR | MISSING | only VPC/subnet CIDRs are present; DB endpoint/CIDR is not exposed |
+| SQS Queue URL | MISSING | queue name is present, URL/account target is not confirmed |
+
+Note: Account IDs are recorded from current repo references and must be confirmed by Infra before runtime execution.
+
 ## Validation Summary
 
 | Area | Status | Evidence |
@@ -38,13 +56,13 @@ Cluster checks are still skipped because no reachable kubeconfig / cluster conte
 | kubectl client | PASS | Installed via `nix-shell -p kubectl`; client `v1.34.3`, kustomize `v5.7.1` |
 | Cluster context | BLOCKED_BY_INFRA | No reachable kubeconfig / cluster context |
 | Cluster kustomize / server dry-run | BLOCKED_BY_INFRA | Requires reachable cluster context |
+| RBAC behavior | BLOCKED_BY_INFRA | Requires `kubectl auth can-i` on target cluster |
 | Namespace wave -4 manifests | PASS | `security-policies/namespaces.yaml` declares `self-heal-system`, `observability`, `tenant-payment`, `tenant-checkout` |
 | Kyverno policy manifest | PASS | `security-policies/restrict-mutations.yaml` declares `ClusterPolicy/restrict-mutations` |
 | RBAC self-heal executor manifests | PASS | `security-policies/rbac.yaml` declares `self-heal-executor-role` and tenant RoleBindings |
 | NetworkPolicy manifests | PASS | `webhook-netpolicy` and `ai-engine-netpolicy` declared |
 | Prometheus alerts | PASS | `PodOOMKilled`, `PodCrashLooping`, and `QueueBacklog` declared |
 | Alertmanager route | PASS | `cdo1-self-heal-routing` routes to `webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts` |
-| RBAC behavior | PENDING | Run `kubectl auth can-i` checks from `validate-e2e-flow.sh` |
 | OOM trigger | READY | Run `oom-simulator.sh`; collect pod/events evidence |
 | DB network block | READY_FOR_DRY_RUN | Run `network-blockade.sh` with `DRY_RUN=true`; actual run waits for real DB CIDR |
 | Queue backlog | READY_FOR_DRY_RUN | Run `queue-backlog-stress.sh` with `DRY_RUN=true`; actual run waits for real queue URL |
@@ -91,6 +109,7 @@ kubectl get alertmanagerconfig -n observability cdo1-self-heal-routing
 
 | Owner | Blocker | Required evidence |
 |---|---|---|
+| Infra/Platform | EKS cluster access | cluster name, kubeconfig command, member AWS profile/role |
 | Member 7 | Cluster-applied security gate | `kubectl kustomize`, server dry-run, RBAC/Kyverno behavior |
 | Member 8 | Monitoring runtime | firing Prometheus alert and Alertmanager delivery |
 | App team | Self-heal runtime | webhook log, sqs-worker log, remediation action |
