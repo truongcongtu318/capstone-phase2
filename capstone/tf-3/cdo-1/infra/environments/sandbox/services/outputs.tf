@@ -13,6 +13,26 @@ output "worker_irsa_role_arn" {
   value       = module.observability.worker_irsa_role_arn
 }
 
+output "webhook_irsa_role_arn" {
+  description = "ARN của IAM Role IRSA cho webhook-receiver — Sub-team 2 dùng để gắn annotation vào ServiceAccount"
+  value       = module.observability.webhook_irsa_role_arn
+}
+
+output "sqs_queue_arn" {
+  description = "ARN của SQS Queue chính của self-heal pipeline"
+  value       = module.observability.sqs_queue_arn
+}
+
+output "sqs_queue_id" {
+  description = "URL / Name của SQS Queue chính"
+  value       = module.observability.sqs_queue_id
+}
+
+output "sns_topic_arn" {
+  description = "ARN của SNS Topic để leo thang cảnh báo"
+  value       = module.observability.sns_topic_arn
+}
+
 output "firehose_stream_arn" {
   description = "ARN của Kinesis Firehose delivery stream tf3-cdo1-sandbox-audit-stream"
   value       = module.observability.firehose_stream_arn
