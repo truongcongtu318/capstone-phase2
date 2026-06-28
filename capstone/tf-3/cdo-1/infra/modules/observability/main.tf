@@ -1,7 +1,7 @@
 # =============================================================================
 # MODULE: observability — Kube-Prometheus-Stack + Kinesis Firehose Audit Stream
 # NAT-less: tất cả images phải trỏ về ECR Private 474013238625.dkr.ecr.us-east-1.amazonaws.com
-# Alert routing: Alertmanager → patch-receiver.self-heal-system.svc.cluster.local:8443/alerts
+# Fix #2: Alert routing trỏ đúng tên service webhook-receiver (KHÔNG phải patch-receiver)
 # =============================================================================
 
 locals {
@@ -9,12 +9,12 @@ locals {
   grafana_service = "kube-prometheus-stack-grafana"
   ecr_registry    = "474013238625.dkr.ecr.us-east-1.amazonaws.com"
 
-  # Alertmanager → Webhook Receiver (ClusterDNS — không cần NAT)
-  alert_receiver_url = "http://patch-receiver.self-heal-system.svc.cluster.local:8443/alerts"
+  # Fix #2: Tên service chuẩn của dự án là webhook-receiver (theo MEMORY.md)
+  alert_receiver_url = "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts"
 }
 
 # =============================================================================
-# CLOUDWATCH LOG GROUP — EKS Control Plane
+# CLOUDWATCH LOG GROUP — EKS Control Plane (AWS resource — no count, always planned)
 # Tạo trước để tránh ResourceAlreadyExists khi EKS tự tạo cùng tên
 # =============================================================================
 
@@ -28,10 +28,12 @@ resource "aws_cloudwatch_log_group" "eks_control_plane" {
 
 # =============================================================================
 # KUBERNETES NAMESPACE — observability
-# Label protected=true: ngăn self-heal-executor tác động vào namespace này
+# count = var.enabled ? 1 : 0: bỏ qua khi mock mode (EKS chưa tồn tại)
 # =============================================================================
 
 resource "kubernetes_namespace" "observability" {
+  count = var.enabled ? 1 : 0
+
   metadata {
     name = local.namespace
     labels = {
@@ -44,24 +46,23 @@ resource "kubernetes_namespace" "observability" {
 
 # =============================================================================
 # HELM RELEASE — Kube-Prometheus-Stack
+# count = var.enabled ? 1 : 0: bỏ qua khi mock mode
 # NAT-less: override toàn bộ image repository về ECR Private
-# Alertmanager config: route alert về self-heal webhook receiver
 # =============================================================================
 
 resource "helm_release" "kube_prometheus_stack" {
+  count = var.enabled ? 1 : 0
+
   name       = "kube-prometheus-stack"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
-  namespace  = kubernetes_namespace.observability.metadata[0].name
+  namespace  = kubernetes_namespace.observability[0].metadata[0].name
   version    = "61.7.2"
 
   values = [
     yamlencode({
       fullnameOverride = "kube-prometheus-stack"
 
-      # -----------------------------------------------------------------------
-      # Prometheus Operator — NAT-less ECR override
-      # -----------------------------------------------------------------------
       prometheusOperator = {
         enabled = true
         image = {
@@ -76,9 +77,6 @@ resource "helm_release" "kube_prometheus_stack" {
         }
       }
 
-      # -----------------------------------------------------------------------
-      # Prometheus Server — NAT-less ECR override
-      # -----------------------------------------------------------------------
       prometheus = {
         enabled = true
         service = {
@@ -97,9 +95,7 @@ resource "helm_release" "kube_prometheus_stack" {
         }
       }
 
-      # -----------------------------------------------------------------------
-      # Alertmanager — NAT-less ECR override + route về self-heal webhook
-      # -----------------------------------------------------------------------
+      # Fix #2: alert_receiver_url dùng webhook-receiver (không phải patch-receiver)
       alertmanager = {
         enabled = true
         service = {
@@ -137,9 +133,6 @@ resource "helm_release" "kube_prometheus_stack" {
         }
       }
 
-      # -----------------------------------------------------------------------
-      # Grafana — NAT-less ECR override
-      # -----------------------------------------------------------------------
       grafana = {
         enabled = true
         service = {
@@ -163,9 +156,6 @@ resource "helm_release" "kube_prometheus_stack" {
         }
       }
 
-      # -----------------------------------------------------------------------
-      # Kube State Metrics — NAT-less ECR override
-      # -----------------------------------------------------------------------
       "kube-state-metrics" = {
         enabled = true
         image = {
@@ -174,9 +164,6 @@ resource "helm_release" "kube_prometheus_stack" {
         }
       }
 
-      # -----------------------------------------------------------------------
-      # Node Exporter — NAT-less ECR override
-      # -----------------------------------------------------------------------
       "prometheus-node-exporter" = {
         enabled = true
         image = {
@@ -194,7 +181,7 @@ resource "helm_release" "kube_prometheus_stack" {
 }
 
 # =============================================================================
-# CLOUDWATCH LOG GROUP & STREAM — Kinesis Firehose error logging
+# CLOUDWATCH LOG GROUP & STREAM — Kinesis Firehose error logging (AWS — no count)
 # =============================================================================
 
 resource "aws_cloudwatch_log_group" "firehose" {
@@ -211,7 +198,7 @@ resource "aws_cloudwatch_log_stream" "firehose" {
 }
 
 # =============================================================================
-# IAM ROLE — Kinesis Firehose delivery role
+# IAM ROLE — Kinesis Firehose delivery role (AWS — no count)
 # =============================================================================
 
 resource "aws_iam_role" "firehose" {
@@ -282,8 +269,7 @@ resource "aws_iam_role_policy" "firehose" {
 }
 
 # =============================================================================
-# KINESIS FIREHOSE DELIVERY STREAM — tf3-cdo1-sandbox-audit-stream
-# Đích: S3 Audit Bucket (Object Lock COMPLIANCE 90 days)
+# KINESIS FIREHOSE DELIVERY STREAM — tf3-cdo1-sandbox-audit-stream (AWS — no count)
 # =============================================================================
 
 resource "aws_kinesis_firehose_delivery_stream" "audit_stream" {
@@ -308,8 +294,7 @@ resource "aws_kinesis_firehose_delivery_stream" "audit_stream" {
 }
 
 # =============================================================================
-# IAM ROLE — IRSA cho SQS Worker (self-heal-executor ServiceAccount)
-# Quyền: Firehose PutRecord, SQS receive/delete, SNS publish, DynamoDB lock
+# IAM ROLE — IRSA cho SQS Worker self-heal-executor (AWS — no count)
 # =============================================================================
 
 resource "aws_iam_role" "worker_irsa" {

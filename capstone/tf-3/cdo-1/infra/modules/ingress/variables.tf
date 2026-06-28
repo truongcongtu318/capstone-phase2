@@ -28,3 +28,9 @@ variable "global_tags" {
   description = "Tags chung của dự án — truyền vào từ root module environment"
   default     = {}
 }
+
+variable "enabled" {
+  type        = bool
+  description = "Bật/tắt toàn bộ K8s/Helm/IAM resources trong module — đặt false khi chạy dry-run plan trước khi EKS tồn tại"
+  default     = true
+}

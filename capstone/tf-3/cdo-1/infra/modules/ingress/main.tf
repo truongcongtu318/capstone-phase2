@@ -1,5 +1,7 @@
 # =============================================================================
 # MODULE: ingress — AWS Load Balancer Controller (IRSA + Helm + IngressClass)
+# Fix #3: installCRDs = true — bắt buộc để IngressClassParams CRD tồn tại trước kubernetes_manifest
+# Fix #4: count = var.enabled ? 1 : 0 trên toàn bộ K8s/Helm/IAM resources
 # NAT-less: image phải trỏ về ECR Private 474013238625.dkr.ecr.us-east-1.amazonaws.com
 # =============================================================================
 
@@ -8,12 +10,13 @@ data "aws_region" "current" {}
 locals {
   service_account_name = "aws-load-balancer-controller"
   service_account_ns   = "kube-system"
+  alb_params_name      = "alb-internal-params"
   oidc_provider_url    = replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")
   ecr_registry         = "474013238625.dkr.ecr.us-east-1.amazonaws.com"
 }
 
 # =============================================================================
-# IAM ROLE — IRSA cho AWS Load Balancer Controller
+# IAM POLICY DOCUMENTS — computed locally, không cần count
 # =============================================================================
 
 data "aws_iam_policy_document" "lbc_assume_role" {
@@ -39,16 +42,6 @@ data "aws_iam_policy_document" "lbc_assume_role" {
     }
   }
 }
-
-resource "aws_iam_role" "lbc" {
-  name               = "${var.cluster_name}-aws-load-balancer-controller"
-  assume_role_policy = data.aws_iam_policy_document.lbc_assume_role.json
-  tags               = local.module_tags
-}
-
-# =============================================================================
-# IAM POLICY — Quyền tối thiểu cho AWS LBC quản lý ALB/NLB
-# =============================================================================
 
 data "aws_iam_policy_document" "lbc" {
   statement {
@@ -250,22 +243,37 @@ data "aws_iam_policy_document" "lbc" {
   }
 }
 
+# =============================================================================
+# IAM ROLE & POLICY — count = var.enabled ? 1 : 0
+# =============================================================================
+
+resource "aws_iam_role" "lbc" {
+  count              = var.enabled ? 1 : 0
+  name               = "${var.cluster_name}-aws-load-balancer-controller"
+  assume_role_policy = data.aws_iam_policy_document.lbc_assume_role.json
+  tags               = local.module_tags
+}
+
 resource "aws_iam_policy" "lbc" {
+  count  = var.enabled ? 1 : 0
   name   = "${var.cluster_name}-aws-load-balancer-controller"
   policy = data.aws_iam_policy_document.lbc.json
   tags   = local.module_tags
 }
 
 resource "aws_iam_role_policy_attachment" "lbc" {
-  role       = aws_iam_role.lbc.name
-  policy_arn = aws_iam_policy.lbc.arn
+  count      = var.enabled ? 1 : 0
+  role       = aws_iam_role.lbc[0].name
+  policy_arn = aws_iam_policy.lbc[0].arn
 }
 
 # =============================================================================
-# KUBERNETES SERVICE ACCOUNT — gắn annotation IRSA
+# KUBERNETES SERVICE ACCOUNT — count = var.enabled ? 1 : 0
 # =============================================================================
 
 resource "kubernetes_service_account" "lbc" {
+  count = var.enabled ? 1 : 0
+
   metadata {
     name      = local.service_account_name
     namespace = local.service_account_ns
@@ -274,24 +282,24 @@ resource "kubernetes_service_account" "lbc" {
       "app.kubernetes.io/name"      = local.service_account_name
     }
     annotations = {
-      "eks.amazonaws.com/role-arn" = aws_iam_role.lbc.arn
+      "eks.amazonaws.com/role-arn" = aws_iam_role.lbc[0].arn
     }
   }
 }
 
 # =============================================================================
 # HELM RELEASE — AWS Load Balancer Controller
-# NAT-less: image.repository trỏ về ECR Private
+# Fix #3: installCRDs = true — cần thiết trước khi deploy IngressClassParams CRD
+# count = var.enabled ? 1 : 0
 # =============================================================================
 
 resource "helm_release" "lbc" {
-  name      = "aws-load-balancer-controller"
-  chart     = "aws-load-balancer-controller"
-  namespace = local.service_account_ns
-  version   = "1.8.1"
+  count = var.enabled ? 1 : 0
 
-  # NAT-less: repository phải là S3 Helm repo nội bộ hoặc chart path local.
-  # Tạm thời khai báo repository public để validate — Sub-team 3 sẽ mirror chart vào S3.
+  name       = "aws-load-balancer-controller"
+  chart      = "aws-load-balancer-controller"
+  namespace  = local.service_account_ns
+  version    = "1.8.1"
   repository = "https://aws.github.io/eks-charts"
 
   values = [
@@ -308,10 +316,13 @@ resource "helm_release" "lbc" {
 
       serviceAccount = {
         create = false
-        name   = kubernetes_service_account.lbc.metadata[0].name
+        # Dùng local constant thay vì [0] reference để tránh dependency cycle
+        name = local.service_account_name
       }
 
-      # Không cần Shield/WAF trong sandbox
+      # Fix #3: Cài CRDs trước — bắt buộc để IngressClassParams API Group tồn tại
+      installCRDs = true
+
       enableShield = false
       enableWaf    = false
       enableWafv2  = false
@@ -327,34 +338,18 @@ resource "helm_release" "lbc" {
 }
 
 # =============================================================================
-# INGRESS CLASS — alb-internal (scheme: internal, dùng Private Subnets)
+# INGRESS CLASS PARAMS — IngressClassParams CRD (count = var.enabled ? 1 : 0)
+# depends_on helm_release để CRD elbv2.k8s.aws/v1beta1 đã được cài
 # =============================================================================
 
-resource "kubernetes_ingress_class_v1" "alb_internal" {
-  metadata {
-    name = "alb-internal"
-    annotations = {
-      "ingressclass.kubernetes.io/is-default-class" = "false"
-    }
-  }
-  spec {
-    controller = "elbv2.k8s.aws/alb"
-    parameters {
-      api_group = "elbv2.k8s.aws"
-      kind      = "IngressClassParams"
-      name      = kubernetes_manifest.alb_internal_params.manifest.metadata.name
-    }
-  }
-  depends_on = [kubernetes_manifest.alb_internal_params]
-}
-
-# IngressClassParams — ràng buộc ALB luôn là Internal + Private Subnets
 resource "kubernetes_manifest" "alb_internal_params" {
+  count = var.enabled ? 1 : 0
+
   manifest = {
     apiVersion = "elbv2.k8s.aws/v1beta1"
     kind       = "IngressClassParams"
     metadata = {
-      name = "alb-internal-params"
+      name = local.alb_params_name
     }
     spec = {
       scheme = "internal"
@@ -372,5 +367,34 @@ resource "kubernetes_manifest" "alb_internal_params" {
       ]
     }
   }
+
   depends_on = [helm_release.lbc]
+}
+
+# =============================================================================
+# INGRESS CLASS — alb-internal (count = var.enabled ? 1 : 0)
+# Dùng local.alb_params_name thay vì [0] reference để tránh lỗi khi count=0
+# =============================================================================
+
+resource "kubernetes_ingress_class_v1" "alb_internal" {
+  count = var.enabled ? 1 : 0
+
+  metadata {
+    name = "alb-internal"
+    annotations = {
+      "ingressclass.kubernetes.io/is-default-class" = "false"
+    }
+  }
+
+  spec {
+    controller = "elbv2.k8s.aws/alb"
+    parameters {
+      api_group = "elbv2.k8s.aws"
+      kind      = "IngressClassParams"
+      # Dùng local constant tránh circular reference khi count=0
+      name = local.alb_params_name
+    }
+  }
+
+  depends_on = [kubernetes_manifest.alb_internal_params]
 }

@@ -1,16 +1,18 @@
 # =============================================================================
 # PROVIDERS — sandbox/services (Phase 4)
-# Giải pháp Chicken-and-Egg: đọc EKS endpoint/CA từ remote state Phase 3
-# thay vì tham chiếu trực tiếp module.eks (chưa tồn tại trong state này)
+# Fix #4: Giải pháp Mock Compute để CI plan chạy trước khi Phase 3 apply
+# use_mock_compute = true → dùng mock EKS info, bỏ qua K8s/Helm resources
+# use_mock_compute = false → đọc remote state Phase 3, deploy thực
 # =============================================================================
 
 provider "aws" {
   region = var.aws_region
 }
 
-# Đọc remote state Phase 3 (Compute) để lấy EKS connection info
-# Phải chạy SAU KHI Phase 3 đã apply thành công lên AWS
+# Chỉ đọc remote state Phase 3 khi use_mock_compute = false
 data "terraform_remote_state" "compute" {
+  count = var.use_mock_compute ? 0 : 1
+
   backend = "s3"
   config = {
     bucket = var.tf_state_bucket
@@ -19,24 +21,36 @@ data "terraform_remote_state" "compute" {
   }
 }
 
-# Lấy token xác thực EKS qua AWS SDK (dùng OIDC credentials của CI pipeline)
-# An toàn hơn exec{aws eks get-token} trong môi trường CI/CD
+# Chỉ lấy EKS token khi use_mock_compute = false
 data "aws_eks_cluster_auth" "this" {
-  name = data.terraform_remote_state.compute.outputs.cluster_name
+  count = var.use_mock_compute ? 0 : 1
+  name  = data.terraform_remote_state.compute[0].outputs.cluster_name
 }
 
-# Kubernetes provider — kết nối cụm EKS qua remote state
+# Locals cung cấp mock fallback khi chưa có Phase 3 state
+locals {
+  cluster_name      = var.use_mock_compute ? "mock-eks" : data.terraform_remote_state.compute[0].outputs.cluster_name
+  cluster_endpoint  = var.use_mock_compute ? "https://localhost" : data.terraform_remote_state.compute[0].outputs.cluster_endpoint
+  cluster_ca_data   = var.use_mock_compute ? base64encode("mock-ca") : data.terraform_remote_state.compute[0].outputs.cluster_ca_data
+  token             = var.use_mock_compute ? "mock-token" : data.aws_eks_cluster_auth.this[0].token
+  oidc_provider_arn = var.use_mock_compute ? "arn:aws:iam::474013238625:oidc-provider/mock.eks.example.com" : data.terraform_remote_state.compute[0].outputs.oidc_provider_arn
+}
+
+# Kubernetes provider — dùng mock values khi use_mock_compute = true
+# insecure = true khi mock mode: bỏ qua TLS validation vì mock CA không phải PEM hợp lệ
 provider "kubernetes" {
-  host                   = data.terraform_remote_state.compute.outputs.cluster_endpoint
-  cluster_ca_certificate = base64decode(data.terraform_remote_state.compute.outputs.cluster_ca_data)
-  token                  = data.aws_eks_cluster_auth.this.token
+  host                   = local.cluster_endpoint
+  cluster_ca_certificate = var.use_mock_compute ? null : base64decode(local.cluster_ca_data)
+  token                  = local.token
+  insecure               = var.use_mock_compute
 }
 
 # Helm provider — cùng credentials với kubernetes provider
 provider "helm" {
   kubernetes {
-    host                   = data.terraform_remote_state.compute.outputs.cluster_endpoint
-    cluster_ca_certificate = base64decode(data.terraform_remote_state.compute.outputs.cluster_ca_data)
-    token                  = data.aws_eks_cluster_auth.this.token
+    host                   = local.cluster_endpoint
+    cluster_ca_certificate = var.use_mock_compute ? null : base64decode(local.cluster_ca_data)
+    token                  = local.token
+    insecure               = var.use_mock_compute
   }
 }

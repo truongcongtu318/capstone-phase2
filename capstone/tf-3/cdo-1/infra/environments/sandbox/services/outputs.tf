@@ -9,11 +9,11 @@ output "grafana_service_name" {
 }
 
 output "worker_irsa_role_arn" {
-  description = "ARN của IAM Role cho SQS Worker (self-heal-executor) — Sub-team 2 dùng để gắn annotation IRSA vào ServiceAccount"
+  description = "ARN của IAM Role IRSA cho self-heal-executor — Sub-team 2 dùng để gắn annotation vào ServiceAccount"
   value       = module.observability.worker_irsa_role_arn
 }
 
 output "firehose_stream_arn" {
-  description = "ARN của Kinesis Firehose delivery stream tf3-cdo1-sandbox-audit-stream — Sub-team 2 dùng để ghi audit log"
+  description = "ARN của Kinesis Firehose delivery stream tf3-cdo1-sandbox-audit-stream"
   value       = module.observability.firehose_stream_arn
 }
