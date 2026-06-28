@@ -4,7 +4,7 @@ from typing import List, Optional
 import boto3
 import json
 from src.config import settings
-from src.security import scrub
+from src.security import scrub_dict
 from src.client_ddb import build_lock_key, acquire_lock
 
 app = FastAPI()
@@ -76,7 +76,7 @@ async def receive_alerts(
             raise HTTPException(status_code=409, detail="Alert already being processed")
 
         # Bước 3: scrub + push SQS
-        message = scrub(json.dumps(alert.model_dump()))
+        message = json.dumps(scrub_dict(alert.model_dump()))
         _push_sqs(message)
 
     return {"status": "accepted"}
