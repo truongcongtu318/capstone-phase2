@@ -14,7 +14,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/truongcongtu318/capstone-phase2.git
-    targetRevision: feat/argocd
+    targetRevision: HEAD
     path: capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/webhook-receiver
   destination:
     server: https://kubernetes.default.svc

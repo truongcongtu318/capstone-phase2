@@ -54,6 +54,12 @@ spec:
                 - tenant-checkout
               operations:
                 - UPDATE
+      exclude:
+        any:
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
       validate:
         message: >-
           Chỉ được phép sửa spec.replicas hoặc resources.limits.
@@ -131,6 +137,9 @@ spec:
               - kind: ServiceAccount
                 name: sqs-worker
                 namespace: self-heal-system
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
       validate:
         message: >-
           Chỉ ServiceAccount self-heal-executor hoặc sqs-worker (namespace self-heal-system)
