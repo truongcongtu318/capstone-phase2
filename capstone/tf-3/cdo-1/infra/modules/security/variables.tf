@@ -4,6 +4,12 @@ variable "name_prefix" {
   default     = "tf3-cdo1-sandbox"
 }
 
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "sandbox"
+}
+
 variable "vpc_id" {
   description = "Tu module.networking.vpc_id"
   type        = string

@@ -4,6 +4,12 @@ variable "name_prefix" {
   default     = "tf3-cdo1-sandbox"
 }
 
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "sandbox"
+}
+
 variable "vpc_cidr" {
   description = "CIDR block cho VPC"
   type        = string
@@ -32,6 +38,18 @@ variable "sg_vpc_endpoint_id" {
   description = "Security group ID cho Interface VPC endpoints (tu module security)"
   type        = string
   default     = null
+}
+
+variable "create_vpc_endpoints" {
+  description = "Bat tao VPC endpoints trong module nay neu da co sg_vpc_endpoint_id"
+  type        = bool
+  default     = false
+}
+
+variable "github_repo" {
+  description = "org/repo duoc phep assume GitHub Actions OIDC roles"
+  type        = string
+  default     = "truongcongtu318/capstone-phase2"
 }
 
 variable "tags" {
