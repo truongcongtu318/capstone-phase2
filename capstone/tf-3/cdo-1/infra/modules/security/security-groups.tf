@@ -2,7 +2,7 @@
 
 # sg-alb-internal: Inbound 443 từ client/VPN. Outbound 8443 đến workload pods.
 resource "aws_security_group" "alb_internal" {
-  name        = "${var.name_prefix}-alb-internal"
+  name        = "sg-alb-internal"
   description = "Security group for Internal ALB"
   vpc_id      = var.vpc_id
 
@@ -24,7 +24,7 @@ resource "aws_security_group" "alb_internal" {
 
 # sg-eks-workload: Workload pods inbound 8443 từ ALB.
 resource "aws_security_group" "eks_workload" {
-  name        = "${var.name_prefix}-eks-workload"
+  name        = "sg-eks-workload"
   description = "Security group for EKS workload pods"
   vpc_id      = var.vpc_id
 
@@ -38,7 +38,7 @@ resource "aws_security_group" "eks_workload" {
 
 # sg-eks-control-plane: EKS Master node control plane.
 resource "aws_security_group" "eks_control_plane" {
-  name        = "${var.name_prefix}-eks-control-plane"
+  name        = "sg-eks-control-plane"
   description = "Security group for EKS control plane ENI"
   vpc_id      = var.vpc_id
 
@@ -52,7 +52,7 @@ resource "aws_security_group" "eks_control_plane" {
 
 # sg-rds: Inbound 5432 từ Workload. No outbound.
 resource "aws_security_group" "rds" {
-  name        = "${var.name_prefix}-rds"
+  name        = "sg-rds"
   description = "Security group for RDS PostgreSQL Sandbox DB"
   vpc_id      = var.vpc_id
 
@@ -74,7 +74,7 @@ resource "aws_security_group" "rds" {
 
 # sg-vpc-endpoint: Interface endpoints inbound 443 từ Workload và Control Plane.
 resource "aws_security_group" "vpc_endpoint" {
-  name        = "${var.name_prefix}-vpc-endpoint"
+  name        = "sg-vpc-endpoint"
   description = "Security group for Interface VPC endpoints"
   vpc_id      = var.vpc_id
 
@@ -201,4 +201,26 @@ resource "aws_security_group_rule" "control_plane_egress_to_endpoints" {
   protocol                 = "tcp"
   security_group_id        = aws_security_group.eks_control_plane.id
   source_security_group_id = aws_security_group.vpc_endpoint.id
+}
+
+# Workload Self-Communication (node-to-node, pod-to-pod, CoreDNS)
+resource "aws_security_group_rule" "workload_ingress_self" {
+  type              = "ingress"
+  description       = "Allow node-to-node and pod-to-pod communication"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  security_group_id = aws_security_group.eks_workload.id
+  self              = true
+}
+
+# Admission Webhooks: Control Plane → Workload (Karpenter 8443, Kyverno 9443)
+resource "aws_security_group_rule" "workload_ingress_webhooks_from_control_plane" {
+  type                     = "ingress"
+  description              = "Allow admission webhooks (Karpenter 8443, Kyverno 9443) from control plane"
+  from_port                = 443
+  to_port                  = 9443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.eks_workload.id
+  source_security_group_id = aws_security_group.eks_control_plane.id
 }
