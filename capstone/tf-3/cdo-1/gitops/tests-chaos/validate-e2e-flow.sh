@@ -115,7 +115,7 @@ file_exists "${GITOPS_DIR}/manifests/base/sqs-worker/serviceaccount.yaml" "sqs-w
 file_exists "${GITOPS_DIR}/manifests/base/ai-engine/service.yaml" "ai-engine Service manifest"
 
 if ! kubectl_available; then
-  skip "kubectl is not installed; cluster checks were not executed"
+  skip "kubectl client unavailable; cluster checks were not executed"
 elif ! cluster_available; then
   skip "kubectl is installed but no reachable cluster context was found"
 else
