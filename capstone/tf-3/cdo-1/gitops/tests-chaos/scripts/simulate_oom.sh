@@ -7,7 +7,8 @@ set -e
 
 NAMESPACE=${NAMESPACE:-tenant-payment}
 APP_NAME=${APP_NAME:-oom-chaos}
-IMAGE=${IMAGE:-544011261607.dkr.ecr.us-east-1.amazonaws.com/alexeiled/stress-ng:latest}
+ECR_REGISTRY=${ECR_REGISTRY:-544011261607.dkr.ecr.us-east-1.amazonaws.com}
+IMAGE=${IMAGE:-${ECR_REGISTRY}/alexeiled/stress-ng:latest}
 MEM_LIMIT=${MEM_LIMIT:-64Mi}
 
 echo "Deploying OOM Chaos Test..."
