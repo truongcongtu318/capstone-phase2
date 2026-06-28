@@ -1,75 +1,124 @@
 # Chaos Testing & E2E Validation (Member 9)
 
-This folder contains the Member 9 validation assets for CDO-01:
+This folder is the Member 9 evidence pack for CDO-01. It validates the GitOps, Kyverno, NetworkPolicy, monitoring, and chaos flow delivered by Member 7/8 without taking ownership of their manifests.
 
-- controlled chaos scripts for OOM and DB egress failure scenarios
-- partial E2E readiness checks for the self-heal flow
-- validation evidence and blocker tracking
+## Source Of Truth
 
-Member 9 owns the validation evidence. GitOps, Kyverno, Prometheus, Alertmanager, and Firehose implementation remain owned by Member 7/8.
+Use the root-level scripts in this folder:
+
+| Script | Purpose |
+|---|---|
+| `validate-e2e-flow.sh` | Partial real checker for security gate, RBAC, GitOps, monitoring, and app readiness |
+| `oom-simulator.sh` | Trigger an OOMKilled pod in a tenant namespace |
+| `network-blockade.sh` | Dry-run or apply a DB egress blockade NetworkPolicy |
+| `queue-backlog-stress.sh` | Dry-run or send synthetic SQS backlog messages |
+
+The `scripts/` folder only contains backward-compatible wrappers for older command names.
 
 ## Prerequisites
 
-- `kubectl` points to the target cluster.
-- The target namespaces and labels are confirmed with Member 7/8.
-- On NAT-less EKS, chaos/debug images must already be mirrored to private ECR.
+- `kubectl` points to the target cluster for cluster checks.
+- `security-policies` from Member 7 are applied or available for dry-run.
+- Monitoring CRDs from Member 8 are installed for PrometheusRule and AlertmanagerConfig checks.
+- On NAT-less EKS, chaos/debug images must be mirrored to private ECR.
 - Default private registry:
 
 ```bash
 544011261607.dkr.ecr.us-east-1.amazonaws.com
 ```
 
-## Syntax Validation
+## Static Validation
 
-Run this before opening or updating the PR:
+Run before opening or updating the PR:
 
 ```bash
+bash -n capstone/tf-3/cdo-1/gitops/tests-chaos/*.sh
 bash -n capstone/tf-3/cdo-1/gitops/tests-chaos/scripts/*.sh
 bash -n capstone/tf-3/cdo-1/gitops/mirror-images.sh
 ```
 
-Validate the mirror list shape:
+Validate `mirror-list.txt` shape:
 
 ```bash
 awk 'NF && $1 !~ /^#/ {print "source="$1, "dest="$2}' capstone/tf-3/cdo-1/gitops/mirror-list.txt
 ```
 
-## Mirror Images
+## Security Gate Validation
 
-`../mirror-images.sh` mirrors the images listed in `../mirror-list.txt` to ECR private registry.
-
-Important variables:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `AWS_REGION` | `us-east-1` | ECR region |
-| `AWS_ACCOUNT` | `544011261607` | ECR account used by the chaos image defaults |
-
-Run:
+Run the partial checker:
 
 ```bash
-AWS_REGION=us-east-1 bash capstone/tf-3/cdo-1/gitops/mirror-images.sh
+./capstone/tf-3/cdo-1/gitops/tests-chaos/validate-e2e-flow.sh
 ```
+
+It checks:
+
+- namespace wave `-4`: `self-heal-system`, `observability`, `tenant-payment`, `tenant-checkout`
+- Kyverno ClusterPolicy `restrict-mutations`
+- RBAC `self-heal-executor-role` and tenant RoleBindings
+- NetworkPolicies `webhook-netpolicy` and `ai-engine-netpolicy`
+- webhook receiver, sqs-worker, and ai-engine manifests/resources
+- PrometheusRule `cdo1-self-heal-alerts`
+- AlertmanagerConfig `cdo1-self-heal-routing`
+- Firehose audit config presence, reported as `SKIP` until ready
+
+When a cluster is reachable, it also runs the expected RBAC checks:
+
+```bash
+kubectl auth can-i patch deployment -n tenant-payment \
+  --as=system:serviceaccount:self-heal-system:self-heal-executor
+
+kubectl auth can-i patch deployment -n tenant-checkout \
+  --as=system:serviceaccount:self-heal-system:self-heal-executor
+
+kubectl auth can-i patch deployment -n argocd \
+  --as=system:serviceaccount:self-heal-system:self-heal-executor
+
+kubectl auth can-i patch deployment -n observability \
+  --as=system:serviceaccount:self-heal-system:self-heal-executor
+
+kubectl auth can-i patch deployment -n tenant-payment \
+  --as=system:serviceaccount:argocd:argocd-application-controller
+```
+
+Expected behavior:
+
+| Check | Expected |
+|---|---|
+| self-heal-executor patch tenant-payment | `yes` |
+| self-heal-executor patch tenant-checkout | `yes` |
+| self-heal-executor patch argocd | `no` |
+| self-heal-executor patch observability | `no` |
+| argocd controller patch tenant-payment | `yes` |
 
 ## OOM Chaos
 
-Simulates an OOMKilled pod with `stress-ng`.
+Dry-run first:
+
+```bash
+DRY_RUN=true \
+NAMESPACE=tenant-payment \
+APP_NAME=oom-chaos \
+./capstone/tf-3/cdo-1/gitops/tests-chaos/oom-simulator.sh
+```
+
+Run on cluster:
 
 ```bash
 NAMESPACE=tenant-payment \
 APP_NAME=oom-chaos \
-bash capstone/tf-3/cdo-1/gitops/tests-chaos/scripts/simulate_oom.sh
+IMAGE=544011261607.dkr.ecr.us-east-1.amazonaws.com/alexeiled/stress-ng:latest \
+MEM_LIMIT=64Mi \
+./capstone/tf-3/cdo-1/gitops/tests-chaos/oom-simulator.sh
 ```
 
-Environment variables:
+Evidence:
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `NAMESPACE` | `tenant-payment` | Namespace for the chaos pod |
-| `APP_NAME` | `oom-chaos` | Pod name and app label |
-| `ECR_REGISTRY` | `544011261607.dkr.ecr.us-east-1.amazonaws.com` | Private ECR registry |
-| `IMAGE` | `$ECR_REGISTRY/alexeiled/stress-ng:latest` | Stress image |
-| `MEM_LIMIT` | `64Mi` | Memory limit used to trigger OOM |
+```bash
+kubectl get pod -n tenant-payment oom-chaos -o wide
+kubectl describe pod -n tenant-payment oom-chaos
+kubectl get events -n tenant-payment --sort-by=.lastTimestamp | tail -30
+```
 
 Cleanup:
 
@@ -79,71 +128,47 @@ kubectl delete pod oom-chaos -n tenant-payment --ignore-not-found
 
 ## DB Network Block
 
-Applies a temporary `NetworkPolicy` that allows egress to everything except the provided DB CIDR.
-
-Warning: Kubernetes NetworkPolicy is allow-list based. This test blocks DB traffic only if no other NetworkPolicy allows DB egress for the selected pods.
-
-Dry run first:
+Dry-run first:
 
 ```bash
 DRY_RUN=true \
 NAMESPACE=tenant-payment \
 APP_LABEL=payment-api \
 DB_CIDR=10.42.12.34/32 \
-bash capstone/tf-3/cdo-1/gitops/tests-chaos/scripts/simulate_db_network_block.sh
+./capstone/tf-3/cdo-1/gitops/tests-chaos/network-blockade.sh
 ```
 
-Apply:
+Apply only after Sub-team 1 confirms the real DB CIDR:
 
 ```bash
+AUTO_CLEANUP=true \
 NAMESPACE=tenant-payment \
 APP_LABEL=payment-api \
-DB_CIDR=10.42.12.34/32 \
-bash capstone/tf-3/cdo-1/gitops/tests-chaos/scripts/simulate_db_network_block.sh
+DB_CIDR=<REAL_DB_CIDR>/32 \
+./capstone/tf-3/cdo-1/gitops/tests-chaos/network-blockade.sh
 ```
 
-Environment variables:
+Warning: Kubernetes NetworkPolicy is allow-list based. This blocks DB only if no other NetworkPolicy allows DB egress for the selected pods.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `NAMESPACE` | `tenant-payment` | Target app namespace |
-| `APP_LABEL` | `payment-api` | App label matched as `app=$APP_LABEL` |
-| `DB_CIDR` | required | DB CIDR to exclude from egress |
-| `POLICY_NAME` | `chaos-deny-db-egress` | NetworkPolicy name |
-| `DRY_RUN` | `false` | Use `kubectl apply --dry-run=client` |
-| `AUTO_CLEANUP` | `false` | Delete policy on script exit |
+## Queue Backlog
 
-Cleanup:
+Dry-run:
 
 ```bash
-kubectl delete networkpolicy chaos-deny-db-egress -n tenant-payment --ignore-not-found
+QUEUE_URL=https://sqs.us-east-1.amazonaws.com/544011261607/tf3-cdo1-sandbox-alert-queue \
+DRY_RUN=true \
+./capstone/tf-3/cdo-1/gitops/tests-chaos/queue-backlog-stress.sh
 ```
 
-## Partial E2E Validation
-
-Runs checks that can pass independently while Member 7/8 finish the platform components.
+Send synthetic messages:
 
 ```bash
-bash capstone/tf-3/cdo-1/gitops/tests-chaos/scripts/validate_e2e_flow.sh
+QUEUE_URL=<REAL_QUEUE_URL> \
+MESSAGE_COUNT=150 \
+DRY_RUN=false \
+./capstone/tf-3/cdo-1/gitops/tests-chaos/queue-backlog-stress.sh
 ```
 
-Output uses:
+## Report
 
-- `[PASS]` for detected resources
-- `[SKIP]` for components not installed or not ready yet
-- `[FAIL]` for required namespaces missing when a cluster is reachable
-
-Environment variables:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `TENANT_NAMESPACE` | `tenant-payment` | Tenant app namespace |
-| `SELF_HEAL_NAMESPACE` | `self-heal-system` | Self-heal components namespace |
-| `OBSERVABILITY_NAMESPACE` | `observability` | Prometheus/Alertmanager namespace |
-| `WEBHOOK_LABEL` | `app=webhook-receiver` | Webhook pod selector |
-| `SQS_WORKER_LABEL` | `app=sqs-worker` | Worker pod selector |
-| `STRICT` | `false` | Exit non-zero when failures are found |
-
-## Evidence
-
-Record command output and screenshots in `reports/validation-report.md`. Do not mark full E2E as PASS until GitOps, monitoring routes, and Firehose audit evidence are available.
+Use `SLO_validation_report.md` as the main report. Mark full alert, remediation, and audit as `PENDING` or `BLOCKED` until monitoring routes, app handlers, and Firehose evidence are available.
