@@ -8,6 +8,7 @@ resources:
   - service.yaml
   - serviceaccount.yaml
   - configmap.yaml
+  - hpa.yaml
   - fake-source-secret.yaml
   - secretstore.yaml
   - external-secret.yaml
