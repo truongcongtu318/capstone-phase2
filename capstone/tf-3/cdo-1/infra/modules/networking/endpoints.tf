@@ -2,6 +2,9 @@ data "aws_region" "current" {}
 
 locals {
   interface_services = {
+    ec2              = "com.amazonaws.${data.aws_region.current.name}.ec2"
+    ssm              = "com.amazonaws.${data.aws_region.current.name}.ssm"
+    ssmmessages      = "com.amazonaws.${data.aws_region.current.name}.ssmmessages"
     sqs              = "com.amazonaws.${data.aws_region.current.name}.sqs"
     kinesis_firehose = "com.amazonaws.${data.aws_region.current.name}.kinesis-firehose"
     secretsmanager   = "com.amazonaws.${data.aws_region.current.name}.secretsmanager"
