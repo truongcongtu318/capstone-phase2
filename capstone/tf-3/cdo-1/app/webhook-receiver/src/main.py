@@ -18,11 +18,19 @@ class AlertLabel(BaseModel):
     pod: Optional[str] = None
     container: Optional[str] = None
 
+class Annotations(BaseModel):
+    summary: Optional[str] = None
+    description: Optional[str] = None
+
 class Alert(BaseModel):
     status: str
     labels: AlertLabel
+    annotations: Optional[Annotations] = None
+    startsAt: Optional[str] = None
 
 class AlertmanagerPayload(BaseModel):
+    receiver: Optional[str] = None
+    status: Optional[str] = None
     alerts: List[Alert]
 
 COOLDOWN_BY_NAMESPACE = {

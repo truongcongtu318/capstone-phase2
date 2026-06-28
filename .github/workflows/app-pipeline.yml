@@ -4,11 +4,11 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'capstone/tf-3/cdo-1/apps/**'
+      - 'capstone/tf-3/cdo-1/app/**'
   pull_request:
     branches: [ main ]
     paths:
-      - 'capstone/tf-3/cdo-1/apps/**'
+      - 'capstone/tf-3/cdo-1/app/**'
 
 permissions:
   id-token: write
@@ -37,15 +37,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ruff pytest httpx fastapi uvicorn
-          if [ -f capstone/tf-3/cdo-1/apps/requirements.txt ]; then pip install -r capstone/tf-3/cdo-1/apps/requirements.txt; fi
+          pip install -r capstone/tf-3/cdo-1/app/webhook-receiver/requirements.txt
+          if [ -f capstone/tf-3/cdo-1/app/sqs-worker/requirements.txt ]; then pip install -r capstone/tf-3/cdo-1/app/sqs-worker/requirements.txt; fi
 
       - name: Run Ruff Linter
-        run: ruff check capstone/tf-3/cdo-1/apps/
+        run: ruff check capstone/tf-3/cdo-1/app/
 
       - name: Run Unit Tests
         run: |
-          # Chạy pytest và xuất độ phủ coverage (yêu cầu >= 70%)
-          python -m pytest capstone/tf-3/cdo-1/apps/ --cov=capstone/tf-3/cdo-1/apps/ --cov-fail-under=70
+          python -m pytest capstone/tf-3/cdo-1/app/ --cov=capstone/tf-3/cdo-1/app/ --cov-fail-under=70
 
   build-and-publish:
     name: Build & Push ECR
@@ -78,7 +78,7 @@ jobs:
           ECR_REPOSITORY: tf-3-${{ matrix.app }}
           IMAGE_TAG: sha-${{ github.sha }}
         run: |
-          cd capstone/tf-3/cdo-1/apps/${{ matrix.app }}
+          cd capstone/tf-3/cdo-1/app/${{ matrix.app }}
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           # Ghi đè file manifest bằng image digest mới vừa build để ArgoCD sync
