@@ -33,6 +33,19 @@ If `kubectl` is not installed locally, use:
 nix-shell -p kubectl
 ```
 
+Current infra-derived values:
+
+| Input | Value / Status |
+|---|---|
+| AWS region | `us-east-1` |
+| VPC CIDR | `10.42.0.0/16` |
+| Private subnet / endpoint CIDRs | `10.42.0.0/20`, `10.42.16.0/20` |
+| SQS queue name | `tf3-cdo1-sandbox-alert-queue` |
+| EKS cluster name | pending infra compute/EKS implementation |
+| kubeconfig command | pending infra compute/EKS implementation |
+| DB CIDR | pending DB endpoint/CIDR confirmation |
+| SQS queue URL | pending queue URL/account confirmation |
+
 ## Static Validation
 
 Run before opening or updating the PR:
