@@ -12,9 +12,20 @@ Member 9 validates the CDO-01 self-heal evidence pack:
 
 This report does not claim full E2E success until alert delivery, remediation execution, and audit log delivery are observed on the target cluster.
 
-## Local Environment Note
+## Runtime Environment Note
 
-Cluster checks were skipped during local validation because `kubectl` is not installed in the current workstation environment. Static manifest checks, shell syntax checks, and dry-run script paths are PR-ready; full E2E runtime validation remains pending cluster access.
+`kubectl` was installed temporarily with `nix-shell -p kubectl` and the validator was re-run.
+
+Runtime check result:
+
+```text
+Client Version: v1.34.3
+Kustomize Version: v5.7.1
+Local manifest checks: PASS
+Cluster checks: SKIP
+```
+
+Cluster checks are still skipped because no reachable kubeconfig / cluster context is configured. Therefore, static manifest checks, shell syntax checks, and dry-run script paths are PR-ready, while full E2E runtime validation remains pending EKS cluster access.
 
 ## Validation Summary
 
@@ -23,13 +34,16 @@ Cluster checks were skipped during local validation because `kubectl` is not ins
 | Static shell syntax | PASS | `bash -n tests-chaos/*.sh`, `bash -n tests-chaos/scripts/*.sh` |
 | Mirror script syntax | PASS | `bash -n gitops/mirror-images.sh` |
 | Mirror list shape | PASS | `awk 'NF && $1 !~ /^#/ {print "source="$1, "dest="$2}' gitops/mirror-list.txt` |
+| Local manifest checks | PASS | `validate-e2e-flow.sh` local checks completed with `0 failure(s)` |
+| kubectl client | PASS | Installed via `nix-shell -p kubectl`; client `v1.34.3`, kustomize `v5.7.1` |
+| Cluster context | BLOCKED_BY_INFRA | No reachable kubeconfig / cluster context |
+| Cluster kustomize / server dry-run | BLOCKED_BY_INFRA | Requires reachable cluster context |
 | Namespace wave -4 manifests | PASS | `security-policies/namespaces.yaml` declares `self-heal-system`, `observability`, `tenant-payment`, `tenant-checkout` |
 | Kyverno policy manifest | PASS | `security-policies/restrict-mutations.yaml` declares `ClusterPolicy/restrict-mutations` |
 | RBAC self-heal executor manifests | PASS | `security-policies/rbac.yaml` declares `self-heal-executor-role` and tenant RoleBindings |
 | NetworkPolicy manifests | PASS | `webhook-netpolicy` and `ai-engine-netpolicy` declared |
 | Prometheus alerts | PASS | `PodOOMKilled`, `PodCrashLooping`, and `QueueBacklog` declared |
 | Alertmanager route | PASS | `cdo1-self-heal-routing` routes to `webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts` |
-| Cluster kustomize / server dry-run | PENDING | Run `validate-e2e-flow.sh` with a reachable cluster |
 | RBAC behavior | PENDING | Run `kubectl auth can-i` checks from `validate-e2e-flow.sh` |
 | OOM trigger | READY | Run `oom-simulator.sh`; collect pod/events evidence |
 | DB network block | READY_FOR_DRY_RUN | Run `network-blockade.sh` with `DRY_RUN=true`; actual run waits for real DB CIDR |
