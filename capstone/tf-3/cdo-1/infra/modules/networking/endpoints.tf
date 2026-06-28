@@ -11,6 +11,8 @@ locals {
     ecr_api          = "com.amazonaws.${data.aws_region.current.name}.ecr.api"
     ecr_dkr          = "com.amazonaws.${data.aws_region.current.name}.ecr.dkr"
     sts              = "com.amazonaws.${data.aws_region.current.name}.sts"
+    git_codecommit   = "com.amazonaws.${data.aws_region.current.name}.git-codecommit"
+    codecommit       = "com.amazonaws.${data.aws_region.current.name}.codecommit"
     sns              = "com.amazonaws.${data.aws_region.current.name}.sns"
   }
 }
