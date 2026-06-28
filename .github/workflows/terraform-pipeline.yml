@@ -46,7 +46,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::474013238625:role/github-ci-plan
+          role-to-assume: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-plan
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Format Check
@@ -84,7 +84,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::474013238625:role/github-ci-apply
+          role-to-assume: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-apply
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
