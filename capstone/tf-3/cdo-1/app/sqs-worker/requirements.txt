@@ -1,0 +1,6 @@
+boto3
+pydantic-settings
+httpx
+jsonschema
+kubernetes
+python-dotenv

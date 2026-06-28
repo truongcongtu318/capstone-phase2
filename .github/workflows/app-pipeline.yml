@@ -54,7 +54,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        app: [ 'webhook-receiver', 'self-heal-worker' ]
+        include:
+          - app: 'webhook-receiver'
+            dir: 'webhook-receiver'
+          - app: 'self-heal-worker'
+            dir: 'sqs-worker'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -78,7 +82,10 @@ jobs:
           ECR_REPOSITORY: tf-3-${{ matrix.app }}
           IMAGE_TAG: sha-${{ github.sha }}
         run: |
-          cd capstone/tf-3/cdo-1/app/${{ matrix.app }}
+          if [ "${{ matrix.app }}" = "self-heal-worker" ]; then
+            cp capstone/tf-3/cdo-1/app/webhook-receiver/src/security.py capstone/tf-3/cdo-1/app/sqs-worker/src/security.py
+          fi
+          cd capstone/tf-3/cdo-1/app/${{ matrix.dir }}
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           # Ghi đè file manifest bằng image digest mới vừa build để ArgoCD sync
