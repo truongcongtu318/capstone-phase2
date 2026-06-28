@@ -21,6 +21,7 @@ locals {
   private_subnet_ids      = data.terraform_remote_state.networking.outputs.private_subnet_ids
   sg_eks_control_plane_id = data.terraform_remote_state.networking.outputs.sg_eks_control_plane_id
   sg_eks_workload_id      = data.terraform_remote_state.networking.outputs.sg_eks_workload_id
+  sg_vpc_endpoint_id      = data.terraform_remote_state.networking.outputs.sg_vpc_endpoint_id
   kms_key_arn             = data.terraform_remote_state.networking.outputs.kms_infra_arn
 }
 
@@ -31,6 +32,7 @@ module "eks" {
   private_subnet_ids      = local.private_subnet_ids
   sg_eks_control_plane_id = local.sg_eks_control_plane_id
   sg_eks_workload_id      = local.sg_eks_workload_id
+  sg_vpc_endpoint_id      = local.sg_vpc_endpoint_id
   kms_key_arn             = local.kms_key_arn
   cluster_name            = "${var.name_prefix}-eks"
   global_tags             = local.module_tags
