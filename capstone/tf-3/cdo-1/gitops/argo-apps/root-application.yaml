@@ -10,10 +10,9 @@
 # - repoURL trỏ về GitHub (dùng để test local trên Kind). Theo README
 #   gốc, production sẽ dùng AWS CodeCommit - cần đổi lại repoURL +
 #   credential (SSH key qua IRSA) khi Sub-team 1 cấp xong OIDC role.
-# - targetRevision = feat/argocd (KHÔNG phải main),
-#   vì code gitops/ hiện chỉ tồn tại ở nhánh này. Tech Lead sẽ merge
-#   vào main sau khi review xong - lúc đó nhớ đổi targetRevision lại
-#   thành "main" trong PR riêng, đừng quên bước này.
+# - targetRevision = team-3 (nhánh tổng hợp của Sub-team 3).
+#   Tech Lead sẽ merge vào main sau khi review - lúc đó nhớ đổi
+#   targetRevision lại thành "main" trong PR riêng.
 # ============================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
