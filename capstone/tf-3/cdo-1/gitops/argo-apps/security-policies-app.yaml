@@ -14,7 +14,7 @@ spec:
   project: default
   source:
     # Đã đổi từ GitHub (test) → CodeCommit (production) theo Contract K8s
-    repoURL: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/capstone-phase2
+    repoURL: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/cdo1-selfheal-gitops
     targetRevision: team-3
     path: capstone/tf-3/cdo-1/gitops/security-policies
   destination:
