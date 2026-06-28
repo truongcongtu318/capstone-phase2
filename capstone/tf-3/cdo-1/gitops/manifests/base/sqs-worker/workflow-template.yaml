@@ -21,7 +21,7 @@ spec:
       - name: repo-url
         value: "https://github.com/truongcongtu318/capstone-phase2.git"
       - name: target-branch
-        value: "feat/argocd"
+        value: "team-3"
       - name: namespace
       - name: workload-type
         value: "deployment"

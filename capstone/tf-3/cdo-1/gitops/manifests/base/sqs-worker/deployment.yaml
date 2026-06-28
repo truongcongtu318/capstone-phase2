@@ -25,7 +25,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
-      serviceAccountName: sqs-worker
+      serviceAccountName: self-heal-executor
       containers:
         - name: sqs-worker
           securityContext:
