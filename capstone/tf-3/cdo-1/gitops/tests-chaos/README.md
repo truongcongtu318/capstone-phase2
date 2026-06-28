@@ -27,6 +27,12 @@ The `scripts/` folder only contains backward-compatible wrappers for older comma
 544011261607.dkr.ecr.us-east-1.amazonaws.com
 ```
 
+If `kubectl` is not installed locally, use:
+
+```bash
+nix-shell -p kubectl
+```
+
 ## Static Validation
 
 Run before opening or updating the PR:
