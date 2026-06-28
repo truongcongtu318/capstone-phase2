@@ -1,1 +1,7 @@
-# 🌐 TODO: Cấu hình AWS provider cho Networking env
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = local.module_tags
+  }
+}

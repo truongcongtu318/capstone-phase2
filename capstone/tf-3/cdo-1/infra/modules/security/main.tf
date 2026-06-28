@@ -20,7 +20,7 @@ resource "aws_kms_key" "keys" {
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
-  policy = each.key == "cdo-observability-kms" ? jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Id      = "${each.key}-policy"
     Statement = [
@@ -52,7 +52,7 @@ resource "aws_kms_key" "keys" {
         }
       }
     ]
-  }) : null
+  })
 
   tags = merge(
     local.module_tags,
