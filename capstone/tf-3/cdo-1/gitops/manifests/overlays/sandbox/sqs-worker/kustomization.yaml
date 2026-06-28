@@ -1,2 +1,13 @@
-# Kustomization Sandbox Overlay config
-# TODO: Kustomize overlay trỏ về base và apply các files patch: patch-replicas.yaml.
+# ============================================================
+# overlays/sandbox/sqs-worker/kustomization.yaml
+# Sở hữu: Member 7 — chưa patch gì, trỏ thẳng base/ để test sync.
+# ============================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base/sqs-worker
+# patches:
+#   - path: patch-replicas.yaml
+#     target:
+#       kind: Deployment
+#       name: sqs-worker

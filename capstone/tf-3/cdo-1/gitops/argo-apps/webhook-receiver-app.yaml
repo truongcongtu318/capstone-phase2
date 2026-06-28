@@ -1,7 +1,27 @@
+# ============================================================
+# webhook-receiver-app.yaml
+# Sở hữu: Member 7
+# Sync Wave: "0" — deploy sau Namespace(-4)/Security(-3)/Config(-2)/Service(-1)
+# ============================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: webhook-receiver
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
-  # TODO: Cấu hình Application Webhook Receiver trỏ về gitops/manifests/overlays/sandbox/
+  project: default
+  source:
+    repoURL: https://github.com/truongcongtu318/capstone-phase2.git
+    targetRevision: feat/argocd
+    path: capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/webhook-receiver
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: self-heal-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

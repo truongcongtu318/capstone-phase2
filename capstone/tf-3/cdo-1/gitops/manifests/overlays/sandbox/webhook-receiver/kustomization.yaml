@@ -1,2 +1,18 @@
-# Kustomization Sandbox Overlay config
-# TODO: Kustomize overlay trỏ về base và apply các files patch: patch-env.yaml.
+# ============================================================
+# overlays/sandbox/webhook-receiver/kustomization.yaml
+# Sở hữu: Member 7
+#
+# GIAI ĐOẠN HIỆN TẠI: chưa có patch nào, chỉ trỏ thẳng base/ để
+# ArgoCD sync được. Khi cần patch riêng cho sandbox (biến môi trường,
+# số replicas, image tag theo commit SHA), thêm patch-env.yaml vào
+# đây và uncomment phần patches dưới.
+# ============================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base/webhook-receiver
+# patches:
+#   - path: patch-env.yaml
+#     target:
+#       kind: Deployment
+#       name: webhook-receiver

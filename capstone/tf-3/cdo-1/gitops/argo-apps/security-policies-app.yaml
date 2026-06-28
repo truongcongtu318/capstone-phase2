@@ -1,29 +1,25 @@
 # ============================================================
-# sqs-worker-app.yaml
+# security-policies-app.yaml
 # Sở hữu: Member 7
-# Sync Wave: "0"
-#
-# LƯU Ý: serviceaccount.yaml trong base/sqs-worker/ phải gắn
-# annotation IRSA (eks.amazonaws.com/role-arn) khi deploy lên EKS
-# thật - không cần thiết trên Kind local (IRSA chỉ có ý nghĩa trên
-# AWS EKS, Kind sẽ bỏ qua annotation này một cách an toàn).
+# Sync Wave: "-3" — deploy sau Namespace(-4), trước Config(-2)
 # ============================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: sqs-worker
+  name: security-policies
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "-3"
 spec:
   project: default
   source:
     repoURL: https://github.com/truongcongtu318/capstone-phase2.git
     targetRevision: feat/argocd
-    path: capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/sqs-worker
+    path: capstone/tf-3/cdo-1/gitops/security-policies
   destination:
     server: https://kubernetes.default.svc
-    namespace: self-heal-system
+    # Không set namespace chung ở đây để giữ nguyên namespace khai báo trong rbac.yaml 
+    # (tenant-payment, tenant-checkout) thay vì bị override toàn bộ về self-heal-system.
   syncPolicy:
     automated:
       prune: true
