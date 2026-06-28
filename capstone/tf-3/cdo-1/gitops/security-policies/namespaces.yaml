@@ -4,6 +4,7 @@ metadata:
   name: self-heal-system
   annotations:
     argocd.argoproj.io/sync-wave: "-4"
+    argocd.argoproj.io/sync-options: Prune=false
 ---
 apiVersion: v1
 kind: Namespace
@@ -11,6 +12,7 @@ metadata:
   name: observability
   annotations:
     argocd.argoproj.io/sync-wave: "-4"
+    argocd.argoproj.io/sync-options: Prune=false
 ---
 apiVersion: v1
 kind: Namespace
@@ -18,6 +20,7 @@ metadata:
   name: tenant-payment
   annotations:
     argocd.argoproj.io/sync-wave: "-4"
+    argocd.argoproj.io/sync-options: Prune=false
 ---
 apiVersion: v1
 kind: Namespace
@@ -25,3 +28,4 @@ metadata:
   name: tenant-checkout
   annotations:
     argocd.argoproj.io/sync-wave: "-4"
+    argocd.argoproj.io/sync-options: Prune=false

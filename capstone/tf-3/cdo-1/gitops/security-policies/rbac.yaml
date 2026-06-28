@@ -30,9 +30,6 @@ subjects:
   - kind: ServiceAccount
     name: self-heal-executor
     namespace: self-heal-system
-  - kind: ServiceAccount
-    name: sqs-worker
-    namespace: self-heal-system
 roleRef:
   kind: ClusterRole
   name: self-heal-executor-role
@@ -46,9 +43,6 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: self-heal-executor
-    namespace: self-heal-system
-  - kind: ServiceAccount
-    name: sqs-worker
     namespace: self-heal-system
 roleRef:
   kind: ClusterRole
