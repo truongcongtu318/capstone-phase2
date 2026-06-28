@@ -37,6 +37,7 @@ registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.4.1 ingress-nginx/kube-web
 # ==============================================================================
 # E. Chaos Testing & Debugging (3 Images)
 # ==============================================================================
+# TODO: pin stress-ng image digest/version before final EKS run.
 docker.io/alexeiled/stress-ng:latest alexeiled/stress-ng:latest
 docker.io/library/alpine:3.19 alpine:3.19
 docker.io/library/busybox:1.36 busybox:1.36

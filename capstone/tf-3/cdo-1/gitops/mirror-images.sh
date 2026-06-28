@@ -5,14 +5,16 @@
 # Người thực thi: Member 8 & 9 (Sub-team 3) và Member 3 (Sub-team 1)
 # Nơi chạy: Chạy trên máy cá nhân có Internet và cấu hình AWS CLI có quyền đẩy ECR
 # ==============================================================================
-set -e
+set -euo pipefail
 
 AWS_ACCOUNT="474013238625"
-AWS_REGION="us-east-1"
+
+AWS_REGION="${AWS_REGION:-us-east-1}"
+
 TARGET_REGISTRY="${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
 echo "🔐 Đăng nhập AWS ECR Private..."
-aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $TARGET_REGISTRY
+aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$TARGET_REGISTRY"
 
 # Khai báo mảng ánh xạ (Public Source Image -> ECR Private Path)
 declare -A images=(
@@ -57,10 +59,10 @@ for src in "${!images[@]}"; do
   docker pull "$src"
   
   echo "Checking/Creating ECR Repository: $repo_name"
-  aws ecr describe-repositories --repository-name "$repo_name" --region $AWS_REGION >/dev/null 2>&1 || \
+  aws ecr describe-repositories --repository-name "$repo_name" --region "$AWS_REGION" >/dev/null 2>&1 || \
     aws ecr create-repository \
       --repository-name "$repo_name" \
-      --region $AWS_REGION \
+      --region "$AWS_REGION" \
       --image-scanning-configuration scanOnPush=true \
       --encryption-configuration encryptionType=AES256
       
