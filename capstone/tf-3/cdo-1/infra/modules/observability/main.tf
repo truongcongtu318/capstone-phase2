@@ -294,6 +294,110 @@ resource "aws_kinesis_firehose_delivery_stream" "audit_stream" {
 }
 
 # =============================================================================
+# AWS SQS & SNS RESOURCES — Alerts Pipeline (AWS — no count)
+# =============================================================================
+
+resource "aws_sqs_queue" "self_heal_dlq" {
+  name                      = "${var.name_prefix}-${var.environment}-self-heal-dlq"
+  message_retention_seconds = 1209600 # 14 days
+  kms_master_key_id         = var.kms_observability_arn # dùng chung key mã hóa monitoring
+
+  tags = local.module_tags
+}
+
+resource "aws_sqs_queue" "self_heal_queue" {
+  name                      = "${var.name_prefix}-${var.environment}-self-heal-queue"
+  delay_seconds             = 0
+  max_message_size          = 262144
+  message_retention_seconds = 345600 # 4 days
+  receive_wait_time_seconds = 20     # Long polling enabled
+  kms_master_key_id         = var.kms_observability_arn
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.self_heal_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = local.module_tags
+}
+
+resource "aws_sns_topic" "alerts_escalation" {
+  name              = "${var.name_prefix}-${var.environment}-alerts-escalation"
+  kms_master_key_id = var.kms_observability_arn
+
+  tags = local.module_tags
+}
+
+# =============================================================================
+# IAM ROLE — IRSA cho FastAPI Webhook webhook-receiver (AWS — no count)
+# =============================================================================
+
+resource "aws_iam_role" "webhook_irsa" {
+  name = "${var.name_prefix}-${var.environment}-irsa-webhook-receiver"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = var.oidc_provider_arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")}:sub" : "system:serviceaccount:self-heal-system:webhook-receiver",
+            "${replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")}:aud" : "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = local.module_tags
+}
+
+resource "aws_iam_role_policy" "webhook_irsa" {
+  name = "webhook-irsa-policy"
+  role = aws_iam_role.webhook_irsa.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SQSSendAccess"
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+        ]
+        Resource = [aws_sqs_queue.self_heal_queue.arn]
+      },
+      {
+        Sid    = "DynamoDBAccess"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+        ]
+        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
+      },
+      {
+        Sid    = "KMSAccess"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+        ]
+        Resource = [var.kms_observability_arn] # Webhook encrypt message trước khi gửi SQS
+      }
+    ]
+  })
+}
+
+# =============================================================================
 # IAM ROLE — IRSA cho SQS Worker self-heal-executor (AWS — no count)
 # =============================================================================
 
@@ -345,7 +449,10 @@ resource "aws_iam_role_policy" "worker_irsa" {
           "kms:Decrypt",
           "kms:GenerateDataKey",
         ]
-        Resource = [var.kms_audit_arn]
+        Resource = [
+          var.kms_audit_arn,
+          var.kms_observability_arn
+        ]
       },
       {
         Sid    = "SQSAccess"
@@ -356,13 +463,16 @@ resource "aws_iam_role_policy" "worker_irsa" {
           "sqs:GetQueueAttributes",
           "sqs:ChangeMessageVisibility",
         ]
-        Resource = "arn:aws:sqs:*:*:*"
+        Resource = [
+          aws_sqs_queue.self_heal_queue.arn,
+          aws_sqs_queue.self_heal_dlq.arn
+        ]
       },
       {
         Sid      = "SNSAccess"
         Effect   = "Allow"
         Action   = ["sns:Publish"]
-        Resource = "arn:aws:sns:*:*:*"
+        Resource = [aws_sns_topic.alerts_escalation.arn]
       },
       {
         Sid    = "DynamoDBAccess"
