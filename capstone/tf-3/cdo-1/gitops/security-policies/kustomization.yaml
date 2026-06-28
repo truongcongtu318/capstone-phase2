@@ -13,3 +13,5 @@ resources:
   - network-policies/ai-engine-netpolicy.yaml
   - network-policies/webhook-netpolicy.yaml
   - rbac.yaml
+  - namespaces.yaml
+
