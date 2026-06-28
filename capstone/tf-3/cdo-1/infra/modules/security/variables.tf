@@ -5,7 +5,7 @@ variable "name_prefix" {
 }
 
 variable "environment" {
-  description = "Environment name used for standard resource tags"
+  description = "Environment name"
   type        = string
   default     = "sandbox"
 }
