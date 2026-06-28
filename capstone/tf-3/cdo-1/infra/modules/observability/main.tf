@@ -1,15 +1,23 @@
+# =============================================================================
+# MODULE: observability — Kube-Prometheus-Stack + Kinesis Firehose Audit Stream
+# NAT-less: tất cả images phải trỏ về ECR Private 474013238625.dkr.ecr.us-east-1.amazonaws.com
+# Fix #2: Alert routing trỏ đúng tên service webhook-receiver (KHÔNG phải patch-receiver)
+# =============================================================================
+
 locals {
   namespace       = "observability"
   grafana_service = "kube-prometheus-stack-grafana"
+  ecr_registry    = "474013238625.dkr.ecr.us-east-1.amazonaws.com"
 
-  # Alertmanager → webhook receiver
-  # Service name: patch-receiver (or we can use our unified self-heal-executor name/endpoint)
-  # Wait, let's keep the alert receiver service name as defined in gitops/manifests or similar
-  alert_receiver_url = "http://patch-receiver.self-heal-system.svc.cluster.local:8443/alerts"
+  # Fix #2: Tên service chuẩn của dự án là webhook-receiver (theo MEMORY.md)
+  alert_receiver_url = "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts"
 }
 
-# EKS Control Plane Log Group
-# Terraform manages it (created before EKS cluster is provisioned if called in early state, or dynamically)
+# =============================================================================
+# CLOUDWATCH LOG GROUP — EKS Control Plane (AWS resource — no count, always planned)
+# Tạo trước để tránh ResourceAlreadyExists khi EKS tự tạo cùng tên
+# =============================================================================
+
 resource "aws_cloudwatch_log_group" "eks_control_plane" {
   name              = "/aws/eks/${var.cluster_name}/cluster"
   retention_in_days = 30
@@ -18,8 +26,14 @@ resource "aws_cloudwatch_log_group" "eks_control_plane" {
   tags = local.module_tags
 }
 
-# Observability namespace
+# =============================================================================
+# KUBERNETES NAMESPACE — observability
+# count = var.enabled ? 1 : 0: bỏ qua khi mock mode (EKS chưa tồn tại)
+# =============================================================================
+
 resource "kubernetes_namespace" "observability" {
+  count = var.enabled ? 1 : 0
+
   metadata {
     name = local.namespace
     labels = {
@@ -30,18 +44,58 @@ resource "kubernetes_namespace" "observability" {
   }
 }
 
-# Prometheus Stack (Helm Chart)
+# =============================================================================
+# HELM RELEASE — Kube-Prometheus-Stack
+# count = var.enabled ? 1 : 0: bỏ qua khi mock mode
+# NAT-less: override toàn bộ image repository về ECR Private
+# =============================================================================
+
 resource "helm_release" "kube_prometheus_stack" {
+  count = var.enabled ? 1 : 0
+
   name       = "kube-prometheus-stack"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
-  namespace  = kubernetes_namespace.observability.metadata[0].name
+  namespace  = kubernetes_namespace.observability[0].metadata[0].name
   version    = "61.7.2"
 
   values = [
     yamlencode({
       fullnameOverride = "kube-prometheus-stack"
 
+      prometheusOperator = {
+        enabled = true
+        image = {
+          repository = "${local.ecr_registry}/prometheus-operator/prometheus-operator"
+          tag        = "v0.74.0"
+        }
+        prometheusConfigReloader = {
+          image = {
+            repository = "${local.ecr_registry}/prometheus-operator/prometheus-config-reloader"
+            tag        = "v0.74.0"
+          }
+        }
+      }
+
+      prometheus = {
+        enabled = true
+        service = {
+          type = "ClusterIP"
+        }
+        prometheusSpec = {
+          retention = "7d"
+          replicas  = 1
+          image = {
+            repository = "${local.ecr_registry}/prometheus/prometheus"
+            tag        = "v2.52.0"
+          }
+          serviceMonitorSelectorNilUsesHelmValues = false
+          podMonitorSelectorNilUsesHelmValues     = false
+          ruleSelectorNilUsesHelmValues           = false
+        }
+      }
+
+      # Fix #2: alert_receiver_url dùng webhook-receiver (không phải patch-receiver)
       alertmanager = {
         enabled = true
         service = {
@@ -49,6 +103,10 @@ resource "helm_release" "kube_prometheus_stack" {
         }
         alertmanagerSpec = {
           replicas = 1
+          image = {
+            repository = "${local.ecr_registry}/prometheus/alertmanager"
+            tag        = "v0.27.0"
+          }
         }
         config = {
           global = {
@@ -80,7 +138,15 @@ resource "helm_release" "kube_prometheus_stack" {
         service = {
           type = "ClusterIP"
         }
+        image = {
+          repository = "${local.ecr_registry}/grafana/grafana"
+          tag        = "10.4.3"
+        }
         sidecar = {
+          image = {
+            repository = "${local.ecr_registry}/kiwigrid/k8s-sidecar"
+            tag        = "1.27.4"
+          }
           dashboards = {
             enabled = true
           }
@@ -90,30 +156,20 @@ resource "helm_release" "kube_prometheus_stack" {
         }
       }
 
-      prometheus = {
-        enabled = true
-        service = {
-          type = "ClusterIP"
-        }
-        prometheusSpec = {
-          retention                               = "7d"
-          replicas                                = 1
-          serviceMonitorSelectorNilUsesHelmValues = false
-          podMonitorSelectorNilUsesHelmValues     = false
-          ruleSelectorNilUsesHelmValues           = false
-        }
-      }
-
-      prometheusOperator = {
-        enabled = true
-      }
-
       "kube-state-metrics" = {
         enabled = true
+        image = {
+          repository = "${local.ecr_registry}/kube-state-metrics/kube-state-metrics"
+          tag        = "v2.12.0"
+        }
       }
 
       "prometheus-node-exporter" = {
         enabled = true
+        image = {
+          repository = "${local.ecr_registry}/prometheus/node-exporter"
+          tag        = "v1.8.1"
+        }
       }
     })
   ]
@@ -125,14 +181,13 @@ resource "helm_release" "kube_prometheus_stack" {
 }
 
 # =============================================================================
-# KINESIS DATA FIREHOSE DELIVERY STREAM & CLOUDWATCH LOGGING
+# CLOUDWATCH LOG GROUP & STREAM — Kinesis Firehose error logging (AWS — no count)
 # =============================================================================
 
-# CloudWatch Log Group for Firehose error logging (team 3 requirement)
 resource "aws_cloudwatch_log_group" "firehose" {
   name              = "/aws/kinesisfirehose/tf3-cdo1-sandbox-audit-stream"
   retention_in_days = 30
-  kms_key_id        = var.kms_observability_arn # Encrypted with observability key
+  kms_key_id        = var.kms_observability_arn
 
   tags = local.module_tags
 }
@@ -142,7 +197,10 @@ resource "aws_cloudwatch_log_stream" "firehose" {
   log_group_name = aws_cloudwatch_log_group.firehose.name
 }
 
-# Firehose IAM Role and policy
+# =============================================================================
+# IAM ROLE — Kinesis Firehose delivery role (AWS — no count)
+# =============================================================================
+
 resource "aws_iam_role" "firehose" {
   name = "${var.name_prefix}-${var.environment}-firehose-role"
 
@@ -162,7 +220,7 @@ resource "aws_iam_role" "firehose" {
   tags = local.module_tags
 }
 
-resource "aws_iam_role_policy" "firehose_policy" {
+resource "aws_iam_role_policy" "firehose" {
   name = "firehose-s3-kms-cw"
   role = aws_iam_role.firehose.id
 
@@ -178,11 +236,11 @@ resource "aws_iam_role_policy" "firehose_policy" {
           "s3:GetObject",
           "s3:ListBucket",
           "s3:ListBucketMultipartUploads",
-          "s3:PutObject"
+          "s3:PutObject",
         ]
         Resource = [
           var.s3_audit_bucket_arn,
-          "${var.s3_audit_bucket_arn}/*"
+          "${var.s3_audit_bucket_arn}/*",
         ]
       },
       {
@@ -190,38 +248,37 @@ resource "aws_iam_role_policy" "firehose_policy" {
         Effect = "Allow"
         Action = [
           "kms:Decrypt",
-          "kms:GenerateDataKey"
+          "kms:GenerateDataKey",
         ]
-        Resource = [
-          var.kms_audit_arn
-        ]
+        Resource = [var.kms_audit_arn]
       },
       {
         Sid    = "CloudWatchAccess"
         Effect = "Allow"
         Action = [
           "logs:PutLogEvents",
-          "logs:CreateLogStream"
+          "logs:CreateLogStream",
         ]
         Resource = [
           aws_cloudwatch_log_group.firehose.arn,
-          "${aws_cloudwatch_log_group.firehose.arn}:*"
+          "${aws_cloudwatch_log_group.firehose.arn}:*",
         ]
-      }
+      },
     ]
   })
 }
 
-# Kinesis Firehose Delivery Stream
+# =============================================================================
+# KINESIS FIREHOSE DELIVERY STREAM — tf3-cdo1-sandbox-audit-stream (AWS — no count)
+# =============================================================================
+
 resource "aws_kinesis_firehose_delivery_stream" "audit_stream" {
   name        = "tf3-cdo1-sandbox-audit-stream"
   destination = "extended_s3"
 
   extended_s3_configuration {
-    role_arn   = aws_iam_role.firehose.arn
-    bucket_arn = var.s3_audit_bucket_arn
-
-    # Encryption configuration using cdo-audit-kms KMS Key
+    role_arn    = aws_iam_role.firehose.arn
+    bucket_arn  = var.s3_audit_bucket_arn
     kms_key_arn = var.kms_audit_arn
 
     cloudwatch_logging_options {
@@ -233,18 +290,119 @@ resource "aws_kinesis_firehose_delivery_stream" "audit_stream" {
 
   tags = local.module_tags
 
-  depends_on = [
-    aws_iam_role_policy.firehose_policy
-  ]
+  depends_on = [aws_iam_role_policy.firehose]
 }
 
 # =============================================================================
-# EKS IRSA ROLE FOR WORKER SERVICE ACCOUNT (self-heal-executor)
+# AWS SQS & SNS RESOURCES — Alerts Pipeline (AWS — no count)
 # =============================================================================
 
-# IRSA role allowing Worker to PutRecords to Firehose, read SQS, publish SNS, lock DynamoDB
+resource "aws_sqs_queue" "self_heal_dlq" {
+  name                      = "${var.name_prefix}-${var.environment}-self-heal-dlq"
+  message_retention_seconds = 1209600 # 14 days
+  kms_master_key_id         = var.kms_observability_arn # dùng chung key mã hóa monitoring
+
+  tags = local.module_tags
+}
+
+resource "aws_sqs_queue" "self_heal_queue" {
+  name                      = "${var.name_prefix}-${var.environment}-self-heal-queue"
+  delay_seconds             = 0
+  max_message_size          = 262144
+  message_retention_seconds = 345600 # 4 days
+  receive_wait_time_seconds = 20     # Long polling enabled
+  kms_master_key_id         = var.kms_observability_arn
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.self_heal_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = local.module_tags
+}
+
+resource "aws_sns_topic" "alerts_escalation" {
+  name              = "${var.name_prefix}-${var.environment}-alerts-escalation"
+  kms_master_key_id = var.kms_observability_arn
+
+  tags = local.module_tags
+}
+
+# =============================================================================
+# IAM ROLE — IRSA cho FastAPI Webhook webhook-receiver (AWS — no count)
+# =============================================================================
+
+resource "aws_iam_role" "webhook_irsa" {
+  name = "${var.name_prefix}-${var.environment}-irsa-webhook-receiver"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = var.oidc_provider_arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")}:sub" : "system:serviceaccount:self-heal-system:webhook-receiver",
+            "${replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")}:aud" : "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = local.module_tags
+}
+
+resource "aws_iam_role_policy" "webhook_irsa" {
+  name = "webhook-irsa-policy"
+  role = aws_iam_role.webhook_irsa.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SQSSendAccess"
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+        ]
+        Resource = [aws_sqs_queue.self_heal_queue.arn]
+      },
+      {
+        Sid    = "DynamoDBAccess"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+        ]
+        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
+      },
+      {
+        Sid    = "KMSAccess"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+        ]
+        Resource = [var.kms_observability_arn] # Webhook encrypt message trước khi gửi SQS
+      }
+    ]
+  })
+}
+
+# =============================================================================
+# IAM ROLE — IRSA cho SQS Worker self-heal-executor (AWS — no count)
+# =============================================================================
+
 resource "aws_iam_role" "worker_irsa" {
-  name = "${var.name_prefix}-${var.environment}-worker-irsa"
+  name = "${var.name_prefix}-${var.environment}-irsa-audit-writer"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -268,8 +426,8 @@ resource "aws_iam_role" "worker_irsa" {
   tags = local.module_tags
 }
 
-resource "aws_iam_role_policy" "worker_policy" {
-  name = "worker-policy"
+resource "aws_iam_role_policy" "worker_irsa" {
+  name = "worker-irsa-policy"
   role = aws_iam_role.worker_irsa.id
 
   policy = jsonencode({
@@ -280,21 +438,20 @@ resource "aws_iam_role_policy" "worker_policy" {
         Effect = "Allow"
         Action = [
           "firehose:PutRecord",
-          "firehose:PutRecordBatch"
+          "firehose:PutRecordBatch",
         ]
-        Resource = [
-          aws_kinesis_firehose_delivery_stream.audit_stream.arn
-        ]
+        Resource = [aws_kinesis_firehose_delivery_stream.audit_stream.arn]
       },
       {
         Sid    = "KMSAccess"
         Effect = "Allow"
         Action = [
           "kms:Decrypt",
-          "kms:GenerateDataKey"
+          "kms:GenerateDataKey",
         ]
         Resource = [
-          var.kms_audit_arn
+          var.kms_audit_arn,
+          var.kms_observability_arn
         ]
       },
       {
@@ -304,17 +461,18 @@ resource "aws_iam_role_policy" "worker_policy" {
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes",
-          "sqs:ChangeMessageVisibility"
+          "sqs:ChangeMessageVisibility",
         ]
-        Resource = "arn:aws:sqs:*:*:*"
+        Resource = [
+          aws_sqs_queue.self_heal_queue.arn,
+          aws_sqs_queue.self_heal_dlq.arn
+        ]
       },
       {
-        Sid    = "SNSAccess"
-        Effect = "Allow"
-        Action = [
-          "sns:Publish"
-        ]
-        Resource = "arn:aws:sns:*:*:*"
+        Sid      = "SNSAccess"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = [aws_sns_topic.alerts_escalation.arn]
       },
       {
         Sid    = "DynamoDBAccess"
@@ -323,10 +481,10 @@ resource "aws_iam_role_policy" "worker_policy" {
           "dynamodb:GetItem",
           "dynamodb:PutItem",
           "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem"
+          "dynamodb:DeleteItem",
         ]
         Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
-      }
+      },
     ]
   })
 }

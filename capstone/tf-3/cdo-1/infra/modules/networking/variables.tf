@@ -5,7 +5,7 @@ variable "name_prefix" {
 }
 
 variable "environment" {
-  description = "Environment name used for standard resource tags"
+  description = "Environment name"
   type        = string
   default     = "sandbox"
 }
@@ -40,10 +40,16 @@ variable "sg_vpc_endpoint_id" {
   default     = null
 }
 
-variable "enable_vpc_endpoints" {
-  description = "Whether to create NAT-less Gateway and Interface VPC endpoints"
+variable "create_vpc_endpoints" {
+  description = "Bat tao VPC endpoints trong module nay neu da co sg_vpc_endpoint_id"
   type        = bool
   default     = false
+}
+
+variable "github_repo" {
+  description = "org/repo duoc phep assume GitHub Actions OIDC roles"
+  type        = string
+  default     = "truongcongtu318/capstone-phase2"
 }
 
 variable "tags" {
