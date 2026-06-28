@@ -5,7 +5,7 @@ output "grafana_service_name" {
 
 output "firehose_stream_arn" {
   description = "ARN của Kinesis Firehose delivery stream tf3-cdo1-sandbox-audit-stream"
-  value       = aws_kinesis_firehose_delivery_stream.audit_stream.arn
+  value       = var.enabled ? aws_kinesis_firehose_delivery_stream.audit_stream[0].arn : ""
 }
 
 output "worker_irsa_role_arn" {

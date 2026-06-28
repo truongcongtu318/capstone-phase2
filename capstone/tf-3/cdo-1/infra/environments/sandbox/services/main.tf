@@ -12,12 +12,9 @@ data "aws_s3_bucket" "audit" {
 
 # -----------------------------------------------------------------------------
 # REMOTE STATE — Phase 2: Networking & Security
-# count = var.use_mock_compute ? 0 : 1: bỏ qua khi mock mode
 # -----------------------------------------------------------------------------
 
 data "terraform_remote_state" "networking" {
-  count = var.use_mock_compute ? 0 : 1
-
   backend = "s3"
   config = {
     bucket = var.tf_state_bucket
@@ -26,24 +23,23 @@ data "terraform_remote_state" "networking" {
   }
 }
 
-# Locals cho networking outputs — mock fallback khi use_mock_compute = true
+# Locals cho networking outputs
 locals {
-  vpc_id                = var.use_mock_compute ? "vpc-mock" : data.terraform_remote_state.networking[0].outputs.vpc_id
-  private_subnet_ids    = var.use_mock_compute ? ["subnet-mock"] : data.terraform_remote_state.networking[0].outputs.private_subnet_ids
-  sg_alb_internal_id    = var.use_mock_compute ? "sg-mock" : data.terraform_remote_state.networking[0].outputs.sg_alb_internal_id
-  kms_observability_arn = var.use_mock_compute ? "arn:aws:kms:us-east-1:474013238625:key/mock-obs" : data.terraform_remote_state.networking[0].outputs.kms_observability_arn
-  kms_audit_arn         = var.use_mock_compute ? "arn:aws:kms:us-east-1:474013238625:key/mock-audit" : data.terraform_remote_state.networking[0].outputs.kms_audit_arn
+  vpc_id                = data.terraform_remote_state.networking.outputs.vpc_id
+  private_subnet_ids    = data.terraform_remote_state.networking.outputs.private_subnet_ids
+  sg_alb_internal_id    = data.terraform_remote_state.networking.outputs.sg_alb_internal_id
+  kms_observability_arn = data.terraform_remote_state.networking.outputs.kms_observability_arn
+  kms_audit_arn         = data.terraform_remote_state.networking.outputs.kms_audit_arn
 }
 
 # -----------------------------------------------------------------------------
 # MODULE: ingress — AWS Load Balancer Controller
-# enabled = false khi mock mode → tất cả K8s/Helm/IAM resources bị skip (count=0)
 # -----------------------------------------------------------------------------
 
 module "ingress" {
   source = "../../../modules/ingress"
 
-  enabled            = !var.use_mock_compute
+  enabled            = true
   cluster_name       = local.cluster_name
   oidc_provider_arn  = local.oidc_provider_arn
   vpc_id             = local.vpc_id
@@ -54,14 +50,13 @@ module "ingress" {
 
 # -----------------------------------------------------------------------------
 # MODULE: observability — Kube-Prometheus-Stack + Kinesis Firehose Audit
-# enabled = false khi mock mode → K8s/Helm resources bị skip, AWS resources vẫn plan
 # Fix #1: s3_audit_bucket_arn lấy từ data.aws_s3_bucket.audit.arn (Phase 1)
 # -----------------------------------------------------------------------------
 
 module "observability" {
   source = "../../../modules/observability"
 
-  enabled               = !var.use_mock_compute
+  enabled               = true
   cluster_name          = local.cluster_name
   oidc_provider_arn     = local.oidc_provider_arn
   kms_observability_arn = local.kms_observability_arn
