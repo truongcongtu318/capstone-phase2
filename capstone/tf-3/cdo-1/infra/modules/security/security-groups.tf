@@ -79,11 +79,19 @@ resource "aws_security_group" "vpc_endpoint" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "Allow HTTPS from inside VPC CIDR (needed for NAT-less EKS nodes)"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    description     = "Allow HTTPS from EKS workload pods"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.eks_workload.id]
+  }
+
+  ingress {
+    description     = "Allow HTTPS from EKS control plane"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.eks_control_plane.id]
   }
 
   tags = merge(

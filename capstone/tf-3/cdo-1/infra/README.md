@@ -342,18 +342,4 @@ resource "helm_release" "kube_prometheus_stack" {
     })
   ]
 }
-
----
-
-## 🐞 Nhật ký Sự cố & Khắc phục (Troubleshooting & Incident Runbook)
-
-### 1. Sự cố: EKS Node Group lỗi "Instances failed to join the kubernetes cluster" (Phase 3)
-*   **Triệu chứng:** Khi apply Phase 3 (`compute`), tài nguyên `aws_eks_node_group` đứng treo rất lâu rồi fail với lỗi: `NodeCreationFailure: Instances failed to join the kubernetes cluster`.
-*   **Nguyên nhân:** 
-    *   Hạ tầng chạy mô hình **NAT-less VPC** (không có Internet). EKS nodes bắt buộc phải kết nối tới endpoint API của EKS và các API AWS khác (ECR, EC2, STS, S3) thông qua các **Interface VPC Endpoints**.
-    *   Trước đó, Security Group của VPC Endpoints (`sg-vpc-endpoint` được khởi tạo ở Phase 2) chỉ cho phép Ingress HTTPS (port 443) từ Security Group chỉ định là `sg-eks-workload`.
-    *   Tuy nhiên, AWS `aws_eks_node_group` khi tạo EC2 instances sẽ tự động gắn Cluster-managed Security Group do EKS tự sinh ra, chứ không tự động gắn `sg-eks-workload`. Vì vậy, nodes bị chặn không thể gọi DNS/HTTPS tới VPC Endpoints để chạy script bootstrap join cluster.
-*   **Cách khắc phục:** 
-    *   Tại file `capstone/tf-3/cdo-1/infra/modules/security/security-groups.tf` (Phase 2), cấu hình lại Ingress của Security Group `sg-vpc-endpoint` để mở rộng port 443 cho toàn bộ dải mạng **`var.vpc_cidr`** thay vì lọc theo security group ID. Điều này đảm bảo mọi node và pod tự động sinh ra sau này trong VPC đều kết nối an toàn với AWS API nội bộ.
-
 ```
