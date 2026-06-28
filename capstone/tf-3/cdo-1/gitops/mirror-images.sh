@@ -7,7 +7,7 @@
 # ==============================================================================
 set -euo pipefail
 
-AWS_ACCOUNT="544011261607"
+AWS_ACCOUNT="474013238625"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 TARGET_REGISTRY="${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 

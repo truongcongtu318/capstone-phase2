@@ -2,13 +2,13 @@ name: GitOps & Manifests Validation
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'capstone/tf-3/cdo-1/gitops/**'
+      - "capstone/tf-3/cdo-1/gitops/**"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'capstone/tf-3/cdo-1/gitops/**'
+      - "capstone/tf-3/cdo-1/gitops/**"
 
 permissions:
   contents: read
@@ -23,15 +23,18 @@ jobs:
 
       - name: Install Kube-linter
         run: |
-          curl -sL "https://github.com/stackrox/kube-linter/releases/latest/download/kube-linter-linux.tar.gz" | tar -xz
-          sudo mv kube-linter /usr/local/bin/
+          curl -sSfL -O https://github.com/stackrox/kube-linter/releases/download/v0.8.3/kube-linter-linux.tar.gz
+          tar -xzf kube-linter-linux.tar.gz
+          mkdir -p $HOME/.kube-linter/bin
+          mv kube-linter $HOME/.kube-linter/bin/
+          echo "$HOME/.kube-linter/bin" >> $GITHUB_PATH
 
       - name: Run Kube-linter
-        run: |
-          # Quét cấu trúc manifest đảm bảo an toàn bảo mật, resource limits
-          kube-linter lint capstone/tf-3/cdo-1/gitops/
+        uses: stackrox/kube-linter-action@v1.0.4
+        with:
+          directory: capstone/tf-3/cdo-1/gitops/
 
       - name: Validate YAML Syntax
         run: |
-          # Check định dạng YAML
-          python3 -c "import yaml, glob; [yaml.safe_load(open(f)) for f in glob.glob('capstone/tf-3/cdo-1/gitops/**/*.yaml', recursive=True)]"
+          # Check định dạng YAML (hỗ trợ cả tệp chứa nhiều document phân tách bằng ---)
+          python3 -c "import yaml, glob; [list(yaml.safe_load_all(open(f))) for f in glob.glob('capstone/tf-3/cdo-1/gitops/**/*.yaml', recursive=True)]"
