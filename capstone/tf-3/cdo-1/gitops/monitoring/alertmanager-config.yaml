@@ -1,0 +1,30 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: cdo1-self-heal-routing
+  namespace: observability
+  labels:
+    cdo1-alert-routing: "enabled"
+    app.kubernetes.io/part-of: cdo1-self-heal
+spec:
+  route:
+    receiver: self-heal-webhook
+    groupBy:
+      - alertname
+      - namespace
+      - pod
+      - container
+      - service
+    groupWait: 10s
+    groupInterval: 1m
+    repeatInterval: 30m
+    matchers:
+      - name: alertname
+        value: PodOOMKilled|PodCrashLooping|QueueBacklog
+        matchType: =~
+
+  receivers:
+    - name: self-heal-webhook
+      webhookConfigs:
+        - url: http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts
+          sendResolved: true
