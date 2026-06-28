@@ -1,54 +1,54 @@
 output "vpc_id" {
-  description = "VPC ID used by downstream compute and services states"
+  description = "VPC ID dung boi compute/services remote state"
   value       = module.networking.vpc_id
 }
 
 output "vpc_cidr" {
-  description = "CIDR block of the sandbox VPC"
+  description = "VPC CIDR block"
   value       = module.networking.vpc_cidr
 }
 
 output "private_subnet_ids" {
-  description = "Private subnet IDs for EKS workloads and private data services"
+  description = "Private subnet IDs cho EKS workloads/RDS"
   value       = module.networking.private_subnet_ids
 }
 
 output "public_subnet_ids" {
-  description = "Public subnet IDs for public-facing or edge resources"
+  description = "Public subnet IDs"
   value       = module.networking.public_subnet_ids
 }
 
 output "sg_eks_workload_id" {
-  description = "Security group ID for EKS workloads"
+  description = "SG cho EKS workload pods"
   value       = module.security.sg_eks_workload_id
 }
 
 output "sg_eks_control_plane_id" {
-  description = "Security group ID for EKS control plane ENIs"
+  description = "SG cho EKS control plane ENI"
   value       = module.security.sg_eks_control_plane_id
 }
 
 output "sg_alb_internal_id" {
-  description = "Security group ID for the internal ALB"
+  description = "SG cho Internal ALB"
   value       = module.security.sg_alb_internal_id
 }
 
 output "sg_rds_id" {
-  description = "Security group ID for RDS"
+  description = "SG cho RDS sandbox PostgreSQL"
   value       = module.security.sg_rds_id
 }
 
 output "sg_vpc_endpoint_id" {
-  description = "Security group ID for Interface VPC endpoints"
+  description = "SG cho Interface VPC endpoints"
   value       = module.security.sg_vpc_endpoint_id
 }
 
 output "kms_infra_arn" {
-  description = "KMS key ARN for infrastructure resources"
+  description = "KMS key ARN cho infra"
   value       = module.security.kms_infra_arn
 }
 
 output "kms_observability_arn" {
-  description = "KMS key ARN for observability log encryption"
+  description = "KMS key ARN cho observability"
   value       = module.security.kms_observability_arn
 }
