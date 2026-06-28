@@ -137,6 +137,7 @@ jobs:
       - name: Deploy Phase 2 - Networking
         working-directory: capstone/tf-3/cdo-1/infra/environments/sandbox/networking
         run: |
+          mkdir -p ${{ env.TF_PLUGIN_CACHE_DIR }}
           cp /tmp/tfplans/tfplan-02-networking/tfplan .
           terraform init
           terraform apply -auto-approve tfplan
@@ -144,6 +145,7 @@ jobs:
       - name: Deploy Phase 3 - Compute EKS
         working-directory: capstone/tf-3/cdo-1/infra/environments/sandbox/compute
         run: |
+          mkdir -p ${{ env.TF_PLUGIN_CACHE_DIR }}
           cp /tmp/tfplans/tfplan-03-compute/tfplan .
           terraform init
           terraform apply -auto-approve tfplan
@@ -151,6 +153,7 @@ jobs:
       - name: Deploy Phase 4 - Services
         working-directory: capstone/tf-3/cdo-1/infra/environments/sandbox/services
         run: |
+          mkdir -p ${{ env.TF_PLUGIN_CACHE_DIR }}
           cp /tmp/tfplans/tfplan-04-services/tfplan .
           terraform init
           terraform apply -auto-approve tfplan
