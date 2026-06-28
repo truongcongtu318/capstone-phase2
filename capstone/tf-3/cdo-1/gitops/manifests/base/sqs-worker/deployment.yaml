@@ -25,7 +25,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
-      serviceAccountName: self-heal-executor
+      # Đổi SA: self-heal-executor → patch-controller theo Contract K8s
+      serviceAccountName: patch-controller
       containers:
         - name: sqs-worker
           securityContext:
