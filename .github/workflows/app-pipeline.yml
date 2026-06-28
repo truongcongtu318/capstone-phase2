@@ -82,6 +82,9 @@ jobs:
           ECR_REPOSITORY: tf-3-${{ matrix.app }}
           IMAGE_TAG: sha-${{ github.sha }}
         run: |
+          if [ "${{ matrix.app }}" = "self-heal-worker" ]; then
+            cp capstone/tf-3/cdo-1/app/webhook-receiver/src/security.py capstone/tf-3/cdo-1/app/sqs-worker/src/security.py
+          fi
           cd capstone/tf-3/cdo-1/app/${{ matrix.dir }}
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
