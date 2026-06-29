@@ -17,6 +17,7 @@ locals {
     git_codecommit   = "com.amazonaws.${data.aws_region.current.name}.git-codecommit"
     codecommit       = "com.amazonaws.${data.aws_region.current.name}.codecommit"
     sns              = "com.amazonaws.${data.aws_region.current.name}.sns"
+    acm              = "com.amazonaws.${data.aws_region.current.name}.acm"
   }
 }
 
