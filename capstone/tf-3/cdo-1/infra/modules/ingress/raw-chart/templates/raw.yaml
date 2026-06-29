@@ -1,0 +1,20 @@
+{{- range $index, $resource := .Values.resources }}
+---
+apiVersion: {{ $resource.apiVersion }}
+kind: {{ $resource.kind }}
+metadata:
+  name: {{ $resource.metadata.name }}
+  {{- if $resource.metadata.namespace }}
+  namespace: {{ $resource.metadata.namespace }}
+  {{- end }}
+  {{- if $resource.metadata.annotations }}
+  annotations:
+    {{- toYaml $resource.metadata.annotations | nindent 4 }}
+  {{- end }}
+  {{- if $resource.metadata.labels }}
+  labels:
+    {{- toYaml $resource.metadata.labels | nindent 4 }}
+  {{- end }}
+spec:
+  {{- toYaml $resource.spec | nindent 2 }}
+{{- end }}
