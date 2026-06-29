@@ -1,12 +1,13 @@
 # ============================================================
 # deployment.yaml - ai-engine (base)
-# Sở hữu: Member 7 (khung) — model/code thật do AI team
+# Sở hữu: Member 7 (khung) — image demo thật do ST2 bàn giao
 #
-# PLACEHOLDER: nginx tạm, lắng nghe port 80 thay cho 8080 thật.
+# ST2 Handoff: image ECR tf-3-ai-engine-demo, port 8080.
+# QUAN TRỌNG (Zero Trust): pod AI Engine TUYỆT ĐỐI không có
+# kubeconfig/kubectl/K8s SDK. ServiceAccount ai-engine không có
+# ClusterRole/Role nào — chỉ gọi Bedrock qua IRSA (khi cần).
 #
-# QUAN TRỌNG (Zero Trust): khi đổi sang image thật, PHẢI verify image
-# đó KHÔNG chứa kubeconfig, KHÔNG cài kubectl/K8s SDK. ServiceAccount
-# dưới đây CHƯA gắn RBAC nào (đúng ý đồ).
+# Image tag sha-PENDING — override tại overlays/sandbox/ai-engine/kustomization.yaml.
 # ============================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -15,8 +16,7 @@ metadata:
   labels:
     app: ai-engine
   annotations:
-    ignore-check.kube-linter.io/no-read-only-root-fs: "Nginx placeholder requires writeable cache"
-    ignore-check.kube-linter.io/run-as-non-root: "Nginx placeholder requires root privileges for port 80"
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   replicas: 1
   selector:
@@ -28,15 +28,23 @@ spec:
         app: ai-engine
     spec:
       serviceAccountName: ai-engine
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
         - name: ai-engine
-          # PLACEHOLDER (sandbox): nginx:1.25 — EKS NAT-less runtime phải dùng
-          # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/nginx:1.25
-          # TODO: đổi sang image ECR Private khi AI team build xong
-          # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/ai-engine:<commit-sha>
-          image: nginx:1.25
+          # ST2 Handoff image — tag được override tại sandbox overlay
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine-demo:sha-PENDING
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           ports:
-            - containerPort: 80 # TODO: đổi thành 8080 khi có code thật
+            - containerPort: 8080
+              protocol: TCP
           resources:
             requests:
               memory: "1024Mi"
@@ -47,14 +55,14 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 80
+              port: 8080
             initialDelaySeconds: 15
             periodSeconds: 20
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /ready
-              port: 80
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3

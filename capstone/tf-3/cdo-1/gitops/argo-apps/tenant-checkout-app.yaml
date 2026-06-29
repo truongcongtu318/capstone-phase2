@@ -1,0 +1,32 @@
+# ============================================================
+# tenant-checkout-app.yaml
+# Sở hữu: Member 7
+# Sync Wave: "1" — deploy SAU các system app (Wave 0)
+#
+# ArgoCD Application tên "tenant-checkout-app" — pattern {namespace}-app.
+# Worker suy ra tên này từ namespace "tenant-checkout" khi suspend/resume autosync.
+# Path đang trỏ vào stub — cần tạo manifest thật nếu cần test tenant-checkout.
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-checkout-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/truongcongtu318/capstone-phase2.git
+    targetRevision: main
+    # TODO: tạo manifest cho tenant-checkout khi cần test E2E đa-tenant
+    path: capstone/tf-3/cdo-1/gitops/manifests/base/tenant-payment/order-service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-checkout
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
