@@ -37,3 +37,31 @@ output "firehose_stream_arn" {
   description = "ARN của Kinesis Firehose delivery stream tf3-cdo1-sandbox-audit-stream"
   value       = module.observability.firehose_stream_arn
 }
+
+# -----------------------------------------------------------------------------
+# DYNAMODB: App Idempotency Lock Table
+# -----------------------------------------------------------------------------
+
+output "app_idempotency_table_name" {
+  description = "DynamoDB table name for application idempotency lock"
+  value       = aws_dynamodb_table.app_idempotency.name
+}
+
+output "app_idempotency_table_arn" {
+  description = "DynamoDB table ARN for application idempotency lock"
+  value       = aws_dynamodb_table.app_idempotency.arn
+}
+
+# -----------------------------------------------------------------------------
+# CODECOMMIT: GitOps Repository
+# -----------------------------------------------------------------------------
+
+output "gitops_repo_name" {
+  description = "CodeCommit repository name for GitOps manifests"
+  value       = aws_codecommit_repository.gitops.repository_name
+}
+
+output "gitops_repo_clone_url" {
+  description = "CodeCommit repository clone URL (HTTPS)"
+  value       = aws_codecommit_repository.gitops.clone_url_http
+}
