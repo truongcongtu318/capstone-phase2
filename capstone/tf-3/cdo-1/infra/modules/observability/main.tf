@@ -135,8 +135,11 @@ resource "helm_release" "kube_prometheus_stack" {
             receiver        = "self-heal-receiver"
           }
           receivers = [
-            {
-              name = "self-heal-receiver"
+              {
+                name = "null"
+              },
+              {
+                name = "self-heal-receiver"
               webhook_configs = [
                 {
                   url           = local.alert_receiver_url
@@ -594,6 +597,8 @@ resource "aws_iam_role_policy" "ai_engine_irsa" {
 # =============================================================================
 # UPDATE: B? sung quy?n d?c Secrets Manager cho Worker IRSA
 # =============================================================================
+
+
 
 
 
