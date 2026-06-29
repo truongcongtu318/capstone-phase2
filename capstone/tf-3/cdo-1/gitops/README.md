@@ -6,7 +6,7 @@ Thư mục này chứa toàn bộ tài nguyên cấu hình Kubernetes, ArgoCD Ap
 
 Để đảm bảo khả năng mở rộng hệ thống theo chuẩn **GitOps & Kustomize Overlays**, cấu trúc thư mục được thiết kế chi tiết như sau:
 
-`	ext
+```text
 gitops/
 ├── argo-apps/                        # Cấu hình ArgoCD App-of-Apps
 │   ├── root-application.yaml         # Application gốc quản lý toàn bộ các ứng dụng con
@@ -41,7 +41,7 @@ gitops/
     ├── queue-backlog-stress.sh       # Script tạo tải ảo giả lập nghẽn SQS Queue
     ├── network-blockade.sh           # Script giả lập đứt kết nối giữa Worker và AI Engine
     └── SLO_validation_report.md      # Template báo cáo chỉ số SLO và nghiệm thu tự chữa lành
-`
+```
 
 ---
 
@@ -50,13 +50,12 @@ gitops/
 Nhóm **Sub-team 3** chịu trách nhiệm cấu hình và thực thi tuyệt đối các quy định bảo mật mạng và chính sách nhập cụm (Admission Policies):
 
 ### 1. Phân vùng mạng cô lập (NetworkPolicies)
-*   **AI Engine Isolation (i-engine-netpolicy.yaml):** 
-    Container AI Engine là tài nguyên nhạy cảm (giao tiếp trực tiếp với AWS Bedrock). Bắt buộc phải khóa cứng NetworkPolicy: block toàn bộ Ingress/Egress từ các namespaces hoặc pods khác, **chỉ cho phép** kết nối Ingress đi vào Port 8080 của AI Engine từ các Pods gán nhãn pp=sqs-worker và pp=webhook-receiver trong namespace self-heal-system.
+*   **AI Engine Isolation (ai-engine-netpolicy.yaml):**
+    Container AI Engine là tài nguyên nhạy cảm (giao tiếp trực tiếp với AWS Bedrock). Bắt buộc phải khóa cứng NetworkPolicy: block toàn bộ Ingress/Egress từ các namespaces hoặc pods khác, **chỉ cho phép** kết nối Ingress đi vào Port 8080 của AI Engine từ các Pods gán nhãn `app=sqs-worker` và `app=webhook-receiver` trong namespace `self-heal-system`.
 *   **Webhook Isolation (webhook-netpolicy.yaml):**
     Webhook Receiver mở Port 8443 để tiếp nhận Alert payload. Ingress NetworkPolicy chỉ cho phép traffic đi vào Port này từ cụm IP của Prometheus/Alertmanager (hoặc ingress controller).
 
-### 2. Kyverno Admission Guardrails (
-estrict-mutations.yaml)
+### 2. Kyverno Admission Guardrails (restrict-mutations.yaml)
 Hệ thống tự chữa lành có tính năng tự động vá lỗi (Fast Lane), cho phép Worker sửa trực tiếp thông số EKS qua API Client. Để tránh lạm dụng quyền và bảo vệ an toàn hệ thống, cấu hình Kyverno ClusterPolicy bắt buộc phải chặn đứng mọi hành động cập nhật tài nguyên từ Worker, **ngoại trừ** hai thông số duy nhất sau được phép thay đổi:
 1.  spec.replicas (Khi scale-up xử lý hàng chờ).
 2.  spec.template.spec.containers[*].resources.limits (Khi nâng cấu hình khắc phục lỗi OOMKilled).
@@ -70,15 +69,14 @@ Bất kỳ hành động sửa đổi cấu hình K8s nào khác (ví dụ: thay
 **Member 9 (QA, Chaos & Validation Lead)** chịu trách nhiệm thiết kế, duy trì và thực thi các bài kiểm thử chaos nằm tại thư mục gitops/tests-chaos/. Các kịch bản chaos bao gồm:
 
 ### 1. Giả lập OOMKilled (oom-simulator.sh):
-*   Sử dụng container chạy ứng dụng ngốn RAM (như stress-ng) deploy vào namespaces tenant (	enant-payment hoặc 	enant-checkout) nhằm cưỡng ép hệ sinh thái Kubernetes bắn alert PodOOMKilled. 
+*   Sử dụng container chạy ứng dụng ngốn RAM (như stress-ng) deploy vào namespaces tenant (`tenant-payment` hoặc `tenant-checkout`) nhằm cưỡng ép hệ sinh thái Kubernetes bắn alert PodOOMKilled.
 *   **Mục tiêu validation:** Kiểm tra xem Webhook có lock thành công, SQS nhận tin nhắn và Worker có patch limits x1.5 lần của pod lỗi lên EKS và CodeCommit đúng SLO hay không.
 
 ### 2. Mô phỏng SQS Queue Backlog (queue-backlog-stress.sh):
 *   Tự động gửi liên tục hàng nghìn alert giả lập vào SQS Queue để tạo backlog lớn.
 *   **Mục tiêu validation:** Kiểm tra Prometheus kích hoạt cảnh báo, Worker tự động trigger Argo Workflow để nâng replicas (Slow Lane) khắc phục backlog, và tự động thu hẹp (scale-in) khi hàng chờ trống.
 
-### 3. Đứt kết nối mạng AI Engine (
-etwork-blockade.sh):
+### 3. Đứt kết nối mạng AI Engine (network-blockade.sh):
 *   Sử dụng NetworkPolicy tạm thời block cổng 8080 của AI Engine hoặc ngắt giao tiếp của SQS Worker.
 *   **Mục tiêu validation:** Thử nghiệm phản ứng của **Circuit Breaker** (phải tự động ngắt mạch sau 3 lần lỗi liên tiếp, chuyển sang trạng thái cảnh báo khẩn cấp lên Slack/SNS để kỹ sư trực vận hành on-call nhảy vào).
 
@@ -93,8 +91,7 @@ etwork-blockade.sh):
     *   Xây dựng cấu trúc thư mục repo gitops/ theo chuẩn Kustomize Base/Overlays.
     *   Thiết lập cấu hình ArgoCD App-of-Apps (Root Application và các Child Applications).
     *   Viết các Kubernetes NetworkPolicies cô lập lưu lượng mạng cho Webhook và AI Engine.
-    *   Xây dựng chính sách bảo mật Kyverno ClusterPolicy 
-estrict-mutations.yaml khóa quyền API Server.
+    *   Xây dựng chính sách bảo mật Kyverno ClusterPolicy `restrict-mutations.yaml` khóa quyền API Server.
     *   Xây dựng pipeline gitops-pipeline.yml thực hiện static check (kube-linter/Kubeval) đối với K8s manifests và tự động sync/push code sang AWS CodeCommit repository.
 *   **Đầu ra (Deliverables):**
     *   Thư mục gitops/argo-apps/ và gitops/manifests/ hoàn chỉnh chạy được trên ArgoCD.
@@ -140,7 +137,7 @@ estrict-mutations.yaml khóa quyền API Server.
 
 ### 1. Khi chưa có EKS Cluster của Sub-team 1
 *   **Vấn đề:** Không có Kubernetes cluster để test YAML manifest, NetworkPolicies và Kyverno policies.
-*   **Giải pháp:** 
+*   **Giải pháp:**
     *   Tự dựng cụm **Kind** (Kubernetes in Docker) hoặc **Minikube** cục bộ trên máy cá nhân.
     *   Cài đặt ArgoCD và Prometheus Stack lên cụm local để kiểm tra cú pháp YAML, kiểm nghiệm tính năng Admission Control của Kyverno và luồng đồng bộ Argo CD Sync Waves.
     *   Mọi check-in code YAML phải chạy qua pipeline kiểm thử tự động `gitops-pipeline.yml` (sử dụng `kube-linter` và `pluto` để quét lỗi cấu trúc/version API lỗi thời).
@@ -176,15 +173,15 @@ estrict-mutations.yaml khóa quyền API Server.
 
 ## 🌀 Hướng dẫn Tự động hóa Tải tay (Manual Mirror Script)
 
-Để hỗ trợ công việc tải tay ảnh Docker của **Member 8 & 9 (Sub-team 3)** và **Member 3 (Sub-team 1)**, một script tự động hóa toàn bộ quá trình docker pull -> ws ecr create-repository -> docker tag -> docker push đã được viết và lưu tại:
+Để hỗ trợ công việc tải tay ảnh Docker của **Member 8 & 9 (Sub-team 3)** và **Member 3 (Sub-team 1)**, một script tự động hóa toàn bộ quá trình docker pull -> aws ecr create-repository -> docker tag -> docker push đã được viết và lưu tại:
 👉 gitops/mirror-images.sh
 
 ### Hướng dẫn chạy script:
 1. Máy chạy cần có quyền Admin/PowerUser AWS (đặc biệt là quyền ECR Write: ecr:CreateRepository, ecr:BatchCheckLayerAvailability, ecr:PutImage, ecr:InitiateLayerUpload...).
 2. Đảm bảo docker daemon đang chạy cục bộ trên máy.
 3. Cấp quyền thực thi và chạy:
-   `ash
+   ```bash
    chmod +x gitops/mirror-images.sh
    ./gitops/mirror-images.sh
-   `
+   ```
 Script sẽ tự động quét, kéo và tạo repo đầy đủ cho 19 images hệ thống và chaos testing trên vùng ECR Private 474013238625.dkr.ecr.us-east-1.amazonaws.com!
