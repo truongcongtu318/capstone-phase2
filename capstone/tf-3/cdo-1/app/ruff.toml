@@ -1,0 +1,4 @@
+[lint]
+ignore = [
+    "E402",  # Module-level import not at top of file — required by sys.path manipulation for test isolation
+]

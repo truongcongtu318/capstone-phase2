@@ -32,3 +32,8 @@ output "sns_topic_arn" {
   description = "ARN của SNS Topic để leo thang cảnh báo"
   value       = aws_sns_topic.alerts_escalation.arn
 }
+
+output "ai_engine_irsa_role_arn" {
+  description = "IAM role ARN for AI Engine Bedrock"
+  value       = aws_iam_role.ai_engine_irsa.arn
+}
