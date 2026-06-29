@@ -14,13 +14,14 @@ locals {
 }
 
 # =============================================================================
-# CLOUDWATCH LOG GROUP — EKS Control Plane (AWS resource — no count, always planned)
+# CLOUDWATCH LOG GROUP — EKS Control Plane (AWS resource — skip in mock mode)
 # Tạo trước để tránh ResourceAlreadyExists khi EKS tự tạo cùng tên
 # =============================================================================
 
 resource "aws_cloudwatch_log_group" "eks_control_plane" {
+  count             = var.enabled ? 1 : 0
   name              = "/aws/eks/${var.cluster_name}/cluster"
-  retention_in_days = 30
+  retention_in_days = 90
   kms_key_id        = var.kms_observability_arn
 
   tags = local.module_tags
@@ -181,28 +182,31 @@ resource "helm_release" "kube_prometheus_stack" {
 }
 
 # =============================================================================
-# CLOUDWATCH LOG GROUP & STREAM — Kinesis Firehose error logging (AWS — no count)
+# CLOUDWATCH LOG GROUP & STREAM — Kinesis Firehose error logging (AWS — skip in mock mode)
 # =============================================================================
 
 resource "aws_cloudwatch_log_group" "firehose" {
+  count             = var.enabled ? 1 : 0
   name              = "/aws/kinesisfirehose/tf3-cdo1-sandbox-audit-stream"
-  retention_in_days = 30
+  retention_in_days = 90
   kms_key_id        = var.kms_observability_arn
 
   tags = local.module_tags
 }
 
 resource "aws_cloudwatch_log_stream" "firehose" {
+  count          = var.enabled ? 1 : 0
   name           = "S3Delivery"
-  log_group_name = aws_cloudwatch_log_group.firehose.name
+  log_group_name = aws_cloudwatch_log_group.firehose[0].name
 }
 
 # =============================================================================
-# IAM ROLE — Kinesis Firehose delivery role (AWS — no count)
+# IAM ROLE — Kinesis Firehose delivery role (AWS — skip in mock mode)
 # =============================================================================
 
 resource "aws_iam_role" "firehose" {
-  name = "${var.name_prefix}-${var.environment}-firehose-role"
+  count = var.enabled ? 1 : 0
+  name  = "${var.name_prefix}-${var.environment}-firehose-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -221,8 +225,9 @@ resource "aws_iam_role" "firehose" {
 }
 
 resource "aws_iam_role_policy" "firehose" {
-  name = "firehose-s3-kms-cw"
-  role = aws_iam_role.firehose.id
+  count = var.enabled ? 1 : 0
+  name  = "firehose-s3-kms-cw"
+  role  = aws_iam_role.firehose[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -260,8 +265,8 @@ resource "aws_iam_role_policy" "firehose" {
           "logs:CreateLogStream",
         ]
         Resource = [
-          aws_cloudwatch_log_group.firehose.arn,
-          "${aws_cloudwatch_log_group.firehose.arn}:*",
+          aws_cloudwatch_log_group.firehose[0].arn,
+          "${aws_cloudwatch_log_group.firehose[0].arn}:*",
         ]
       },
     ]
@@ -269,22 +274,23 @@ resource "aws_iam_role_policy" "firehose" {
 }
 
 # =============================================================================
-# KINESIS FIREHOSE DELIVERY STREAM — tf3-cdo1-sandbox-audit-stream (AWS — no count)
+# KINESIS FIREHOSE DELIVERY STREAM — tf3-cdo1-sandbox-audit-stream (AWS — skip in mock mode)
 # =============================================================================
 
 resource "aws_kinesis_firehose_delivery_stream" "audit_stream" {
+  count       = var.enabled ? 1 : 0
   name        = "tf3-cdo1-sandbox-audit-stream"
   destination = "extended_s3"
 
   extended_s3_configuration {
-    role_arn    = aws_iam_role.firehose.arn
+    role_arn    = aws_iam_role.firehose[0].arn
     bucket_arn  = var.s3_audit_bucket_arn
     kms_key_arn = var.kms_audit_arn
 
     cloudwatch_logging_options {
       enabled         = true
-      log_group_name  = aws_cloudwatch_log_group.firehose.name
-      log_stream_name = aws_cloudwatch_log_stream.firehose.name
+      log_group_name  = aws_cloudwatch_log_group.firehose[0].name
+      log_stream_name = aws_cloudwatch_log_stream.firehose[0].name
     }
   }
 
@@ -382,7 +388,7 @@ resource "aws_iam_role_policy" "webhook_irsa" {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
+        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-app-idempotency-lock"
       },
       {
         Sid    = "KMSAccess"
@@ -440,7 +446,7 @@ resource "aws_iam_role_policy" "worker_irsa" {
           "firehose:PutRecord",
           "firehose:PutRecordBatch",
         ]
-        Resource = [aws_kinesis_firehose_delivery_stream.audit_stream.arn]
+        Resource = [aws_kinesis_firehose_delivery_stream.audit_stream[0].arn]
       },
       {
         Sid    = "KMSAccess"
@@ -483,8 +489,20 @@ resource "aws_iam_role_policy" "worker_irsa" {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
+        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-app-idempotency-lock"
       },
+      {
+        Sid    = "CodeCommitAccess"
+        Effect = "Allow"
+        Action = [
+          "codecommit:GitPull",
+          "codecommit:GitPush",
+          "codecommit:GetRepository",
+          "codecommit:GetBranch",
+          "codecommit:GetCommit"
+        ]
+        Resource = "*"
+      }
     ]
   })
 }
