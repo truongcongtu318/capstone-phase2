@@ -1,0 +1,16 @@
+# ============================================================
+# values.yaml - gitops/tenant-payment/order-service
+# Dùng bởi sqs-worker khi commit lại sau khi patch memory limit.
+# Worker path pattern: gitops/{namespace}/{deployment}/values.yaml
+#
+# NOTE: File này cần tồn tại trong CodeCommit repo tại đường dẫn:
+#   gitops/tenant-payment/order-service/values.yaml
+# Hiện đang commit vào GitHub repo để tracking; khi CodeCommit setup
+# xong thì mirror hoặc tạo lại tại repo CodeCommit.
+# ============================================================
+
+memory_limit_mb: 256
+memory_request_mb: 128
+cpu_limit: "500m"
+cpu_request: "100m"
+replicas: 1
