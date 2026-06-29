@@ -369,7 +369,7 @@ resource "kubernetes_manifest" "alb_internal_params" {
   }
 
   # Computed fields để Terraform không validate CRD tồn tại lúc plan
-  computed_fields = ["metadata.name", "spec"]
+  computed_fields = ["*"]
 
   depends_on = [helm_release.lbc]
 }
