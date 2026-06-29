@@ -14,8 +14,8 @@ spec:
   project: default
   source:
     # Đã đổi từ GitHub (test) → CodeCommit (production) theo Contract K8s
-    repoURL: https://github.com/truongcongtu318/capstone-phase2.git
-    targetRevision: team-3
+    repoURL: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
+    targetRevision: main
     path: capstone/tf-3/cdo-1/gitops/security-policies
   destination:
     server: https://kubernetes.default.svc
