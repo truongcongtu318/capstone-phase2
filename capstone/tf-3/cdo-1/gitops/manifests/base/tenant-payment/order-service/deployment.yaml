@@ -38,6 +38,9 @@ spec:
           # Dùng nginx mirror từ ECR để không cần NAT gateway
           # Thay bằng image order-service thật nếu có
           image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/mirror/nginx:1.25
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
           ports:
             - containerPort: 8080
           resources:
