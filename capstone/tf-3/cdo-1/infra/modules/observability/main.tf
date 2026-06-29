@@ -59,20 +59,24 @@ resource "helm_release" "kube_prometheus_stack" {
   chart      = "kube-prometheus-stack"
   namespace  = kubernetes_namespace.observability[0].metadata[0].name
   version    = "61.7.2"
+  timeout    = 600
 
   values = [
     yamlencode({
       fullnameOverride = "kube-prometheus-stack"
+      global = {
+        imageRegistry = local.ecr_registry
+      }
 
       prometheusOperator = {
         enabled = true
         image = {
-          repository = "${local.ecr_registry}/prometheus-operator/prometheus-operator"
+          repository = "prometheus-operator/prometheus-operator"
           tag        = "v0.74.0"
         }
         prometheusConfigReloader = {
           image = {
-            repository = "${local.ecr_registry}/prometheus-operator/prometheus-config-reloader"
+            repository = "prometheus-operator/prometheus-config-reloader"
             tag        = "v0.74.0"
           }
         }
@@ -97,7 +101,7 @@ resource "helm_release" "kube_prometheus_stack" {
           retention = "7d"
           replicas  = 1
           image = {
-            repository = "${local.ecr_registry}/prometheus/prometheus"
+            repository = "prometheus/prometheus"
             tag        = "v2.52.0"
           }
           serviceMonitorSelectorNilUsesHelmValues = false
@@ -115,7 +119,7 @@ resource "helm_release" "kube_prometheus_stack" {
         alertmanagerSpec = {
           replicas = 1
           image = {
-            repository = "${local.ecr_registry}/prometheus/alertmanager"
+            repository = "prometheus/alertmanager"
             tag        = "v0.27.0"
           }
         }
@@ -150,12 +154,12 @@ resource "helm_release" "kube_prometheus_stack" {
           type = "ClusterIP"
         }
         image = {
-          repository = "${local.ecr_registry}/grafana/grafana"
+          repository = "grafana/grafana"
           tag        = "10.4.3"
         }
         sidecar = {
           image = {
-            repository = "${local.ecr_registry}/kiwigrid/k8s-sidecar"
+            repository = "kiwigrid/k8s-sidecar"
             tag        = "1.27.4"
           }
           dashboards = {
@@ -170,7 +174,7 @@ resource "helm_release" "kube_prometheus_stack" {
       "kube-state-metrics" = {
         enabled = true
         image = {
-          repository = "${local.ecr_registry}/kube-state-metrics/kube-state-metrics"
+          repository = "kube-state-metrics/kube-state-metrics"
           tag        = "v2.12.0"
         }
       }
@@ -178,7 +182,7 @@ resource "helm_release" "kube_prometheus_stack" {
       "prometheus-node-exporter" = {
         enabled = true
         image = {
-          repository = "${local.ecr_registry}/prometheus/node-exporter"
+          repository = "prometheus/node-exporter"
           tag        = "v1.8.1"
         }
       }
@@ -516,3 +520,10 @@ resource "aws_iam_role_policy" "worker_irsa" {
     ]
   })
 }
+
+
+
+
+
+
+
