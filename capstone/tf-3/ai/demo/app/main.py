@@ -49,21 +49,26 @@ def detect(
 ):
     """
     Dummy detect endpoint. Always returns a fixed anomaly.
+    Reads namespace/service from telemetry_window so _guard_ns() in worker passes.
     """
+    first = telemetry_window[0] if telemetry_window else {}
+    labels = first.get("labels", {})
+    ns = labels.get("namespace") or first.get("tenant_id", "tenant-payment")
+    service = first.get("service", "order-service")
     return {
         "anomaly_detected": True,
         "severity": 0.85,
         "anomaly_context": {
-            "target_service": "order-service",
+            "target_service": service,
             "suspected_fault_type": "database_connection_failure",
             "system": "E-COMMERCE",
-            "namespace": "production",
-            "deployment": "order-service",
+            "namespace": ns,
+            "deployment": service,
             "trigger_metric": "service_error_rate",
             "trigger_value": 0.15
         },
         "confidence": 0.92,
-        "reasoning": "Tỷ lệ lỗi của order-service (15%) vượt ngưỡng an toàn 5% đồng thời xuất hiện lỗi NullPointerException liên tục trong stack trace.",
+        "reasoning": "Tỷ lệ lỗi vượt ngưỡng an toàn 5%.",
         "correlation_id": correlation_id or "c1a2b3c4-d5e6-4f7g-8h9i-0j1k2l3m4n5o"
     }
 
@@ -81,7 +86,10 @@ def decide(
 ):
     """
     Dummy decide endpoint. Returns an action plan.
+    Echoes namespace from anomaly_context so _guard_ns() in worker passes.
     """
+    ns = anomaly_context.get("namespace", "tenant-payment")
+    service = anomaly_context.get("target_service", "order-service")
     return {
         "matched_runbook": "DatabaseConnectionRecoveryRunbook",
         "pattern_type": "urgent",
@@ -89,9 +97,9 @@ def decide(
             {
                 "step": 1,
                 "action": "PATCH_MEMORY_LIMIT",
-                "target": "deployment/order-service",
+                "target": f"deployment/{service}",
                 "params": {
-                    "namespace": "production",
+                    "namespace": ns,
                     "container": "main",
                     "memory_request_mb": 512,
                     "memory_limit_mb": 768
@@ -101,7 +109,7 @@ def decide(
         "blast_radius_config": {
             "max_pod_impact_pct": 25,
             "circuit_breaker_error_rate": 0.20,
-            "allowed_namespaces": ["production"]
+            "allowed_namespaces": [ns]
         },
         "verify_policy": {
             "window_seconds": 120,

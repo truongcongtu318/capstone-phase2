@@ -31,6 +31,10 @@ from src.config import settings
 from src import ai_client
 from src import circuit_breaker
 from src import patch_executor
+from src.metrics import (
+    start_metrics_server,
+    MESSAGES_PROCESSED, CB_SKIPS, EXECUTIONS, ESCALATIONS, ROLLBACKS,
+)
 from src.audit_logger import (
     log_incident_start,
     log_detect,
@@ -77,7 +81,9 @@ def _process_message(sqs_client, message) -> None:
         if circuit_breaker.is_open(tenant_id, namespace, service):
             reason = f"Circuit Breaker is OPEN for service '{service}' in namespace '{namespace}'. Skipping automatic recovery."
             logger.warning(reason)
+            CB_SKIPS.labels(tenant_id=tenant_id).inc()
             log_escalate(tenant_id, correlation_id, reason, service, settings.dry_run)
+            ESCALATIONS.labels(reason="CB_OPEN").inc()
             sqs_client.delete_message(QueueUrl=settings.sqs_queue_url, ReceiptHandle=receipt_handle)
             return
 
@@ -113,6 +119,7 @@ def _process_message(sqs_client, message) -> None:
 
         if not detect_resp.get("anomaly_detected"):
             logger.info("AI Engine did not detect any anomaly. Ending flow.")
+            MESSAGES_PROCESSED.labels(status="COMPLETED").inc()
             sqs_client.delete_message(QueueUrl=settings.sqs_queue_url, ReceiptHandle=receipt_handle)
             return
 
@@ -127,6 +134,8 @@ def _process_message(sqs_client, message) -> None:
             reason = "AI Engine decide returned empty action plan."
             logger.warning(reason)
             log_escalate(tenant_id, correlation_id, reason, service, settings.dry_run)
+            ESCALATIONS.labels(reason="EMPTY_PLAN").inc()
+            MESSAGES_PROCESSED.labels(status="FAILED").inc()
             sqs_client.delete_message(QueueUrl=settings.sqs_queue_url, ReceiptHandle=receipt_handle)
             return
 
@@ -138,6 +147,7 @@ def _process_message(sqs_client, message) -> None:
         action = action_item.get("action", "UNKNOWN")
         target = action_item.get("target", "UNKNOWN")
         pattern_type = decide_resp.get("pattern_type", "urgent")
+        lane = "slow" if pattern_type == "deferred" else "fast"
 
         log_execute_start(tenant_id, correlation_id, action, target, pattern_type, settings.dry_run)
 
@@ -147,12 +157,15 @@ def _process_message(sqs_client, message) -> None:
             tenant_id, correlation_id, exec_result.action, exec_result.target,
             exec_result.status, exec_result.execution_time_seconds, exec_result.error, settings.dry_run
         )
+        EXECUTIONS.labels(action=action, lane=lane, status=exec_result.status).inc()
 
         if exec_result.status == "FAILED":
             reason = f"Self-heal execution failed: {exec_result.error}"
             logger.error(reason)
             circuit_breaker.record_failure(tenant_id, namespace, service, correlation_id)
             log_escalate(tenant_id, correlation_id, reason, service, settings.dry_run)
+            ESCALATIONS.labels(reason="EXEC_FAILED").inc()
+            MESSAGES_PROCESSED.labels(status="FAILED").inc()
             sqs_client.delete_message(QueueUrl=settings.sqs_queue_url, ReceiptHandle=receipt_handle)
             return
 
@@ -195,12 +208,17 @@ def _process_message(sqs_client, message) -> None:
                 logger.warning(f"Initiating rollback for deployment {service}...")
                 log_rollback(tenant_id, correlation_id, "Verification failed, rolling back", {"pre_state": vars(snapshot)}, settings.dry_run)
                 rb_result = patch_executor.rollback(snapshot, correlation_id, settings.dry_run)
+                ROLLBACKS.labels(status=rb_result.status).inc()
                 if rb_result.status == "FAILED":
                     logger.error(f"Rollback failed: {rb_result.error}")
 
             log_escalate(tenant_id, correlation_id, reason, service, settings.dry_run)
+            ESCALATIONS.labels(reason="VERIFY_FAILED").inc()
+            MESSAGES_PROCESSED.labels(status="FAILED").inc()
         else:
             logger.info(f"Self-heal successfully completed and verified for service '{service}' in namespace '{namespace}'.")
+            status = "DRY_RUN" if settings.dry_run else "COMPLETED"
+            MESSAGES_PROCESSED.labels(status=status).inc()
 
         # Delete message from SQS upon successful completion of the self-heal attempt
         sqs_client.delete_message(QueueUrl=settings.sqs_queue_url, ReceiptHandle=receipt_handle)
@@ -212,8 +230,10 @@ def _process_message(sqs_client, message) -> None:
             try:
                 circuit_breaker.record_failure(tenant_id, namespace, service, correlation_id)
                 log_escalate(tenant_id, correlation_id, f"Unhandled exception: {e}", service, settings.dry_run)
+                ESCALATIONS.labels(reason="EXCEPTION").inc()
             except Exception as cb_err:
                 logger.error(f"Failed to record failure in circuit breaker: {cb_err}")
+        MESSAGES_PROCESSED.labels(status="FAILED").inc()
 
         # Xóa message tránh lặp vòng vô hạn (poison pill)
         try:
@@ -248,4 +268,6 @@ def poll_messages() -> None:
             time.sleep(5)
 
 if __name__ == "__main__":
+    start_metrics_server(9090)
+    logger.info("Prometheus metrics server started on port 9090 (/metrics)")
     poll_messages()

@@ -5,10 +5,12 @@ on:
     branches: [ main ]
     paths:
       - 'capstone/tf-3/cdo-1/app/**'
+      - 'capstone/tf-3/ai/demo/**'
   pull_request:
     branches: [ main ]
     paths:
       - 'capstone/tf-3/cdo-1/app/**'
+      - 'capstone/tf-3/ai/demo/**'
 
 permissions:
   id-token: write
@@ -38,14 +40,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install ruff pytest httpx fastapi uvicorn
           pip install -r capstone/tf-3/cdo-1/app/webhook-receiver/requirements.txt
-          if [ -f capstone/tf-3/cdo-1/app/sqs-worker/requirements.txt ]; then pip install -r capstone/tf-3/cdo-1/app/sqs-worker/requirements.txt; fi
+          pip install -r capstone/tf-3/cdo-1/app/sqs-worker/requirements.txt
+          pip install moto[dynamodb,sqs] jsonschema python-dotenv pyyaml \
+                      prometheus-fastapi-instrumentator prometheus-client
 
       - name: Run Ruff Linter
         run: ruff check capstone/tf-3/cdo-1/app/
 
       - name: Run Unit Tests
         run: |
-          python -m pytest capstone/tf-3/cdo-1/app/ --cov=capstone/tf-3/cdo-1/app/ --cov-fail-under=70
+          python -m pytest capstone/tf-3/cdo-1/app/ \
+            --cov=capstone/tf-3/cdo-1/app/ \
+            --cov-fail-under=70
 
   build-and-publish:
     name: Build & Push ECR
@@ -55,10 +61,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - app: 'webhook-receiver'
-            dir: 'webhook-receiver'
-          - app: 'self-heal-worker'
-            dir: 'sqs-worker'
+          - app: webhook-receiver
+            dir: capstone/tf-3/cdo-1/app/webhook-receiver
+            ecr_repo: tf-3-webhook-receiver
+          - app: self-heal-worker
+            dir: capstone/tf-3/cdo-1/app/sqs-worker
+            ecr_repo: tf-3-self-heal-worker
+          - app: ai-engine-demo
+            dir: capstone/tf-3/ai/demo/app
+            ecr_repo: tf-3-ai-engine-demo
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -69,24 +80,27 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::544011261607:role/tf3-cdo1-sandbox-github-ci-apply
+          role-to-assume: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-apply
           aws-region: us-east-1
 
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Copy shared security.py for sqs-worker
+        if: matrix.app == 'self-heal-worker'
+        run: |
+          cp capstone/tf-3/cdo-1/app/webhook-receiver/src/security.py \
+             capstone/tf-3/cdo-1/app/sqs-worker/src/security.py
+
       - name: Build, Tag and Push Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: tf-3-${{ matrix.app }}
+          ECR_REPOSITORY: ${{ matrix.ecr_repo }}
           IMAGE_TAG: sha-${{ github.sha }}
         run: |
-          if [ "${{ matrix.app }}" = "self-heal-worker" ]; then
-            cp capstone/tf-3/cdo-1/app/webhook-receiver/src/security.py capstone/tf-3/cdo-1/app/sqs-worker/src/security.py
-          fi
-          cd capstone/tf-3/cdo-1/app/${{ matrix.dir }}
+          cd ${{ matrix.dir }}
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          # Ghi đè file manifest bằng image digest mới vừa build để ArgoCD sync
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "Built $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"

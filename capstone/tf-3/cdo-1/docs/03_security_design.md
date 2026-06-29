@@ -77,7 +77,7 @@ truy cập workload được biểu diễn bằng SG reference khi có thể.
 | Role | Used by | Permissions (least-privilege) |
 |---|---|---|
 | `irsa-patch-receiver` | Receiver ServiceAccount | Đọc request configuration, ghi sanitized request metadata, không có quyền mutation trên infrastructure resource |
-| `irsa-patch-controller` | Controller ServiceAccount | Đọc approved patch intent, tạo thay đổi Kubernetes có giới hạn trong namespace được sở hữu, gọi STS, đọc Secrets Manager entry cần thiết |
+| `irsa-self-heal-executor` | Controller ServiceAccount | Đọc approved patch intent, tạo thay đổi Kubernetes có giới hạn trong namespace được sở hữu, gọi STS, đọc Secrets Manager entry cần thiết |
 | `irsa-audit-writer` | Audit Writer ServiceAccount | `firehose:PutRecord`, `firehose:PutRecordBatch`, ghi S3 có scope qua Firehose delivery role, KMS encrypt với audit key |
 | `irsa-gitops-engine` | ArgoCD / GitOps Engine ServiceAccount | `codecommit:GitPull` và read-only CodeCommit API access chỉ cho CDO repository |
 | `irsa-git-commit-engine` | Git Commit Engine ServiceAccount | `codecommit:GitPull`, `codecommit:GitPush`, `codecommit:GetRepository`, `codecommit:CreateCommit` chỉ trên CDO CodeCommit repo; không có quyền mutate Kubernetes trực tiếp |
@@ -93,7 +93,7 @@ AI Engine được self-host trong EKS namespace `self-heal-system` từ Docker 
 | Role | Subject | Verbs | Resources | Namespace scope |
 |---|---|---|---|---|
 | `patch-receiver-readonly` | `sa/patch-receiver` | `get`, `list` | `configmaps`, `services`, `endpoints` | `self-heal-system` |
-| `patch-controller-ns-editor` | `sa/patch-controller` | `get`, `list`, `watch`, `patch`, `update` | `deployments`, `statefulsets`, `configmaps`, `horizontalpodautoscalers` | Tenant namespace do CDO sở hữu |
+| `self-heal-executor-ns-editor` | `sa/self-heal-executor` | `get`, `list`, `watch`, `patch`, `update` | `deployments`, `statefulsets`, `configmaps`, `horizontalpodautoscalers` | Tenant namespace do CDO sở hữu |
 | `audit-writer-runtime` | `sa/audit-writer` | `create` | `events` | `self-heal-system` |
 | `argocd-application-sync` | `sa/argocd-application-controller` | `get`, `list`, `watch`, `patch`, `update`, `create` | Chỉ resource được khai báo cho application | Namespace được liệt kê trong ArgoCD AppProject |
 | `karpenter-controller` | `sa/karpenter` | `get`, `list`, `watch`, `create`, `delete` | `nodes`, `nodeclaims`, `nodepools`, `events` | Cluster-scoped khi Karpenter yêu cầu |
@@ -102,7 +102,7 @@ AI Engine được self-host trong EKS namespace `self-heal-system` từ Docker 
 RBAC không cấp `cluster-admin` cho CDO workload. Việc mutation tenant bị giới hạn
 trong các namespace được gán rõ cho CDO, và cross-tenant mutation bị chặn bằng
 namespace scope, admission policy và giới hạn destination trong ArgoCD
-AppProject. Để triệt tiêu rủi ro leo thang đặc quyền (khi token patch-controller bị compromise), hệ thống cấu hình **K8s Admission Controller (Kyverno Mutating/Validating Webhook)** giới hạn cứng: chỉ cho phép patch các trường `spec.replicas` và `spec.template.spec.containers[*].resources` của deployment. Mọi request patch các trường nhạy cảm khác (như image tag hay privileged security context) đều bị Admission Controller chặn ngay ở API Server mức hạ tầng.
+AppProject. Để triệt tiêu rủi ro leo thang đặc quyền (khi token self-heal-executor bị compromise), hệ thống cấu hình **K8s Admission Controller (Kyverno Mutating/Validating Webhook)** giới hạn cứng: chỉ cho phép patch các trường `spec.replicas` và `spec.template.spec.containers[*].resources` của deployment. Mọi request patch các trường nhạy cảm khác (như image tag hay privileged security context) đều bị Admission Controller chặn ngay ở API Server mức hạ tầng.
 
 - Namespace `observability` là platform-critical namespace. AI/self-heal action không được patch/delete trực tiếp các workload trong namespace này. Prometheus/AlertManager chỉ đóng vai trò phát hiện và gửi alert, không phải target remediation.
 
@@ -262,7 +262,7 @@ Ví dụ audit event:
   "severity": "SECURITY",
   "correlation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
   "tenant_id": "d3b07384-d113-495f-9f58-20d18d357d75",
-  "actor": "arn:aws:sts::111122223333:assumed-role/irsa-patch-controller/session",
+  "actor": "arn:aws:sts::111122223333:assumed-role/irsa-self-heal-executor/session",
   "action_type": "K8S_MUTATION",
   "resource_ref": "deployment/tenant-payment/api",
   "decision": "POLICY_BLOCKED",

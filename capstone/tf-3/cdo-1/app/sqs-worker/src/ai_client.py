@@ -11,6 +11,7 @@ import httpx
 import jsonschema
 from typing import Dict, Any, List, Optional
 from src.config import settings
+from src.metrics import AI_CALL_DURATION, AI_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +118,9 @@ def _send_request(
 
     for attempt in range(max_retries + 1):
         try:
-            with httpx.Client(timeout=10.0) as client:
-                response = client.post(url, json=body, headers=headers)
+            with AI_CALL_DURATION.labels(endpoint=endpoint).time():
+                with httpx.Client(timeout=10.0) as client:
+                    response = client.post(url, json=body, headers=headers)
 
             status_code = response.status_code
             if status_code == 200:
@@ -135,23 +137,29 @@ def _send_request(
             # Error mapping §3.3
             if status_code == 400:
                 logger.error(f"AI Client 400 Bad Request on {endpoint}: {response.text}")
+                AI_ERRORS.labels(endpoint=endpoint, status_code="400").inc()
                 raise AIClientError(400, response.text, retryable=False)
             elif status_code == 403:
                 logger.error(f"AI Client 403 Tenant Mismatch on {endpoint}: {response.text}")
+                AI_ERRORS.labels(endpoint=endpoint, status_code="403").inc()
                 raise AIClientError(403, response.text, retryable=False)
             elif status_code == 409:
                 logger.warning(f"AI Client 409 Idempotency Conflict on {endpoint}: {response.text}")
+                AI_ERRORS.labels(endpoint=endpoint, status_code="409").inc()
                 raise AIClientError(409, response.text, retryable=False)
             elif status_code == 429:
                 retry_after_val = response.headers.get("Retry-After")
                 retry_after = int(retry_after_val) if retry_after_val and retry_after_val.isdigit() else 5
                 logger.warning(f"AI Client 429 Rate Limited on {endpoint}. Retry after {retry_after}s: {response.text}")
+                AI_ERRORS.labels(endpoint=endpoint, status_code="429").inc()
                 raise AIClientError(429, response.text, retryable=False, retry_after=retry_after)
             elif status_code == 503:
                 logger.error(f"AI Client 503 Service Unavailable on {endpoint}: {response.text}")
+                AI_ERRORS.labels(endpoint=endpoint, status_code="503").inc()
                 raise AIClientError(503, response.text, retryable=False)
             elif status_code == 500:
                 logger.warning(f"AI Client 500 on {endpoint} (Attempt {attempt+1}/{max_retries+1}): {response.text}")
+                AI_ERRORS.labels(endpoint=endpoint, status_code="500").inc()
                 if attempt < max_retries:
                     sleep_time = 1 if attempt == 0 else 3
                     time.sleep(sleep_time)
@@ -160,6 +168,7 @@ def _send_request(
                     raise AIClientError(500, response.text, retryable=False)
             else:
                 logger.error(f"AI Client unexpected status {status_code} on {endpoint}: {response.text}")
+                AI_ERRORS.labels(endpoint=endpoint, status_code=str(status_code)).inc()
                 raise AIClientError(status_code, response.text, retryable=False)
 
         except httpx.RequestError as exc:

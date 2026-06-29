@@ -2,8 +2,10 @@
 import os
 import sys
 
-# Thiết lập các biến môi trường mặc định cho tests
+# Thiết lập các biến môi trường mặc định cho tests (giá trị local/mock)
 os.environ.setdefault("SQS_QUEUE_URL", "http://localhost:4566/000000000000/alert-queue")
+os.environ.setdefault("SNS_TOPIC_ARN", "arn:aws:sns:us-east-1:000000000000:tf3-cdo1-sandbox-alerts-escalation")
+os.environ.setdefault("AI_ENGINE_URL", "http://localhost:8080")
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "test")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")

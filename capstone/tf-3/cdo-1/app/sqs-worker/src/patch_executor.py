@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-import json, logging, os, subprocess, tempfile, time
+import json
+import logging
+import os
+import subprocess
+import tempfile
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -57,7 +62,8 @@ def _guard_ns(ns: str) -> None:
 def _argocd(method: str, path: str, body: dict | None = None, dry_run: bool = False) -> None:
     """Gọi ArgoCD REST API. Nếu dry_run=True chỉ log."""
     if dry_run:
-        log.info("[DRY_RUN] argocd %s %s", method.upper(), path); return
+        log.info("[DRY_RUN] argocd %s %s", method.upper(), path)
+        return
     import httpx
     url = f"{ARGOCD_URL}{path}"
     headers = {"Authorization": f"Bearer {ARGOCD_TOKEN}", "Content-Type": "application/json"}
@@ -83,8 +89,10 @@ def _argocd_resume(app: str, dry_run: bool) -> None:
 def _k8s():
     """Trả về AppsV1Api client dùng in-cluster config (IRSA). Fallback kubeconfig khi local."""
     from kubernetes import client as kc, config as cfg
-    try: cfg.load_incluster_config()
-    except Exception: cfg.load_kube_config()
+    try:
+        cfg.load_incluster_config()
+    except Exception:
+        cfg.load_kube_config()
     return kc.AppsV1Api()
 
 
@@ -105,13 +113,19 @@ def _read_deployment(ns: str, name: str) -> dict:
 
 def _mi(value: str | None) -> int | None:
     """Parse K8s memory string → MB.  "512Mi"→512, "2Gi"→2048, "1G"→1000, None→None."""
-    if not value: return None
+    if not value:
+        return None
     v = value.strip()
-    if v.endswith("Gi"): return int(float(v[:-2]) * 1024)
-    if v.endswith("Mi"): return int(v[:-2])
-    if v.endswith("Ki"): return max(1, int(v[:-2]) // 1024)
-    if v.endswith("G"):  return int(float(v[:-1]) * 1000)   # bare G (decimal)
-    if v.endswith("M"):  return int(v[:-1])                 # bare M (decimal)
+    if v.endswith("Gi"):
+        return int(float(v[:-2]) * 1024)
+    if v.endswith("Mi"):
+        return int(v[:-2])
+    if v.endswith("Ki"):
+        return max(1, int(v[:-2]) // 1024)
+    if v.endswith("G"):
+        return int(float(v[:-1]) * 1000)
+    if v.endswith("M"):
+        return int(v[:-1])
     return None
 
 
@@ -130,7 +144,8 @@ def _patch_body(action: str, params: dict, container: str) -> dict:
     """
     if action == "PATCH_MEMORY_LIMIT":
         ml = params.get("memory_limit_mb")
-        if not ml: raise ValueError("PATCH_MEMORY_LIMIT cần 'memory_limit_mb'")
+        if not ml:
+            raise ValueError("PATCH_MEMORY_LIMIT cần 'memory_limit_mb'")
         res: dict = {"limits": {"memory": _k8s_mem(ml)}}
         if mr := params.get("memory_request_mb"):
             res["requests"] = {"memory": _k8s_mem(mr)}
@@ -138,7 +153,8 @@ def _patch_body(action: str, params: dict, container: str) -> dict:
 
     if action == "SCALE_REPLICAS":
         r = params.get("replicas")
-        if r is None: raise ValueError("SCALE_REPLICAS cần 'replicas'")
+        if r is None:
+            raise ValueError("SCALE_REPLICAS cần 'replicas'")
         return {"spec": {"replicas": int(r)}}
 
     if action == "RESTART_DEPLOYMENT":
@@ -199,7 +215,8 @@ def _k8s_patch(ns: str, name: str, body: dict, dry_run: bool,
 def _git(args: list[str], cwd: str | None = None) -> str:
     """Chạy git command, trả stdout, raise nếu thất bại."""
     r = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
-    if r.returncode: raise RuntimeError(f"git {' '.join(args)}: {r.stderr.strip()}")
+    if r.returncode:
+        raise RuntimeError(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout.strip()
 
 
@@ -219,13 +236,15 @@ def _values_file(repo: str, ns: str, dep: str) -> str:
         f"{repo}/gitops/{ns}/{dep}.yaml",
         f"{repo}/apps/{ns}/{dep}/values.yaml",
     ]:
-        if os.path.exists(path): return path
+        if os.path.exists(path):
+            return path
     raise FileNotFoundError(f"Không tìm thấy values file cho {ns}/{dep}")
 
 
 def _apply_yaml(file: str, action: str, params: dict) -> None:
     """Sửa values.yaml theo action rồi ghi lại file."""
-    with open(file) as f: data = yaml.safe_load(f) or {}
+    with open(file) as f:
+        data = yaml.safe_load(f) or {}
 
     if action == "PATCH_MEMORY_LIMIT":
         r = data.setdefault("resources", {})
@@ -239,7 +258,8 @@ def _apply_yaml(file: str, action: str, params: dict) -> None:
     else:
         raise ValueError(f"Slow Lane không hỗ trợ action: {action!r}")
 
-    with open(file, "w") as f: yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
+    with open(file, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, allow_unicode=True)
 
 
 def _git_commit_push(repo: str, file: str, msg: str) -> str:
@@ -313,7 +333,8 @@ def execute(decide_response: dict, correlation_id: str, dry_run: bool = False) -
              correlation_id, decide_response.get("pattern_type"), matched_runbook, dry_run)
 
     try:
-        if not step: raise ValueError("action_plan rỗng")
+        if not step:
+            raise ValueError("action_plan rỗng")
         s      = step[0]
         action = s.get("action", "")
         target = s.get("target", "")
@@ -329,7 +350,8 @@ def execute(decide_response: dict, correlation_id: str, dry_run: bool = False) -
             if dry_run:
                 log.info("[DRY_RUN] slow_lane action=%s ns=%s dep=%s", action, ns, dep)
             else:
-                if not CC_REPO: raise EnvironmentError("CODECOMMIT_REPO_URL chưa set")
+                if not CC_REPO:
+                    raise EnvironmentError("CODECOMMIT_REPO_URL chưa set")
                 with tempfile.TemporaryDirectory(prefix="cdo-slow-") as tmp:
                     repo  = _git_clone_and_setup(tmp)
                     vfile = _values_file(repo, ns, dep)
@@ -391,7 +413,8 @@ def rollback(snapshot: PreStateSnapshot, correlation_id: str, dry_run: bool = Fa
                 body.setdefault("spec", {}).setdefault("template", {}) \
                     .setdefault("spec", {})["containers"] = \
                     [{"name": snapshot.container_name, "resources": res}]
-            if not body: raise ValueError("Snapshot không có field nào để rollback")
+            if not body:
+                raise ValueError("Snapshot không có field nào để rollback")
             _k8s_patch(snapshot.namespace, snapshot.deployment_name, body, dry_run)
             details = {"restored_memory_limit_mb": snapshot.memory_limit_mb,
                        "restored_replicas":        snapshot.replicas}
@@ -400,7 +423,8 @@ def rollback(snapshot: PreStateSnapshot, correlation_id: str, dry_run: bool = Fa
             if not snapshot.git_commit_sha:
                 raise ValueError("Slow Lane rollback cần git_commit_sha trong snapshot")
             if not dry_run:
-                if not CC_REPO: raise EnvironmentError("CODECOMMIT_REPO_URL chưa set")
+                if not CC_REPO:
+                    raise EnvironmentError("CODECOMMIT_REPO_URL chưa set")
                 with tempfile.TemporaryDirectory(prefix="cdo-rb-") as tmp:  # tự cleanup
                     repo = _git_clone_and_setup(tmp)
                     # git revert TỰ tạo commit → chỉ cần push, không add/commit thêm

@@ -1,9 +1,7 @@
 # 🧪 FastAPI & Idempotency Unit Tests
-import pytest
-import json
 import sys
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 # Clear cached src modules and set path specifically for webhook-receiver

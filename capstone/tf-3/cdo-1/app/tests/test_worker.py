@@ -5,9 +5,7 @@ import sys
 import os
 import time
 from unittest.mock import patch, MagicMock
-import httpx
 import json
-from datetime import datetime, timezone
 
 # Clear cached src modules and set path specifically for sqs-worker
 for mod in list(sys.modules.keys()):
