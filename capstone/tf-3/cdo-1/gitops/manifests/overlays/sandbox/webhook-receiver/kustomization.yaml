@@ -3,7 +3,7 @@
 # Sở hữu: Member 7
 #
 # ST2 Handoff: thêm images override để pin ECR image.
-# SHA tag "sha-PENDING" — cần ST2 cung cấp tag thật sau khi CI build.
+# SHA tag "sha-10efdbc08b57ba7b15aabdaa3fb0487dc150b3e5" — cần ST2 cung cấp tag thật sau khi CI build.
 # Khi có SHA: đổi newTag thành giá trị thật, e.g. sha-a1b2c3d
 # ============================================================
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -13,4 +13,4 @@ resources:
 
 images:
   - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-webhook-receiver
-    newTag: sha-PENDING
+    newTag: sha-10efdbc08b57ba7b15aabdaa3fb0487dc150b3e5
