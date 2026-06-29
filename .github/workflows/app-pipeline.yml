@@ -95,6 +95,17 @@ jobs:
           cp capstone/tf-3/cdo-1/app/webhook-receiver/src/security.py \
              capstone/tf-3/cdo-1/app/sqs-worker/src/security.py
 
+      - name: Ensure ECR Repository Exists
+        env:
+          ECR_REPOSITORY: ${{ matrix.ecr_repo }}
+        run: |
+          aws ecr describe-repositories --repository-name "$ECR_REPOSITORY" --region us-east-1 >/dev/null 2>&1 || \
+            aws ecr create-repository \
+              --repository-name "$ECR_REPOSITORY" \
+              --region us-east-1 \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256
+
       - name: Build, Tag and Push Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
