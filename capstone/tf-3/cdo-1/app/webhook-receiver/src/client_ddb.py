@@ -23,11 +23,11 @@ def acquire_lock(lock_key: str, cooldown_seconds: int) -> bool:
         client.put_item(
             TableName=settings.dynamodb_table_name,
             Item={
-                "lock_key":        {"S": lock_key},
+                "LockID":          {"S": lock_key},
                 "expiration_time": {"N": str(expiration)},
                 "status":          {"S": "ACTIVE"}
             },
-            ConditionExpression="attribute_not_exists(lock_key) OR expiration_time < :now",
+            ConditionExpression="attribute_not_exists(LockID) OR expiration_time < :now",
             ExpressionAttributeValues={
                 ":now": {"N": str(now)}
             }

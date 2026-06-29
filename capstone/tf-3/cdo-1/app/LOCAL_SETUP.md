@@ -71,8 +71,8 @@ Chạy lệnh dưới đây **1 lần** sau mỗi lần khởi động lại Doc
 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
 aws dynamodb create-table \
   --table-name tf-3-aiops-idempotency-lock \
-  --attribute-definitions AttributeName=lock_key,AttributeType=S \
-  --key-schema AttributeName=lock_key,KeyType=HASH \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
   --billing-mode PAY_PER_REQUEST \
   --endpoint-url http://localhost:8000 \
   --region us-east-1
@@ -329,7 +329,7 @@ aws dynamodb scan \
   --endpoint-url http://localhost:8000 \
   --region us-east-1
 ```
-Thấy item với `lock_key` là SHA256 của `tenant-payment#tenant-payment#payment-api#PodOOMKilled`.
+Thấy item với `LockID` là SHA256 của `tenant-payment#tenant-payment#payment-api#PodOOMKilled`.
 
 ---
 
@@ -394,7 +394,7 @@ AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
 aws dynamodb put-item \
   --table-name tf-3-aiops-idempotency-lock \
   --item '{
-    "lock_key":            {"S": "cb#d3b07384-d113-495f-9f58-20d18d357d75#tenant-payment#payment-api"},
+    "LockID":              {"S": "cb#d3b07384-d113-495f-9f58-20d18d357d75#tenant-payment#payment-api"},
     "status":             {"S": "OPEN"},
     "failure_timestamps": {"SS": ["1751191200","1751192400","1751193600"]},
     "expiration_time":    {"N": "9999999999"}
@@ -434,7 +434,7 @@ INFO: audit_emit_ok event_type=ESCALATE
 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
 aws dynamodb delete-item \
   --table-name tf-3-aiops-idempotency-lock \
-  --key '{"lock_key": {"S": "cb#d3b07384-d113-495f-9f58-20d18d357d75#tenant-payment#payment-api"}}' \
+  --key '{"LockID": {"S": "cb#d3b07384-d113-495f-9f58-20d18d357d75#tenant-payment#payment-api"}}' \
   --endpoint-url http://localhost:8000 \
   --region us-east-1
 ```
@@ -500,7 +500,7 @@ aws dynamodb scan \
   --output json | python3 -m json.tool
 ```
 
-Mỗi item là 1 lock (idempotency) hoặc CB state. Field `lock_key`:
+Mỗi item là 1 lock (idempotency) hoặc CB state. Field `LockID`:
 - Bắt đầu bằng `cb#` → Circuit Breaker entry
 - Không có prefix → Idempotency lock (SHA256 của `tenant#namespace#service#alertname`)
 
