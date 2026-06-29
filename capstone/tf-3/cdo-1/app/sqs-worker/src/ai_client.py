@@ -77,7 +77,7 @@ VERIFY_SCHEMA = {
         "regression_detected": {"type": "boolean"},
         "next_action": {"type": "string", "enum": ["DONE", "RETRY", "ROLLBACK", "ESCALATE"]}
     },
-    "required": ["next_action"]
+    "required": ["next_action", "success"]
 }
 
 # ---------------------------------------------------------------------------
@@ -124,36 +124,6 @@ def _send_request(
             if status_code == 200:
                 resp_json = response.json()
                 
-                # Dynamic translation to support running with the dummy AI Engine local mock
-                if endpoint == "/v1/detect":
-                    telemetry = body.get("telemetry_window", [])
-                    if telemetry:
-                        real_service = telemetry[0].get("service")
-                        real_ns = telemetry[0].get("labels", {}).get("namespace")
-                        if resp_json.get("anomaly_context"):
-                            ctx = resp_json["anomaly_context"]
-                            if ctx.get("namespace") == "production":
-                                ctx["namespace"] = real_ns
-                            if ctx.get("target_service") == "order-service":
-                                ctx["target_service"] = real_service
-                            if ctx.get("deployment") == "order-service":
-                                ctx["deployment"] = real_service
-                elif endpoint == "/v1/decide":
-                    ctx = body.get("anomaly_context", {})
-                    real_service = ctx.get("target_service")
-                    real_ns = ctx.get("namespace")
-                    if real_service and real_ns:
-                        if resp_json.get("action_plan"):
-                            for step in resp_json["action_plan"]:
-                                if step.get("target") == "deployment/order-service":
-                                    step["target"] = f"deployment/{real_service}"
-                                if step.get("params") and step["params"].get("namespace") == "production":
-                                    step["params"]["namespace"] = real_ns
-                        if resp_json.get("blast_radius_config"):
-                            br = resp_json["blast_radius_config"]
-                            if br.get("allowed_namespaces") == ["production"]:
-                                br["allowed_namespaces"] = [real_ns]
-
                 # Validate response schema
                 try:
                     jsonschema.validate(instance=resp_json, schema=schema)
