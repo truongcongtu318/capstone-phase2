@@ -36,7 +36,7 @@ Cluster checks are still skipped because no reachable kubeconfig / cluster conte
 | ECR registry for chaos images | KNOWN | `544011261607.dkr.ecr.us-east-1.amazonaws.com` |
 | VPC CIDR | KNOWN | `10.42.0.0/16` |
 | Private subnet CIDRs / endpoint CIDRs | KNOWN | `10.42.0.0/20`, `10.42.16.0/20` |
-| SQS queue name | PARTIAL | monitoring uses `tf3-cdo1-sandbox-alert-queue` |
+| SQS queue name & URL | AVAILABLE_IN_INFRA_CODE | sqs_queue_id output in Terraform |
 | EKS cluster name | MISSING | `infra/environments/sandbox/compute` and `infra/modules/eks` are still TODO |
 | kubeconfig command | MISSING | no concrete `aws eks update-kubeconfig` command is present |
 | Member runtime AWS profile/role | MISSING | CI roles exist, but no member-local access role/profile is defined |
