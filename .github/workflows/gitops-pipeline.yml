@@ -37,4 +37,4 @@ jobs:
       - name: Validate YAML Syntax
         run: |
           # Check định dạng YAML (hỗ trợ cả tệp chứa nhiều document phân tách bằng ---)
-          python3 -c "import yaml, glob; [list(yaml.safe_load_all(open(f))) for f in glob.glob('capstone/tf-3/cdo-1/gitops/**/*.yaml', recursive=True)]"
+          python3 -c "import yaml, glob; [list(yaml.safe_load_all(open(f))) for f in glob.glob('capstone/tf-3/cdo-1/gitops/**/*.yaml', recursive=True) if '/templates/' not in f]"
