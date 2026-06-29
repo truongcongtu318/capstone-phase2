@@ -343,12 +343,10 @@ resource "helm_release" "lbc" {
 # =============================================================================
 
 resource "helm_release" "alb_internal_params" {
-  count      = var.enabled ? 1 : 0
-  name       = "alb-internal-params"
-  repository = "https://bedag.github.io/helm-charts/"
-  chart      = "raw"
-  version    = "0.2.5"
-  namespace  = "kube-system"
+  count     = var.enabled ? 1 : 0
+  name      = "alb-internal-params"
+  chart     = "${path.module}/raw-chart"
+  namespace = "kube-system"
 
   values = [
     yamlencode({
