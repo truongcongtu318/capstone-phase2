@@ -25,7 +25,9 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internal
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    # NOTE: Khi Sub-team 2 (Member 4) deploy app thật nghe HTTPS port 8443,
+    # đổi lại thành: alb.ingress.kubernetes.io/backend-protocol: HTTPS
     # TODO: điền certificate-arn thật khi Sub-team 1 cấp ACM cert
     # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:544011261607:certificate/<cert-id>
     alb.ingress.kubernetes.io/security-groups: sg-alb-internal

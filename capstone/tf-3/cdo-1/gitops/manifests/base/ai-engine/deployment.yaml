@@ -30,6 +30,8 @@ spec:
       serviceAccountName: ai-engine
       containers:
         - name: ai-engine
+          # PLACEHOLDER (sandbox): nginx:1.25 — EKS NAT-less runtime phải dùng
+          # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/nginx:1.25
           # TODO: đổi sang image ECR Private khi AI team build xong
           # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/ai-engine:<commit-sha>
           image: nginx:1.25

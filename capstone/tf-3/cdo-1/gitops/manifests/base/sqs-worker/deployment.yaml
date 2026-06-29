@@ -25,8 +25,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
-      # Đổi SA: self-heal-executor → patch-controller theo Contract K8s
-      serviceAccountName: patch-controller
+      # ServiceAccount đồng bộ với security-policies/rbac.yaml
+      serviceAccountName: self-heal-executor
       containers:
         - name: sqs-worker
           securityContext:
@@ -35,6 +35,8 @@ spec:
             capabilities:
               drop:
                 - ALL
+          # PLACEHOLDER (sandbox): busybox:1.36 — EKS NAT-less runtime phải dùng
+          # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/busybox:1.36
           # TODO: đổi sang image ECR Private khi Sub-team 2 build xong
           # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/sqs-worker:<commit-sha>
           image: busybox:1.36
