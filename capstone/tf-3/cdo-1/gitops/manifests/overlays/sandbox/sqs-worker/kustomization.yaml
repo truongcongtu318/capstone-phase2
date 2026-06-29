@@ -1,13 +1,15 @@
 # ============================================================
 # overlays/sandbox/sqs-worker/kustomization.yaml
-# Sở hữu: Member 7 — chưa patch gì, trỏ thẳng base/ để test sync.
+# Sở hữu: Member 7
+#
+# ST2 Handoff: thêm images override để pin ECR image.
+# SHA tag "sha-PENDING" — cần ST2 cung cấp tag thật sau khi CI build.
 # ============================================================
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../base/sqs-worker
-# patches:
-#   - path: patch-replicas.yaml
-#     target:
-#       kind: Deployment
-#       name: sqs-worker
+
+images:
+  - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-self-heal-worker
+    newTag: sha-PENDING

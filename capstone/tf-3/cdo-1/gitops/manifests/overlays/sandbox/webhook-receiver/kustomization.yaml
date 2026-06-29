@@ -2,17 +2,15 @@
 # overlays/sandbox/webhook-receiver/kustomization.yaml
 # Sở hữu: Member 7
 #
-# GIAI ĐOẠN HIỆN TẠI: chưa có patch nào, chỉ trỏ thẳng base/ để
-# ArgoCD sync được. Khi cần patch riêng cho sandbox (biến môi trường,
-# số replicas, image tag theo commit SHA), thêm patch-env.yaml vào
-# đây và uncomment phần patches dưới.
+# ST2 Handoff: thêm images override để pin ECR image.
+# SHA tag "sha-PENDING" — cần ST2 cung cấp tag thật sau khi CI build.
+# Khi có SHA: đổi newTag thành giá trị thật, e.g. sha-a1b2c3d
 # ============================================================
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../../base/webhook-receiver
-# patches:
-#   - path: patch-env.yaml
-#     target:
-#       kind: Deployment
-#       name: webhook-receiver
+
+images:
+  - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-webhook-receiver
+    newTag: sha-PENDING
