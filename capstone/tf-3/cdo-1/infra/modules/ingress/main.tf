@@ -241,6 +241,16 @@ data "aws_iam_policy_document" "lbc" {
     ]
     resources = ["*"]
   }
+
+  # ACM permissions — needed for HTTPS Ingress to list/describe certificates
+  statement {
+    effect = "Allow"
+    actions = [
+      "acm:DescribeCertificate",
+      "acm:ListCertificates",
+    ]
+    resources = ["*"]
+  }
 }
 
 # =============================================================================
