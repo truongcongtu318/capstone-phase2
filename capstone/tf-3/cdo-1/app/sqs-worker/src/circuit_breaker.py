@@ -40,7 +40,7 @@ def is_open(tenant_id: str, namespace: str, service: str) -> bool:
     try:
         response = client.get_item(
             TableName=settings.dynamodb_table_name,
-            Key={"lock_key": {"S": key}}
+            Key={"LockID": {"S": key}}
         )
         item = response.get("Item")
         if item and item.get("status", {}).get("S") == "OPEN":
@@ -65,7 +65,7 @@ def record_failure(tenant_id: str, namespace: str, service: str, correlation_id:
         # Lấy thông tin circuit breaker hiện tại từ DynamoDB
         response = client.get_item(
             TableName=settings.dynamodb_table_name,
-            Key={"lock_key": {"S": key}}
+            Key={"LockID": {"S": key}}
         )
         item = response.get("Item")
 
@@ -89,7 +89,7 @@ def record_failure(tenant_id: str, namespace: str, service: str, correlation_id:
         expiration = now + 86400
 
         item_data = {
-            "lock_key": {"S": key},
+            "LockID": {"S": key},
             "status": {"S": status},
             "failure_timestamps": {"SS": [str(f) for f in failures]},
             "expiration_time": {"N": str(expiration)}
