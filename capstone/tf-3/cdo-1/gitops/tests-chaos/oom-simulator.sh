@@ -27,7 +27,6 @@ spec:
   containers:
     - name: stress-ng
       image: ${IMAGE}
-      command: ["stress-ng"]
       args: ["--vm", "1", "--vm-bytes", "${VM_BYTES}", "--vm-keep", "--timeout", "${TIMEOUT}"]
       resources:
         limits:

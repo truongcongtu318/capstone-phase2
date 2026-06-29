@@ -40,7 +40,7 @@ spec:
     - name: self-heal.backlog
       interval: 60s
       rules:
-        - alert: SQSQueueBacklog
+        - alert: QueueBacklog
           expr: aws_sqs_approximate_number_of_messages_visible{queue_name=~".*self-heal.*"} > 100
           for: 1m
           labels:
