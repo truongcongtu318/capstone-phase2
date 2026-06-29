@@ -7,6 +7,7 @@ locals {
       Env       = var.environment
       ManagedBy = "terraform"
     },
-    { Component = "bootstrap" }
+    { Component = "security" },
+    var.tags
   )
 }

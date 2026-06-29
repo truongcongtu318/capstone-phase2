@@ -32,7 +32,6 @@ output "kms_observability_arn" {
   description = "KMS key ARN cho observability logs"
   value       = aws_kms_key.keys["cdo-observability-kms"].arn
 }
-
 output "kms_audit_arn" {
   description = "KMS key ARN cho audit trail"
   value       = aws_kms_key.keys["cdo-audit-kms"].arn

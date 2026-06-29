@@ -20,7 +20,7 @@ declare -A images=(
   ["602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon/aws-load-balancer-controller:v2.8.1"]="amazon/aws-load-balancer-controller:v2.8.1"
   
   # B. Karpenter Node Provisioner (1 Image)
-  ["public.ecr.aws/karpenter/controller:v0.37.0"]="karpenter/controller:v0.37.0"
+  ["public.ecr.aws/karpenter/controller:0.37.0"]="karpenter/controller:0.37.0"
   
   # C. Kyverno Admission Controller (5 Images)
   ["ghcr.io/kyverno/kyverno:v1.12.5"]="kyverno/kyverno:v1.12.5"
@@ -38,7 +38,7 @@ declare -A images=(
   ["registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.12.0"]="kube-state-metrics/kube-state-metrics:v2.12.0"
   ["quay.io/prometheus/node-exporter:v1.8.1"]="prometheus/node-exporter:v1.8.1"
   ["quay.io/kiwigrid/k8s-sidecar:1.27.4"]="kiwigrid/k8s-sidecar:1.27.4"
-  ["registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.4.1"]="ingress-nginx/kube-webhook-certgen:v1.4.1"
+  ["registry.k8s.io/ingress-nginx/kube-webhook-certgen:v20221220-controller-v1.5.1-58-g787ea74b6"]="ingress-nginx/kube-webhook-certgen:v20221220-controller-v1.5.1-58-g787ea74b6"
   
   # E. Chaos Testing & Debugging (3 Images)
   ["docker.io/alexeiled/stress-ng:latest"]="alexeiled/stress-ng:latest"
