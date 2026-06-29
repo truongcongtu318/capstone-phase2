@@ -41,7 +41,7 @@ Cluster checks are still skipped because no reachable kubeconfig / cluster conte
 | kubeconfig command | MISSING | no concrete `aws eks update-kubeconfig` command is present |
 | Member runtime AWS profile/role | MISSING | CI roles exist, but no member-local access role/profile is defined |
 | DB CIDR | MISSING | only VPC/subnet CIDRs are present; DB endpoint/CIDR is not exposed |
-| SQS Queue URL | MISSING | queue name is present, URL/account target is not confirmed |
+| SQS Queue URL | AVAILABLE_IN_INFRA_CODE | Output sqs_queue_id in Terraform |
 
 Note: Account IDs are recorded from current repo references and must be confirmed by Infra before runtime execution.
 
