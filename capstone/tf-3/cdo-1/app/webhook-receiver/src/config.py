@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     # DynamoDB
     dynamodb_endpoint_url: Optional[str] = None
-    dynamodb_table_name: str = "tf-3-aiops-idempotency-lock"
+    dynamodb_table_name: str = "tf-3-aiops-app-idempotency-lock"
 
     # SQS
     sqs_endpoint_url: Optional[str] = None

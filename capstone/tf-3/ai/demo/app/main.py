@@ -54,7 +54,8 @@ def detect(
     first = telemetry_window[0] if telemetry_window else {}
     labels = first.get("labels", {})
     ns = labels.get("namespace") or first.get("tenant_id", "tenant-payment")
-    service = first.get("service", "order-service")
+    service = labels.get("service") or first.get("service", "order-service")
+    alertname = labels.get("alertname", "PodOOMKilled")
     return {
         "anomaly_detected": True,
         "severity": 0.85,
@@ -64,6 +65,7 @@ def detect(
             "system": "E-COMMERCE",
             "namespace": ns,
             "deployment": service,
+            "alertname": alertname,
             "trigger_metric": "service_error_rate",
             "trigger_value": 0.15
         },
@@ -90,20 +92,30 @@ def decide(
     """
     ns = anomaly_context.get("namespace", "tenant-payment")
     service = anomaly_context.get("target_service", "order-service")
+    alertname = anomaly_context.get("alertname", "PodOOMKilled")
+
+    if alertname in ("ServiceStuck", "DeploymentAvailableReplicasLow"):
+        action = "RESTART_DEPLOYMENT"
+        params = {"namespace": ns, "container": "main"}
+        runbook = "ServiceRestartRunbook"
+    elif alertname in ("SQSQueueBacklog", "WorkerQueueBacklog"):
+        action = "SCALE_REPLICAS"
+        params = {"namespace": ns, "replicas": 3}
+        runbook = "QueueBacklogScaleRunbook"
+    else:
+        action = "PATCH_MEMORY_LIMIT"
+        params = {"namespace": ns, "container": "main", "memory_request_mb": 512, "memory_limit_mb": 768}
+        runbook = "OOMKilledRunbook"
+
     return {
-        "matched_runbook": "DatabaseConnectionRecoveryRunbook",
+        "matched_runbook": runbook,
         "pattern_type": "urgent",
         "action_plan": [
             {
                 "step": 1,
-                "action": "PATCH_MEMORY_LIMIT",
+                "action": action,
                 "target": f"deployment/{service}",
-                "params": {
-                    "namespace": ns,
-                    "container": "main",
-                    "memory_request_mb": 512,
-                    "memory_limit_mb": 768
-                }
+                "params": params
             }
         ],
         "blast_radius_config": {
