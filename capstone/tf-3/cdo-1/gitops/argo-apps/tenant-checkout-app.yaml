@@ -18,7 +18,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/truongcongtu318/capstone-phase2.git
-    targetRevision: main
+    targetRevision: team-3
     path: capstone/tf-3/cdo-1/gitops/tenant-checkout
   destination:
     server: https://kubernetes.default.svc
