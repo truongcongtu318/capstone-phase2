@@ -65,3 +65,12 @@ output "gitops_repo_clone_url" {
   description = "CodeCommit repository clone URL (HTTPS)"
   value       = aws_codecommit_repository.gitops.clone_url_http
 }
+
+# -----------------------------------------------------------------------------
+# IAM ROLE — AI Engine IRSA
+# -----------------------------------------------------------------------------
+
+output "ai_engine_irsa_role_arn" {
+  description = "IAM role ARN for AI Engine to call Bedrock API"
+  value       = module.observability.ai_engine_irsa_role_arn
+}
