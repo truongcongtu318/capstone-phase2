@@ -13,7 +13,7 @@ spec:
       rules:
         - alert: PodOOMKilled
           expr: |
-            increase(kube_pod_container_status_restarts_total[5m]) > 0
+            changes(kube_pod_container_status_restarts_total[5m]) > 0
             and on(pod, namespace)
             kube_pod_container_status_last_terminated_reason{reason="OOMKilled",namespace=~"tenant-.*"} == 1
           for: 0m
