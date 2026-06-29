@@ -34,9 +34,3 @@ variable "global_tags" {
   }
 }
 
-# Fix #4: Mock Compute — bật mặc định để CI plan chạy trước khi Phase 3 apply lên AWS
-variable "use_mock_compute" {
-  type        = bool
-  description = "Bypass remote state compute và K8s/Helm providers nếu true — bật để chạy dry-run plan khi EKS chưa tồn tại"
-  default     = true
-}
