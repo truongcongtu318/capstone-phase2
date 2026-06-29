@@ -305,7 +305,7 @@ resource "aws_kinesis_firehose_delivery_stream" "audit_stream" {
 
 resource "aws_sqs_queue" "self_heal_dlq" {
   name                      = "${var.name_prefix}-${var.environment}-self-heal-dlq"
-  message_retention_seconds = 1209600 # 14 days
+  message_retention_seconds = 1209600                   # 14 days
   kms_master_key_id         = var.kms_observability_arn # dùng chung key mã hóa monitoring
 
   tags = local.module_tags
@@ -388,7 +388,7 @@ resource "aws_iam_role_policy" "webhook_irsa" {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-app-idempotency-lock"
+        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
       },
       {
         Sid    = "KMSAccess"
@@ -446,7 +446,7 @@ resource "aws_iam_role_policy" "worker_irsa" {
           "firehose:PutRecord",
           "firehose:PutRecordBatch",
         ]
-        Resource = [aws_kinesis_firehose_delivery_stream.audit_stream[0].arn]
+        Resource = var.enabled ? [aws_kinesis_firehose_delivery_stream.audit_stream[0].arn] : ["*"]
       },
       {
         Sid    = "KMSAccess"
@@ -489,7 +489,7 @@ resource "aws_iam_role_policy" "worker_irsa" {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-app-idempotency-lock"
+        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
       },
       {
         Sid    = "CodeCommitAccess"
