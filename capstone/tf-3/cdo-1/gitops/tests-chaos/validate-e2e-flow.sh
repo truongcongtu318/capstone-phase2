@@ -12,9 +12,19 @@ SQS_WORKER_LABEL=${SQS_WORKER_LABEL:-app=sqs-worker}
 AI_ENGINE_LABEL=${AI_ENGINE_LABEL:-app=ai-engine}
 SELF_HEAL_SA=${SELF_HEAL_SA:-system:serviceaccount:self-heal-system:self-heal-executor}
 ARGOCD_SA=${ARGOCD_SA:-system:serviceaccount:argocd:argocd-application-controller}
-STRICT=${STRICT:-false}
+STRICT=${STRICT:-true}
 
 FAILURES=0
+
+report_evidence() {
+  echo "========================================"
+  echo "Validation Report Evidence"
+  echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "Commit SHA: $(git rev-parse HEAD)"
+  fi
+  echo "========================================"
+}
 
 pass() {
   echo "[PASS] $*"
@@ -73,7 +83,7 @@ resource_exists() {
   if kubectl "$@" >/dev/null 2>&1; then
     pass "${description}"
   else
-    skip "${description} not ready yet"
+    fail "${description} not found"
   fi
 }
 
@@ -90,6 +100,7 @@ auth_can_i() {
   fi
 }
 
+report_evidence
 echo "Validating CDO-01 Member 9 E2E readiness..."
 echo "GitOps dir: ${GITOPS_DIR}"
 echo "Tenant namespaces: ${TENANT_NAMESPACES}"
@@ -115,22 +126,24 @@ file_exists "${GITOPS_DIR}/manifests/base/sqs-worker/serviceaccount.yaml" "sqs-w
 file_exists "${GITOPS_DIR}/manifests/base/ai-engine/service.yaml" "ai-engine Service manifest"
 
 if ! kubectl_available; then
-  skip "kubectl client unavailable; cluster checks were not executed"
-elif ! cluster_available; then
-  skip "kubectl is installed but no reachable cluster context was found"
+  skip "kubectl client unavailable; client and cluster checks were not executed"
 else
-  echo "--- Kustomize and cluster checks ---"
+  echo "--- Kustomize client checks ---"
   if kubectl kustomize "${GITOPS_DIR}/security-policies" >/dev/null 2>&1; then
     pass "kubectl kustomize security-policies"
   else
     fail "kubectl kustomize security-policies"
   fi
 
-  if kubectl apply --dry-run=server -k "${GITOPS_DIR}/security-policies" >/dev/null 2>&1; then
-    pass "server dry-run security-policies"
+  if ! cluster_available; then
+    skip "BLOCKED_BY_INFRA: kubectl is installed but no reachable cluster context was found"
   else
-    skip "server dry-run security-policies needs cluster CRDs/admission ready"
-  fi
+    echo "--- Cluster checks ---"
+    if kubectl apply --dry-run=server -k "${GITOPS_DIR}/security-policies" >/dev/null 2>&1; then
+      pass "server dry-run security-policies"
+    else
+      skip "BLOCKED_BY_INFRA: server dry-run security-policies needs cluster CRDs/admission ready"
+    fi
 
   namespace_exists "${SELF_HEAL_NAMESPACE}"
   namespace_exists "${OBSERVABILITY_NAMESPACE}"
@@ -177,6 +190,7 @@ else
     pass "Firehose audit config exists"
   else
     skip "Firehose audit config not ready yet"
+  fi
   fi
 fi
 
