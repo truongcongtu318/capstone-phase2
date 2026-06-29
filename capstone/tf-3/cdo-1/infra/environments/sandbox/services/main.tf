@@ -99,3 +99,16 @@ resource "aws_codecommit_repository" "gitops" {
     Component = "gitops-repo"
   })
 }
+
+# =============================================================================
+# EKS ADDON: Metrics Server (HPA scaling for Sub-team 2/3)
+# =============================================================================
+
+resource "aws_eks_addon" "metrics_server" {
+  cluster_name = local.cluster_name
+  addon_name   = "metrics-server"
+
+  tags = merge(var.global_tags, {
+    Component = "metrics-server"
+  })
+}
