@@ -76,6 +76,16 @@ resource "helm_release" "kube_prometheus_stack" {
             tag        = "v0.74.0"
           }
         }
+        # NAT-less: admission webhook certgen image ph?i tr? v? ECR Private
+        admissionWebhooks = {
+          patch = {
+            image = {
+              registry   = local.ecr_registry
+              repository = "ingress-nginx/kube-webhook-certgen"
+              tag        = "v20221220-controller-v1.5.1-58-g787ea74b6"
+            }
+          }
+        }
       }
 
       prometheus = {
