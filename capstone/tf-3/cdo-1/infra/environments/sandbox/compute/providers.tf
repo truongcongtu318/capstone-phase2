@@ -1,1 +1,7 @@
-# 🌐 TODO: Cấu hình AWS provider cho Compute env
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = var.global_tags
+  }
+}

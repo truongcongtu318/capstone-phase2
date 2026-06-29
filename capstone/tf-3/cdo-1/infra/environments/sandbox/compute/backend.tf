@@ -1,7 +1,9 @@
-# 🌐 TODO: Cấu hình Backend State riêng biệt cho Compute
-# Key: "sandbox/compute/terraform.tfstate"
 terraform {
   backend "s3" {
-    # Tự động import bucket & lock table từ bootstrap
+    bucket         = "tf-3-aiops-audit-trail"
+    key            = "sandbox/compute/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "tf-3-aiops-idempotency-lock"
+    encrypt        = true
   }
 }

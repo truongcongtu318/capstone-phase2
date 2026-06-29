@@ -161,16 +161,15 @@ estrict-mutations.yaml khóa quyền API Server.
 Đối với các ứng dụng triển khai qua file manifest (`gitops/manifests/`), **Member 7** phải kiểm tra toàn bộ file YAML và bảo đảm trường `image` trỏ trực tiếp về AWS ECR Private:
 
 1.  **Kyverno Install YAML:** Sử dụng image mirrored trên ECR Private:
-    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/kyverno:v1.12.5`
-    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/kyvernopre:v1.12.5`
-    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/background-controller:v1.12.5`
-    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/cleanup-controller:v1.12.5`
-    *   `544011261607.dkr.ecr.us-east-1.amazonaws.com/kyverno/reports-controller:v1.12.5`
+    *   `474013238625.dkr.ecr.us-east-1.amazonaws.com/kyverno/kyverno:v1.12.5`
+    *   `474013238625.dkr.ecr.us-east-1.amazonaws.com/kyverno/kyvernopre:v1.12.5`
+    *   `474013238625.dkr.ecr.us-east-1.amazonaws.com/kyverno/background-controller:v1.12.5`
+    *   `474013238625.dkr.ecr.us-east-1.amazonaws.com/kyverno/cleanup-controller:v1.12.5`
+    *   `474013238625.dkr.ecr.us-east-1.amazonaws.com/kyverno/reports-controller:v1.12.5`
 
 2.  **Cách thức kiểm tra (Validation):**
     *   Chạy `git diff` và kiểm tra xem có bất kỳ dòng nào chứa các public domain registry (`ghcr.io`, `quay.io`, `docker.io`, `registry.k8s.io`) hay không.
-    *   Nếu có $
-ightarrow$ Sửa lại đường dẫn thành `544011261607.dkr.ecr.us-east-1.amazonaws.com/<repo>:<tag>`.
+    *   Nếu có $\rightarrow$ Sửa lại đường dẫn thành `474013238625.dkr.ecr.us-east-1.amazonaws.com/<repo>:<tag>`.
 
 
 ---
@@ -188,4 +187,4 @@ ightarrow$ Sửa lại đường dẫn thành `544011261607.dkr.ecr.us-east-1.am
    chmod +x gitops/mirror-images.sh
    ./gitops/mirror-images.sh
    `
-Script sẽ tự động quét, kéo và tạo repo đầy đủ cho 19 images hệ thống và chaos testing trên vùng ECR Private 544011261607.dkr.ecr.us-east-1.amazonaws.com!
+Script sẽ tự động quét, kéo và tạo repo đầy đủ cho 19 images hệ thống và chaos testing trên vùng ECR Private 474013238625.dkr.ecr.us-east-1.amazonaws.com!
