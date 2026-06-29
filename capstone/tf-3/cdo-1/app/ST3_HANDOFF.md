@@ -112,8 +112,14 @@ resources:
 | `DYNAMODB_TABLE_NAME` | `tf-3-aiops-idempotency-lock` | ConfigMap |
 | `AI_ENGINE_URL` | `http://ai-engine.self-heal-system.svc.cluster.local:8080` | ConfigMap |
 | `DRY_RUN` | `false` | ConfigMap |
+| `ARGOCD_SERVER_URL` | URL ArgoCD server trong cluster (vd: `http://argocd-server.argocd.svc.cluster.local`) | ConfigMap |
+| `ARGOCD_AUTH_TOKEN` | Bearer token của ArgoCD service account | Secret (ESO) |
+| `CODECOMMIT_REPO_URL` | URL CodeCommit repo GitOps | ConfigMap |
+| `CODECOMMIT_BRANCH` | `main` | ConfigMap |
 
 **Không set** `*_ENDPOINT_URL` — boto3 tự dùng IRSA.
+
+> **Lưu ý ArgoCD app naming:** worker tự suy ra tên ArgoCD Application theo pattern `{namespace}-app`. Ví dụ: namespace `tenant-payment` → ArgoCD app `tenant-payment-app`. ST3 cần đặt tên Application đúng convention này.
 
 ### ServiceAccount + IRSA
 ```yaml
@@ -121,6 +127,13 @@ serviceAccountName: self-heal-executor
 # Annotation trên ServiceAccount:
 # eks.amazonaws.com/role-arn: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-irsa-audit-writer
 ```
+
+> **Tại sao 2 ServiceAccount riêng (webhook-receiver và self-heal-executor)?**
+> Do khác nhau về quyền AWS:
+> - `webhook-receiver`: DynamoDB PutItem (lock) + SQS SendMessage
+> - `self-heal-executor`: SQS Receive/Delete + DynamoDB PutItem (CB) + Firehose PutRecord + SNS Publish + K8s API patch deployment
+>
+> Dùng chung 1 SA sẽ vi phạm least-privilege và Brain/Hands separation. ST1 đã tạo đúng 2 IRSA role riêng.
 
 ### Prometheus scrape annotations
 ```yaml
@@ -270,7 +283,217 @@ aws s3 ls s3://tf-3-aiops-audit-trail/ --recursive | sort | tail -5
 
 ---
 
-## 7. Hành vi khi dùng AI Engine Demo
+## 7. Test E2E thật trên EKS với DRY_RUN=false
+
+> Mục tiêu: xem worker thực sự patch K8s deployment, ghi GitOps, emit audit log, và expose metrics — không phải dry-run log.
+
+### 7.1 Tiền đề ST3 cần tạo
+
+**Namespace + test Deployment (khớp với alert sẽ gửi):**
+```yaml
+# Tạo namespace (nếu chưa có)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-payment
+---
+# Deployment tên order-service — khớp với trường "service" trong alert
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: tenant-payment
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: order-service }
+  template:
+    metadata:
+      labels: { app: order-service }
+    spec:
+      containers:
+        - name: order-service
+          image: nginx:alpine          # placeholder, nội dung không quan trọng
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 256Mi            # worker sẽ patch lên 512Mi
+              cpu: 500m
+```
+
+**ArgoCD Application (để worker suspend/resume auto-sync):**
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-payment-app            # PHẢI khớp pattern {namespace}-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: <CODECOMMIT_REPO_URL>
+    targetRevision: main
+    path: gitops/tenant-payment/order-service  # xem §7.2
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-payment
+  syncPolicy:
+    automated: { prune: false, selfHeal: false }
+```
+
+**File values.yaml trong CodeCommit** (worker dùng để commit config mới sau khi patch):
+```
+# Tạo file tại đường dẫn: gitops/tenant-payment/order-service/values.yaml
+memory_limit_mb: 256
+memory_request_mb: 128
+cpu_limit: "500m"
+replicas: 1
+```
+
+**K8s RBAC cho self-heal-executor trong namespace tenant-payment:**
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: self-heal-patcher
+  namespace: tenant-payment
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: self-heal-patcher-binding
+  namespace: tenant-payment
+subjects:
+  - kind: ServiceAccount
+    name: self-heal-executor
+    namespace: self-heal-system
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: self-heal-patcher
+```
+
+**ArgoCD token cho worker (ESO hoặc manual):**
+```bash
+# Lấy token từ ArgoCD (cần ArgoCD admin rights)
+argocd account generate-token --account admin
+# → đặt vào Secret, inject qua env ARGOCD_AUTH_TOKEN
+```
+
+**Env vars bổ sung trên sqs-worker Deployment:**
+```yaml
+- name: ARGOCD_SERVER_URL
+  value: http://argocd-server.argocd.svc.cluster.local
+- name: ARGOCD_AUTH_TOKEN
+  valueFrom:
+    secretKeyRef: { name: argocd-token, key: token }
+- name: CODECOMMIT_REPO_URL
+  value: <CodeCommit HTTPS clone URL>
+- name: CODECOMMIT_BRANCH
+  value: main
+- name: DRY_RUN
+  value: "false"
+```
+
+---
+
+### 7.2 Gửi alert và theo dõi kết quả
+
+**Test Fast Lane (OOMKilled → tăng memory limit):**
+```bash
+WEBHOOK_URL=$(kubectl get ingress -n self-heal-system -o jsonpath='{.items[0].spec.rules[0].host}')
+
+curl -s -X POST "https://$WEBHOOK_URL/alerts" \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-Id: d3b07384-d113-495f-9f58-20d18d357d75" \
+  -d '{
+    "alerts": [{
+      "status": "firing",
+      "labels": {
+        "alertname": "PodOOMKilled",
+        "namespace": "tenant-payment",
+        "service": "order-service",
+        "severity": "critical"
+      },
+      "annotations": {"summary": "OOM Kill detected on order-service"}
+    }]
+  }'
+# Expected: {"status":"accepted","idempotency_key":"<sha256>"}
+```
+
+---
+
+### 7.3 Kiểm tra K8s deployment đã được patch
+
+```bash
+# Memory limit phải tăng từ 256Mi → 512Mi (giá trị AI demo trả về)
+kubectl get deployment order-service -n tenant-payment \
+  -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}'
+# Expected: 512Mi (hoặc giá trị AI demo quyết định)
+
+# Xem thêm annotation ArgoCD đã suspend/resume chưa
+kubectl get application tenant-payment-app -n argocd -o jsonpath='{.spec.syncPolicy}'
+```
+
+---
+
+### 7.4 Kiểm tra GitOps (CodeCommit đã update chưa)
+
+```bash
+# Clone repo CodeCommit ra xem
+git clone <CODECOMMIT_REPO_URL> /tmp/gitops-verify
+cat /tmp/gitops-verify/gitops/tenant-payment/order-service/values.yaml
+# Expected: memory_limit_mb: 512  ← worker đã commit giá trị mới
+git -C /tmp/gitops-verify log --oneline -3
+# Expected: commit message kiểu "chore(self-heal): [<corr_id>] fast-lane PATCH_MEMORY_LIMIT on tenant-payment/order-service"
+```
+
+---
+
+### 7.5 Kiểm tra audit log trên S3
+
+```bash
+# Firehose buffer flush mất ~2-5 phút
+aws s3 ls s3://tf-3-aiops-audit-trail/tenant-payment/ --recursive | sort | tail -5
+aws s3 cp s3://tf-3-aiops-audit-trail/tenant-payment/<latest-file> - | head -20
+# Expected: INCIDENT_START, DETECT, DECIDE, EXECUTE_START, EXECUTE_DONE, VERIFY, DONE
+```
+
+---
+
+### 7.6 Kiểm tra Prometheus metrics
+
+```bash
+kubectl port-forward -n self-heal-system svc/sqs-worker 9090:9090 &
+sleep 2
+
+# Message đã xử lý thành công
+curl -s http://localhost:9090/metrics | grep worker_messages_processed
+# Expected: worker_messages_processed_total{status="COMPLETED"} 1
+
+# Execution counter
+curl -s http://localhost:9090/metrics | grep worker_executions_total
+# Expected: worker_executions_total{action="PATCH_MEMORY_LIMIT",lane="fast",status="COMPLETED"} 1
+
+# AI call latency
+curl -s http://localhost:9090/metrics | grep worker_ai_call_duration
+```
+
+---
+
+### 7.7 Kịch bản Slow Lane (deferred)
+
+> AI demo hiện cứng trả `pattern_type: "urgent"` → Fast Lane luôn được chọn. Để test Slow Lane, tạm thời chỉnh AI demo trả `"deferred"` trong `/v1/decide`. Khi đó worker sẽ commit thẳng lên CodeCommit mà không patch K8s trực tiếp → ArgoCD tự sync sau 2–5 phút.
+
+---
+
+## 8. Hành vi khi dùng AI Engine Demo
 
 AI demo đã được cập nhật để echo namespace từ request payload (giống AI Engine thật). Pipeline chạy đến **COMPLETED** với `DRY_RUN=true`.
 
