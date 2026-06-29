@@ -12,9 +12,9 @@ Thư mục này chứa cấu hình observability cho Self-Heal Platform.
 | `prometheus-values.yaml` | ✅ DONE — Helm values ready | Truyền qua Terraform `helm_release` (Sub-team 1) |
 | Grafana dashboard ConfigMap | ✅ DONE — static manifest ready | Sidecar nạp OK trên Minikube |
 | `QueueBacklog` alert firing | ⏳ PENDING | Cần CloudWatch exporter / metric `tf3_cdo1_sqs_visible_messages` từ Sub-team 1 |
-| `ServiceMonitor` (webhook-receiver) | ⏳ PENDING | App chưa expose `/metrics` endpoint |
+| `ServiceMonitor` (webhook-receiver) | ✅ DONE — port 8443 | App đã expose `/metrics` |
 | `ServiceMonitor` (ai-engine) | ⏳ PENDING | App chưa expose `/metrics` endpoint |
-| `ServiceMonitor` (sqs-worker) | ⏳ PENDING | Background daemon, chưa có HTTP metrics port |
+| `ServiceMonitor` (sqs-worker) | ✅ DONE — port 8080 | App đã expose `/metrics` |
 | Runtime alert evidence (cluster) | 🚫 BLOCKED\_BY\_INFRA | Cần EKS cluster + kubeconfig từ Sub-team 1 |
 
 | File | Chức năng |

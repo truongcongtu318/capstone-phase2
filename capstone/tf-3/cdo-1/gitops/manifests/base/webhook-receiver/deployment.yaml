@@ -36,7 +36,8 @@ spec:
           # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/webhook-receiver:<commit-sha>
           image: nginx:1.25
           ports:
-            - containerPort: 80 # TODO: đổi thành 8443 khi có code thật
+            - name: metrics
+              containerPort: 80 # TODO: đổi thành 8443 khi có code thật
           resources:
             requests:
               memory: "64Mi"

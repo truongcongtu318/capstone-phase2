@@ -6,6 +6,7 @@ namespace: observability
 resources:
   - prometheus-rules.yaml
   - alertmanager-config.yaml
+  - service-monitors.yaml
 
 configMapGenerator:
   - name: cdo1-self-heal-dashboard
