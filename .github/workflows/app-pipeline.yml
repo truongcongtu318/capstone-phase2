@@ -13,7 +13,8 @@ on:
       - 'capstone/tf-3/ai/demo/**'
 
 permissions:
-  contents: read
+  id-token: write
+  contents: write
 
 jobs:
   test-and-lint:
@@ -119,3 +120,35 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "Built $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+  update-gitops:
+    name: Update GitOps Image Tags
+    needs: build-and-publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Update kustomization newTag
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          OVERLAY=capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox
+          sed -i "s/newTag: sha-.*/newTag: $IMAGE_TAG/" $OVERLAY/webhook-receiver/kustomization.yaml
+          sed -i "s/newTag: sha-.*/newTag: $IMAGE_TAG/" $OVERLAY/sqs-worker/kustomization.yaml
+          sed -i "s/newTag: sha-.*/newTag: $IMAGE_TAG/" $OVERLAY/ai-engine/kustomization.yaml
+
+      - name: Commit and push
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/
+          git diff --cached --quiet && echo "No tag change, skipping commit" && exit 0
+          git commit -m "chore(gitops): update image tags to $IMAGE_TAG [skip ci]"
+          git push origin main
