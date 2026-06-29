@@ -4,3 +4,7 @@ httpx
 jsonschema
 kubernetes
 python-dotenv
+pyyaml
+prometheus-client
+pytest
+pytest-cov

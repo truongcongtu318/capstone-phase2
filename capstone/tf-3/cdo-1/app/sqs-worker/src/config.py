@@ -2,7 +2,6 @@
 # Đọc và xác thực biến môi trường sử dụng Pydantic Settings.
 # Hỗ trợ DYNAMODB_ENDPOINT_URL và các endpoints cho local development, fallback về native AWS client trên EKS.
 
-import os
 from dotenv import load_dotenv
 
 # Tải trước các biến môi trường từ .env.local vào os.environ để các module khác (ví dụ: audit_logger) có thể đọc qua os.getenv

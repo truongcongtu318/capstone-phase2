@@ -10,4 +10,6 @@ COPY src/ src/
 RUN adduser --disabled-password --no-create-home appuser
 USER appuser
 
+EXPOSE 9090
+
 CMD ["python", "src/main.py"]

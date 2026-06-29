@@ -2,7 +2,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 from datetime import datetime, timezone
 from typing import Any
 import boto3
@@ -363,4 +362,3 @@ def log_circuit_breaker_open(
         details={"failure_count": failure_count, "window": "1h"},
         dry_run=dry_run,
     )
-    return _git_output(["rev-parse", "HEAD"], cwd=repo_dir)
