@@ -69,7 +69,7 @@ Note: Account IDs are recorded from current repo references and must be confirme
 | Prometheus alert fired | PENDING | Requires target cluster monitoring evidence |
 | Webhook received alert | PENDING | Requires app and Alertmanager route evidence |
 | Worker remediation action | PENDING | Requires sqs-worker runtime evidence |
-| Audit log written | PENDING | Requires Firehose/S3 evidence |
+| Audit log written | WAITING_FOR_APPLY_EVIDENCE | Firehose stream is AVAILABLE_IN_INFRA_CODE |
 
 ## Expected RBAC Behavior
 
