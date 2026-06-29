@@ -8,56 +8,44 @@ metadata:
     app.kubernetes.io/part-of: cdo1-self-heal
 spec:
   groups:
-    - name: cdo1.kubernetes
+    - name: self-heal.oom
       interval: 30s
       rules:
         - alert: PodOOMKilled
           expr: |
-            max_over_time(
-              kube_pod_container_status_last_terminated_reason{
-                namespace=~"tenant-payment|tenant-checkout",
-                reason="OOMKilled"
-              }[5m]
-            ) > 0
-          for: 30s
+            increase(kube_pod_container_status_restarts_total[5m]) > 0
+            and on(pod, namespace)
+            kube_pod_container_status_last_terminated_reason{reason="OOMKilled",namespace=~"tenant-.*"} == 1
+          for: 0m
           labels:
             severity: critical
-            service: '{{ $labels.pod }}'
           annotations:
-            summary: 'Container {{ $labels.container }} in pod {{ $labels.pod }} was OOMKilled'
-            description: 'Container {{ $labels.container }} in namespace {{ $labels.namespace }} terminated because it exceeded its memory limit.'
+            summary: "OOMKilled {{ $labels.pod }} in {{ $labels.namespace }}"
+            service: "{{ $labels.container }}"
 
-        - alert: PodCrashLooping
-          expr: |
-            max_over_time(
-              kube_pod_container_status_waiting_reason{
-                namespace=~"tenant-payment|tenant-checkout",
-                reason="CrashLoopBackOff"
-              }[5m]
-            ) >= 1
-          for: 2m
-          labels:
-            severity: critical
-            service: '{{ $labels.pod }}'
-          annotations:
-            summary: 'Pod {{ $labels.pod }} is in CrashLoopBackOff'
-            description: 'Container {{ $labels.container }} in namespace {{ $labels.namespace }} has remained in CrashLoopBackOff for more than 2 minutes.'
-
-    - name: cdo1.aws
+    - name: self-heal.stuck
       interval: 30s
       rules:
-        - alert: QueueBacklog
+        - alert: ServiceStuck
           expr: |
-            tf3_cdo1_sqs_visible_messages{
-              queue="tf3-cdo1-sandbox-alert-queue"
-            } > 100
-          for: 5m
+            kube_deployment_status_replicas_available{namespace=~"tenant-.*"}
+              / kube_deployment_spec_replicas{namespace=~"tenant-.*"} < 0.5
+          for: 2m
           labels:
             severity: warning
-            namespace: self-heal-system
-            pod: sqs-worker
-            container: sqs-worker
-            service: sqs-worker
           annotations:
-            summary: 'SQS self-heal queue backlog is too high'
-            description: 'Queue tf3-cdo1-sandbox-alert-queue has more than 100 visible messages for over 5 minutes.'
+            summary: "Deployment {{ $labels.deployment }} stuck in {{ $labels.namespace }}"
+            service: "{{ $labels.deployment }}"
+
+    - name: self-heal.backlog
+      interval: 60s
+      rules:
+        - alert: SQSQueueBacklog
+          expr: aws_sqs_approximate_number_of_messages_visible{queue_name=~".*self-heal.*"} > 100
+          for: 1m
+          labels:
+            severity: warning
+            namespace: tenant-payment
+          annotations:
+            summary: "SQS queue backlog detected"
+            service: "payment-worker"

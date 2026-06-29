@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+helmCharts:
+  - name: checkout-api
+    releaseName: checkout-api
+    version: "0.1.0"
+    localPath: ./checkout-api
+    valuesFile: ./checkout-api/values.yaml
+    namespace: tenant-checkout
+  - name: checkout-frontend
+    releaseName: checkout-frontend
+    version: "0.1.0"
+    localPath: ./checkout-frontend
+    valuesFile: ./checkout-frontend/values.yaml
+    namespace: tenant-checkout
+  - name: checkout-worker
+    releaseName: checkout-worker
+    version: "0.1.0"
+    localPath: ./checkout-worker
+    valuesFile: ./checkout-worker/values.yaml
+    namespace: tenant-checkout

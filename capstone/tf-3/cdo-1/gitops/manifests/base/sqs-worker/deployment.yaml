@@ -45,6 +45,12 @@ spec:
             - name: metrics
               containerPort: 9090
               protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 30
           env:
             - name: AWS_DEFAULT_REGION
               value: "us-east-1"
@@ -65,7 +71,7 @@ spec:
             - name: ARGOCD_SERVER_URL
               value: "http://argocd-server.argocd.svc.cluster.local"
             - name: CODECOMMIT_REPO_URL
-              value: "<CodeCommit HTTPS clone URL — pending ST2 confirmation>"
+              value: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/cdo1-selfheal-gitops"
             - name: CODECOMMIT_BRANCH
               value: "main"
           envFrom:
@@ -73,8 +79,8 @@ spec:
                 name: sqs-worker-argocd-secret
           resources:
             requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
               memory: "256Mi"
-              cpu: "250m"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"

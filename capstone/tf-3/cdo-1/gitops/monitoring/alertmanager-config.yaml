@@ -8,23 +8,34 @@ metadata:
     app.kubernetes.io/part-of: cdo1-self-heal
 spec:
   route:
-    receiver: self-heal-webhook
-    groupBy:
-      - alertname
-      - namespace
-      - pod
-      - container
-      - service
+    groupBy: ["alertname", "namespace", "service"]
     groupWait: 10s
-    groupInterval: 1m
-    repeatInterval: 30m
-    matchers:
-      - name: alertname
-        value: PodOOMKilled|PodCrashLooping|QueueBacklog
-        matchType: =~
+    groupInterval: 30s
+    repeatInterval: 4h
+    routes:
+      - matchers:
+          - name: namespace
+            value: "tenant-payment"
+        receiver: webhook-tenant-payment
+      - matchers:
+          - name: namespace
+            value: "tenant-checkout"
+        receiver: webhook-tenant-checkout
 
   receivers:
-    - name: self-heal-webhook
+    - name: webhook-tenant-payment
       webhookConfigs:
-        - url: http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts
-          sendResolved: true
+        - url: "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts"
+          sendResolved: false
+          httpConfig:
+            headers:
+              - key: "X-Tenant-Id"
+                value: "d3b07384-d113-495f-9f58-20d18d357d75"
+    - name: webhook-tenant-checkout
+      webhookConfigs:
+        - url: "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts"
+          sendResolved: false
+          httpConfig:
+            headers:
+              - key: "X-Tenant-Id"
+                value: "6c8b4b2b-4d45-4209-a1b4-4b532d56a31c"

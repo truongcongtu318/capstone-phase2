@@ -6,6 +6,6 @@ resources:
     memory: "128Mi"
     cpu: "100m"
 replicaCount: 1
-serviceName: order-service
+serviceName: checkout-frontend
 containerName: main
-namespace: tenant-payment
+namespace: tenant-checkout

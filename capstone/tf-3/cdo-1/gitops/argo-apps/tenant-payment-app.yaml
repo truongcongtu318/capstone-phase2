@@ -18,13 +18,13 @@ spec:
   source:
     repoURL: https://github.com/truongcongtu318/capstone-phase2.git
     targetRevision: main
-    path: capstone/tf-3/cdo-1/gitops/manifests/base/tenant-payment/order-service
+    path: capstone/tf-3/cdo-1/gitops/tenant-payment
   destination:
     server: https://kubernetes.default.svc
     namespace: tenant-payment
   syncPolicy:
     automated:
       prune: true
-      selfHeal: true
+      selfHeal: false
     syncOptions:
       - CreateNamespace=true
