@@ -148,18 +148,50 @@ def _patch_body(action: str, params: dict, container: str) -> dict:
     raise ValueError(f"Action không hỗ trợ: {action!r}")
 
 
-def _k8s_patch(ns: str, name: str, body: dict, dry_run: bool) -> None:
-    """Thực thi K8s patch với ArgoCD suspend/resume bao quanh."""
+def _k8s_patch(ns: str, name: str, body: dict, dry_run: bool,
+               action: str = "", params: dict | None = None,
+               correlation_id: str = "") -> None:
+    """
+    Fast Lane 4 bước (subteam-briefs.md §ST2 ArgoCD Sync Suspension):
+      1. Suspend ArgoCD Auto-Sync
+      2. K8s patch (hot fix ngay)
+      3. Commit config mới lên CodeCommit  ← Git = cluster, ArgoCD không drift
+      4. Resume ArgoCD + force sync
+    """
     app = f"{ns}-app"
     _argocd_suspend(app, dry_run)
     try:
+        # Bước 2: K8s patch
         if dry_run:
             log.info("[DRY_RUN] k8s patch deployment=%s ns=%s body=%s", name, ns, json.dumps(body))
         else:
             _k8s().patch_namespaced_deployment(name=name, namespace=ns, body=body)
             log.info("k8s_patch_applied deployment=%s ns=%s", name, ns)
+
+        # Bước 3: Commit config mới lên CodeCommit TRƯỚC khi resume
+        # Bắt buộc theo subteam-briefs.md §ST2 — để Git = cluster,
+        # ArgoCD resume sẽ không thấy drift và không ghi đè config cũ lên K8s.
+        if CC_REPO and action and params is not None:
+            if dry_run:
+                log.info("[DRY_RUN] fast_lane_git_commit action=%s ns=%s dep=%s",
+                         action, ns, name)
+            else:
+                with tempfile.TemporaryDirectory(prefix="cdo-fast-lane-") as tmp:
+                    repo  = _git_clone_and_setup(tmp)
+                    vfile = _values_file(repo, ns, name)
+                    _apply_yaml(vfile, action, params)
+                    sha   = _git_commit_push(
+                        repo, vfile,
+                        f"chore(self-heal): [{correlation_id[:8]}] fast-lane "
+                        f"{action} on {ns}/{name}"
+                    )
+                    log.info("fast_lane_git_committed sha=%s ns=%s dep=%s", sha, ns, name)
+        elif not CC_REPO:
+            log.warning("CC_REPO chưa set — bỏ qua Git commit Fast Lane. "
+                        "ArgoCD có thể drift về config cũ sau khi resume.")
+
     finally:
-        # Luôn resume — kể cả khi patch lỗi (failsafe §IV)
+        # Bước 4: Resume ArgoCD (luôn chạy kể cả patch/commit lỗi — failsafe §IV)
         _argocd_resume(app, dry_run)
 
 
@@ -309,7 +341,7 @@ def execute(decide_response: dict, correlation_id: str, dry_run: bool = False) -
             # Fast Lane
             git_sha = None
             body = _patch_body(action, params, cont)
-            _k8s_patch(ns, dep, body, dry_run)
+            _k8s_patch(ns, dep, body, dry_run, action=action, params=params, correlation_id=correlation_id)
 
         elapsed = time.monotonic() - t0
         log.info("execute_done correlation_id=%s status=%s elapsed=%.2fs",
