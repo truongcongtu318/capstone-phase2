@@ -13,6 +13,3 @@ metadata:
     argocd.argoproj.io/sync-wave: "-2"
 data:
   PLACEHOLDER_KEY: "placeholder-value"
-  # Ví dụ field thật sẽ cần:
-  # BEDROCK_MODEL_ID: "anthropic.claude-3-..."
-  # AWS_REGION: "us-east-1"
