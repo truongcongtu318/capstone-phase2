@@ -14,7 +14,7 @@ metadata:
 data:
   AWS_DEFAULT_REGION: "us-east-1"
   SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue"
-  DYNAMODB_LOCK_TABLE: "tf-3-aiops-idempotency-lock"
+  DYNAMODB_LOCK_TABLE: "tf-3-aiops-app-idempotency-lock"
   COOLDOWN_SECONDS_BASIC_TIER: "300"
   COOLDOWN_SECONDS_PRO_TIER: "180"
   DRY_RUN: "false"

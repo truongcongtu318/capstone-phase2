@@ -55,7 +55,9 @@ spec:
             - name: FIREHOSE_STREAM_NAME
               value: "tf3-cdo1-sandbox-audit-stream"
             - name: DYNAMODB_TABLE_NAME
-              value: "tf-3-aiops-idempotency-lock"
+              value: "tf-3-aiops-app-idempotency-lock"
+            - name: DYNAMODB_STATE_TABLE
+              value: "tf-3-aiops-app-state"
             - name: AI_ENGINE_URL
               value: "http://ai-engine.self-heal-system.svc.cluster.local:8080"
             - name: DRY_RUN

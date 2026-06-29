@@ -101,11 +101,14 @@ Cluster checks are still skipped because no reachable kubeconfig / cluster conte
 | VPC CIDR | KNOWN | `10.42.0.0/16` |
 | Private subnet CIDRs | KNOWN | `10.42.0.0/20`, `10.42.16.0/20` |
 | SQS queue URL | KNOWN | `https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue` |
-| DynamoDB table | KNOWN | `tf-3-aiops-idempotency-lock` |
+| DynamoDB idempotency lock table | KNOWN | `tf-3-aiops-app-idempotency-lock` |
+| DynamoDB state table | KNOWN | `tf-3-aiops-app-state` |
 | Firehose stream | KNOWN | `tf3-cdo1-sandbox-audit-stream` |
 | SNS topic ARN | KNOWN | `arn:aws:sns:us-east-1:474013238625:tf3-cdo1-sandbox-alerts-escalation` |
 | IRSA webhook-receiver role | KNOWN | `arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-irsa-webhook-receiver` |
 | IRSA self-heal-executor role | KNOWN | `arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-irsa-audit-writer` |
+| IRSA ai-engine role | MISSING (ST1) | `arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-irsa-ai-engine-bedrock` |
+| AWS Secrets Manager Secret | MISSING (ST1) | `tf3-cdo1-sandbox/argocd-auth-token` |
 | EKS cluster name | MISSING | `infra/environments/sandbox/compute` still TODO |
 | kubeconfig command | MISSING | no concrete `aws eks update-kubeconfig` command |
 | ACM Certificate ARN | MISSING | needed for ALB Ingress HTTPS |
