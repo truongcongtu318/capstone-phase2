@@ -55,7 +55,7 @@ resources:
 |---|---|---|
 | `AWS_DEFAULT_REGION` | `us-east-1` | ConfigMap |
 | `SQS_QUEUE_URL` | `https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue` | ConfigMap |
-| `DYNAMODB_TABLE_NAME` | `tf-3-aiops-idempotency-lock` | ConfigMap |
+| `DYNAMODB_TABLE_NAME` | `tf-3-aiops-app-idempotency-lock` | ConfigMap |
 | `DRY_RUN` | `false` | ConfigMap |
 
 **Không set** `DYNAMODB_ENDPOINT_URL`, `SQS_ENDPOINT_URL` — boto3 tự dùng IRSA.
@@ -109,12 +109,12 @@ resources:
 | `SQS_QUEUE_URL` | `https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue` | ConfigMap |
 | `SNS_TOPIC_ARN` | `arn:aws:sns:us-east-1:474013238625:tf3-cdo1-sandbox-alerts-escalation` | ConfigMap |
 | `FIREHOSE_STREAM_NAME` | `tf3-cdo1-sandbox-audit-stream` | ConfigMap |
-| `DYNAMODB_TABLE_NAME` | `tf-3-aiops-idempotency-lock` | ConfigMap |
+| `DYNAMODB_TABLE_NAME` | `tf-3-aiops-app-idempotency-lock` | ConfigMap |
 | `AI_ENGINE_URL` | `http://ai-engine.self-heal-system.svc.cluster.local:8080` | ConfigMap |
 | `DRY_RUN` | `false` | ConfigMap |
 | `ARGOCD_SERVER_URL` | URL ArgoCD server trong cluster (vd: `http://argocd-server.argocd.svc.cluster.local`) | ConfigMap |
 | `ARGOCD_AUTH_TOKEN` | Bearer token của ArgoCD service account | Secret (ESO) |
-| `CODECOMMIT_REPO_URL` | URL CodeCommit repo GitOps | ConfigMap |
+| `CODECOMMIT_REPO_URL` | `https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops` | ConfigMap |
 | `CODECOMMIT_BRANCH` | `main` | ConfigMap |
 
 **Không set** `*_ENDPOINT_URL` — boto3 tự dùng IRSA.
@@ -235,7 +235,7 @@ metadata:
   namespace: self-heal-system
 data:
   AWS_DEFAULT_REGION: "us-east-1"
-  DYNAMODB_TABLE_NAME: "tf-3-aiops-idempotency-lock"
+  DYNAMODB_TABLE_NAME: "tf-3-aiops-app-idempotency-lock"
   SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue"
 ```
 
@@ -251,10 +251,10 @@ data:
   SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue"
   SNS_TOPIC_ARN: "arn:aws:sns:us-east-1:474013238625:tf3-cdo1-sandbox-alerts-escalation"
   FIREHOSE_STREAM_NAME: "tf3-cdo1-sandbox-audit-stream"
-  DYNAMODB_TABLE_NAME: "tf-3-aiops-idempotency-lock"
+  DYNAMODB_TABLE_NAME: "tf-3-aiops-app-idempotency-lock"
   AI_ENGINE_URL: "http://ai-engine.self-heal-system.svc.cluster.local:8080"
   ARGOCD_SERVER_URL: "http://argocd-server.argocd.svc.cluster.local"
-  CODECOMMIT_REPO_URL: "<ST3 điền: HTTPS clone URL CodeCommit repo GitOps>"
+  CODECOMMIT_REPO_URL: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops"
   CODECOMMIT_BRANCH: "main"
   DRY_RUN: "false"
 ```
@@ -500,7 +500,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: <CODECOMMIT_REPO_URL>
+    repoURL: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
     targetRevision: main
     path: gitops/tenant-payment   # quản lý TẤT CẢ services trong namespace
   destination:
