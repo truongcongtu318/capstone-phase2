@@ -4,11 +4,13 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'capstone/tf-3/cdo-1/apps/**'
+      - 'capstone/tf-3/cdo-1/app/**'
+      - 'capstone/tf-3/ai/demo/**'
   pull_request:
     branches: [ main ]
     paths:
-      - 'capstone/tf-3/cdo-1/apps/**'
+      - 'capstone/tf-3/cdo-1/app/**'
+      - 'capstone/tf-3/ai/demo/**'
 
 permissions:
   contents: read
@@ -20,6 +22,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks cần full history để scan diff giữa các commit
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -36,15 +40,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ruff pytest httpx fastapi uvicorn
-          if [ -f capstone/tf-3/cdo-1/apps/requirements.txt ]; then pip install -r capstone/tf-3/cdo-1/apps/requirements.txt; fi
+          pip install -r capstone/tf-3/cdo-1/app/webhook-receiver/requirements.txt
+          pip install -r capstone/tf-3/cdo-1/app/sqs-worker/requirements.txt
+          pip install moto[dynamodb,sqs] jsonschema python-dotenv pyyaml \
+                      prometheus-fastapi-instrumentator prometheus-client
 
       - name: Run Ruff Linter
-        run: ruff check capstone/tf-3/cdo-1/apps/
+        run: ruff check capstone/tf-3/cdo-1/app/
 
       - name: Run Unit Tests
         run: |
-          # Chạy pytest và xuất độ phủ coverage (yêu cầu >= 70%)
-          python -m pytest capstone/tf-3/cdo-1/apps/ --cov=capstone/tf-3/cdo-1/apps/ --cov-fail-under=70
+          python -m pytest capstone/tf-3/cdo-1/app/ \
+            --cov=capstone/tf-3/cdo-1/app/ \
+            --cov-fail-under=70
 
   build-and-publish:
     name: Build & Push ECR
@@ -56,7 +64,16 @@ jobs:
       contents: read
     strategy:
       matrix:
-        app: [ 'webhook-receiver', 'self-heal-worker' ]
+        include:
+          - app: webhook-receiver
+            dir: capstone/tf-3/cdo-1/app/webhook-receiver
+            ecr_repo: tf-3-webhook-receiver
+          - app: self-heal-worker
+            dir: capstone/tf-3/cdo-1/app/sqs-worker
+            ecr_repo: tf-3-self-heal-worker
+          - app: ai-engine-demo
+            dir: capstone/tf-3/ai/demo/app
+            ecr_repo: tf-3-ai-engine-demo
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -74,14 +91,20 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Copy shared security.py for sqs-worker
+        if: matrix.app == 'self-heal-worker'
+        run: |
+          cp capstone/tf-3/cdo-1/app/webhook-receiver/src/security.py \
+             capstone/tf-3/cdo-1/app/sqs-worker/src/security.py
+
       - name: Build, Tag and Push Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: tf-3-${{ matrix.app }}
+          ECR_REPOSITORY: ${{ matrix.ecr_repo }}
           IMAGE_TAG: sha-${{ github.sha }}
         run: |
-          cd capstone/tf-3/cdo-1/apps/${{ matrix.app }}
+          cd ${{ matrix.dir }}
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          # Ghi đè file manifest bằng image digest mới vừa build để ArgoCD sync
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "Built $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
