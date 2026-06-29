@@ -270,16 +270,26 @@ aws s3 ls s3://tf-3-aiops-audit-trail/ --recursive | sort | tail -5
 
 ---
 
-## 7. Giới hạn khi dùng AI Engine Demo
+## 7. Hành vi khi dùng AI Engine Demo
+
+AI demo đã được cập nhật để echo namespace từ request payload (giống AI Engine thật). Pipeline chạy đến **COMPLETED** với `DRY_RUN=true`.
+
+**Happy path với DRY_RUN=true:**
+```
+INCIDENT_START → DETECT → DECIDE → EXECUTE_START (DRY_RUN skip K8s) → EXECUTE_DONE → VERIFY → DONE
+worker_messages_processed_total{status="DRY_RUN"} tăng
+```
+
+**Giới hạn còn lại:**
 
 | Hành vi | Lý do |
 |---|---|
-| Worker luôn vào exception path sau DECIDE | Demo trả `namespace="production"` → `_guard_ns()` raise PermissionError |
-| `worker_messages_processed_total{status="FAILED"}` tăng | Xem trên |
-| `worker_escalations_total{reason="EXCEPTION"}` tăng | Xem trên |
-| Không có execution thật | Demo không trả namespace hợp lệ |
+| AI luôn trả `anomaly_detected=true` | Demo skeleton cứng kết quả |
+| AI luôn trả `next_action=DONE` | Demo không có verify logic thật |
+| K8s patch và Git commit không thật | `DRY_RUN=true` — xem log `[DRY_RUN]` |
+| Không test được ROLLBACK/ESCALATE từ verify | Cần AI Engine thật hoặc inject thủ công |
 
-**Không phải bug** — khi AI Engine thật deploy (trả đúng namespace), toàn bộ pipeline chạy đến COMPLETED.
+**Khi AI Engine thật deploy:** chỉ đổi image tag trong Kustomize overlay — không cần thay đổi Service, env vars, hay bất kỳ config nào khác.
 
 ---
 

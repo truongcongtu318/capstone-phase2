@@ -24,16 +24,19 @@ class Settings(BaseSettings):
     dynamodb_table_name: str = "tf-3-aiops-idempotency-lock"
 
     sqs_endpoint_url: Optional[str] = None
-    sqs_queue_url: str = "http://localhost:4566/000000000000/alert-queue"
+    # sqs_queue_url local: "http://localhost:4566/000000000000/alert-queue"
+    sqs_queue_url: str
 
     sns_endpoint_url: Optional[str] = None
-    sns_topic_arn: str = "arn:aws:sns:us-east-1:000000000000:tf3-cdo1-sandbox-alerts-escalation"
+    # sns_topic_arn local: "arn:aws:sns:us-east-1:000000000000:tf3-cdo1-sandbox-alerts-escalation"
+    sns_topic_arn: str
 
     firehose_endpoint_url: Optional[str] = None
-    firehose_stream_name: str = "tf3-cdo1-sandbox-audit-stream"
+    firehose_stream_name: str = "tf3-cdo1-sandbox-audit-stream"  # tên stream thật trên AWS
 
     # AI Engine Endpoint
-    ai_engine_url: str = "http://localhost:8080"
+    # ai_engine_url local: "http://localhost:8080"
+    ai_engine_url: str
 
     aws_region: str = "us-east-1"
     dry_run: bool = False
