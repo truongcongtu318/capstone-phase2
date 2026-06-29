@@ -104,9 +104,11 @@ def _process_message(sqs_client, message) -> None:
         }]
 
         # 4. Invoke AI Engine /v1/detect
-        idempotency_key = str(uuid.uuid4())
+        # Mỗi API call có idempotency_key riêng độc lập (UUIDv4 per-call).
+        # Lý do: key dùng cho idempotency lock tại server AI, không nên share giữa các bước khác nhau.
+        detect_idem_key = str(uuid.uuid4())
         logger.info(f"Invoking /v1/detect for {service}...")
-        detect_resp = ai_client.detect(telemetry_window, tenant_id, idempotency_key, correlation_id, settings.dry_run)
+        detect_resp = ai_client.detect(telemetry_window, tenant_id, detect_idem_key, correlation_id, settings.dry_run)
         log_detect(tenant_id, correlation_id, detect_resp, settings.dry_run)
 
         if not detect_resp.get("anomaly_detected"):
@@ -115,8 +117,9 @@ def _process_message(sqs_client, message) -> None:
             return
 
         # 5. Invoke AI Engine /v1/decide
+        decide_idem_key = str(uuid.uuid4())
         logger.info(f"Invoking /v1/decide for {service}...")
-        decide_resp = ai_client.decide(detect_resp.get("anomaly_context"), tenant_id, idempotency_key, correlation_id, settings.dry_run)
+        decide_resp = ai_client.decide(detect_resp.get("anomaly_context"), tenant_id, decide_idem_key, correlation_id, settings.dry_run)
         log_decide(tenant_id, correlation_id, decide_resp, settings.dry_run)
 
         action_plan = decide_resp.get("action_plan", [])
@@ -174,8 +177,9 @@ def _process_message(sqs_client, message) -> None:
             "execution_time_seconds": exec_result.execution_time_seconds
         }
 
+        verify_idem_key = str(uuid.uuid4())
         logger.info("Invoking /v1/verify...")
-        verify_resp = ai_client.verify(action_executed, post_telemetry_window, tenant_id, idempotency_key, correlation_id, settings.dry_run)
+        verify_resp = ai_client.verify(action_executed, post_telemetry_window, tenant_id, verify_idem_key, correlation_id, settings.dry_run)
         log_verify(tenant_id, correlation_id, verify_resp, settings.dry_run)
 
         # 9. Process verification result
