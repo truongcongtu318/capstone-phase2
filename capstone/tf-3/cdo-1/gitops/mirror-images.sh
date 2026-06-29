@@ -20,7 +20,7 @@ declare -A images=(
   ["602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon/aws-load-balancer-controller:v2.8.1"]="amazon/aws-load-balancer-controller:v2.8.1"
   
   # B. Karpenter Node Provisioner (1 Image)
-  ["public.ecr.aws/karpenter/controller:v0.37.0"]="karpenter/controller:v0.37.0"
+  ["public.ecr.aws/karpenter/controller:0.37.0"]="karpenter/controller:0.37.0"
   
   # C. Kyverno Admission Controller (5 Images)
   ["ghcr.io/kyverno/kyverno:v1.12.5"]="kyverno/kyverno:v1.12.5"
