@@ -19,9 +19,9 @@ env:
   TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
 
 jobs:
-  # Job validate & plan chạy khi có PR
+  # Job validate & plan chạy khi có PR (Phase 1-3 không cần K8s API)
   plan:
-    name: Terraform Plan
+    name: Terraform Plan (Infrastructure)
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -36,8 +36,6 @@ jobs:
             working_dir: 'capstone/tf-3/cdo-1/infra/environments/sandbox/networking'
           - phase_name: '03-compute'
             working_dir: 'capstone/tf-3/cdo-1/infra/environments/sandbox/compute'
-          - phase_name: '04-services'
-            working_dir: 'capstone/tf-3/cdo-1/infra/environments/sandbox/services'
     defaults:
       run:
         working-directory: ${{ matrix.working_dir }}
@@ -89,7 +87,7 @@ jobs:
           retention-days: 1
 
   # Job apply chỉ chạy khi được merge vào main
-  # Apply tuần tự từ phase 1 đến phase 4 để tránh race condition
+  # Apply tuần tự từ phase 1 đến phase 3 trước
   apply:
     name: Terraform Apply
     needs: plan
@@ -150,10 +148,48 @@ jobs:
           terraform init
           terraform apply -auto-approve tfplan
 
-      - name: Deploy Phase 4 - Services
+  # Phase 4 plan + apply riêng biệt sau khi Phase 3 đã deploy EKS public endpoint
+  services:
+    name: Terraform Services (Phase 4)
+    needs: apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
         working-directory: capstone/tf-3/cdo-1/infra/environments/sandbox/services
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Cache Terraform Providers
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-services-${{ hashFiles('capstone/tf-3/cdo-1/infra/environments/sandbox/services/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Configure AWS Credentials (Apply Role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-apply
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
         run: |
           mkdir -p ${{ env.TF_PLUGIN_CACHE_DIR }}
-          cp /tmp/tfplans/tfplan-04-services/tfplan .
           terraform init
-          terraform apply -auto-approve tfplan
+
+      - name: Terraform Plan
+        run: terraform plan -no-color -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan

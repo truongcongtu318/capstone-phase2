@@ -52,3 +52,8 @@ output "kms_observability_arn" {
   description = "KMS key ARN for observability log encryption"
   value       = module.security.kms_observability_arn
 }
+
+output "kms_audit_arn" {
+  description = "KMS key ARN for audit trail log encryption"
+  value       = module.security.kms_audit_arn
+}
