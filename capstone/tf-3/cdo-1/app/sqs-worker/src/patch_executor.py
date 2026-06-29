@@ -187,7 +187,10 @@ def _k8s_patch(ns: str, name: str, body: dict, dry_run: bool,
         # Bước 3: Commit config mới lên CodeCommit TRƯỚC khi resume
         # Bắt buộc theo subteam-briefs.md §ST2 — để Git = cluster,
         # ArgoCD resume sẽ không thấy drift và không ghi đè config cũ lên K8s.
-        if CC_REPO and action and params is not None:
+        # RESTART_DEPLOYMENT chỉ patch annotation (ephemeral) — không có values.yaml analog,
+        # _apply_yaml() không hỗ trợ action này → bỏ qua git commit cho RESTART_DEPLOYMENT.
+        _GITOPS_ACTIONS = {"PATCH_MEMORY_LIMIT", "SCALE_REPLICAS"}
+        if CC_REPO and action in _GITOPS_ACTIONS and params is not None:
             if dry_run:
                 log.info("[DRY_RUN] fast_lane_git_commit action=%s ns=%s dep=%s",
                          action, ns, name)
