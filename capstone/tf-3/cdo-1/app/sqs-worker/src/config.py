@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # AWS Services Endpoints (for local/mock development)
     dynamodb_endpoint_url: Optional[str] = None
-    dynamodb_table_name: str = "tf-3-aiops-idempotency-lock"
+    dynamodb_table_name: str = "tf-3-aiops-app-idempotency-lock"
 
     sqs_endpoint_url: Optional[str] = None
     # sqs_queue_url local: "http://localhost:4566/000000000000/alert-queue"
