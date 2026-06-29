@@ -11,6 +11,7 @@ spec:
   selector:
     app: ai-engine
   ports:
-    - port: 8080
-      targetPort: 80 # TODO: đổi thành 8080 khi container thật lắng nghe đúng cổng
+    - name: http
+      port: 8080
+      targetPort: 8080
       protocol: TCP
