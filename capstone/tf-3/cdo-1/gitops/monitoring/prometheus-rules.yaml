@@ -19,9 +19,9 @@ spec:
           for: 0m
           labels:
             severity: critical
+            service: "{{ $labels.container }}"
           annotations:
             summary: "OOMKilled {{ $labels.pod }} in {{ $labels.namespace }}"
-            service: "{{ $labels.container }}"
 
     - name: self-heal.stuck
       interval: 30s
@@ -33,9 +33,9 @@ spec:
           for: 2m
           labels:
             severity: warning
+            service: "{{ $labels.deployment }}"
           annotations:
             summary: "Deployment {{ $labels.deployment }} stuck in {{ $labels.namespace }}"
-            service: "{{ $labels.deployment }}"
 
     - name: self-heal.backlog
       interval: 60s
@@ -46,6 +46,6 @@ spec:
           labels:
             severity: warning
             namespace: tenant-payment
+            service: "payment-worker"
           annotations:
             summary: "SQS queue backlog detected"
-            service: "payment-worker"
