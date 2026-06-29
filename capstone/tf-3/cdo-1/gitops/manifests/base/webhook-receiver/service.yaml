@@ -11,9 +11,7 @@ spec:
   selector:
     app: webhook-receiver
   ports:
-    - name: metrics
+    - name: http-webhook
       port: 8443
-      # TODO: đổi targetPort thành 8443 khi container thật lắng nghe đúng cổng này.
-      # Hiện đang trỏ tạm vào port 80 của nginx placeholder.
-      targetPort: 80
+      targetPort: 8443
       protocol: TCP
