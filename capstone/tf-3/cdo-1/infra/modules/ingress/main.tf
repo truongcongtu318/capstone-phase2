@@ -338,38 +338,46 @@ resource "helm_release" "lbc" {
 }
 
 # =============================================================================
-# INGRESS CLASS PARAMS — IngressClassParams CRD (count = var.enabled ? 1 : 0)
-# depends_on helm_release để CRD elbv2.k8s.aws/v1beta1 đã được cài
+# INGRESS CLASS PARAMS — Deploy via Helm raw chart to bypass Terraform plan CRD validation
+# count = var.enabled ? 1 : 0
 # =============================================================================
 
-resource "kubernetes_manifest" "alb_internal_params" {
-  count = var.enabled ? 1 : 0
+resource "helm_release" "alb_internal_params" {
+  count      = var.enabled ? 1 : 0
+  name       = "alb-internal-params"
+  repository = "https://bedag.github.io/helm-charts/"
+  chart      = "raw"
+  version    = "0.2.5"
+  namespace  = "kube-system"
 
-  manifest = {
-    apiVersion = "elbv2.k8s.aws/v1beta1"
-    kind       = "IngressClassParams"
-    metadata = {
-      name = local.alb_params_name
-    }
-    spec = {
-      scheme = "internal"
-      subnets = {
-        ids = var.private_subnet_ids
-      }
-      securityGroups = {
-        ids = [var.sg_alb_internal_id]
-      }
-      tags = [
+  values = [
+    yamlencode({
+      resources = [
         {
-          key   = "Component"
-          value = "ingress"
+          apiVersion = "elbv2.k8s.aws/v1beta1"
+          kind       = "IngressClassParams"
+          metadata = {
+            name = local.alb_params_name
+          }
+          spec = {
+            scheme = "internal"
+            subnets = {
+              ids = var.private_subnet_ids
+            }
+            securityGroups = {
+              ids = [var.sg_alb_internal_id]
+            }
+            tags = [
+              {
+                key   = "Component"
+                value = "ingress"
+              }
+            ]
+          }
         }
       ]
-    }
-  }
-
-  # Computed fields để Terraform không validate CRD tồn tại lúc plan
-  computed_fields = ["*"]
+    })
+  ]
 
   depends_on = [helm_release.lbc]
 }
@@ -399,5 +407,5 @@ resource "kubernetes_ingress_class_v1" "alb_internal" {
     }
   }
 
-  depends_on = [kubernetes_manifest.alb_internal_params]
+  depends_on = [helm_release.alb_internal_params]
 }
