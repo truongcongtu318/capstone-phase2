@@ -4,3 +4,4 @@ resources:
   - deployment.yaml
   - serviceaccount.yaml
   - workflow-template.yaml
+  - configmap.yaml

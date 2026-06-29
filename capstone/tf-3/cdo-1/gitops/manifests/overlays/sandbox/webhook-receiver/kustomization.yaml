@@ -16,3 +16,7 @@ resources:
 #     target:
 #       kind: Deployment
 #       name: webhook-receiver
+
+images:
+  - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-webhook-receiver
+    newTag: sha-latest

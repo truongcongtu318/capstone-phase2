@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sqs-worker-config
+  labels:
+    app: sqs-worker
+data:
+  AWS_DEFAULT_REGION: "us-east-1"
+  SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue"
+  SNS_TOPIC_ARN: "arn:aws:sns:us-east-1:474013238625:tf3-cdo1-sandbox-alerts-escalation"
+  FIREHOSE_STREAM_NAME: "tf3-cdo1-sandbox-audit-stream"
+  DYNAMODB_TABLE_NAME: "tf-3-aiops-idempotency-lock"
+  AI_ENGINE_URL: "http://ai-engine.self-heal-system.svc.cluster.local:8080"
+  DRY_RUN: "false"
+  ARGOCD_SERVER_URL: "http://argocd-server.argocd.svc.cluster.local"
+  CODECOMMIT_REPO_URL: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/capstone-phase2"
+  CODECOMMIT_BRANCH: "main"

@@ -11,3 +11,7 @@ resources:
 #     target:
 #       kind: Deployment
 #       name: ai-engine
+
+images:
+  - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine-demo
+    newTag: sha-latest

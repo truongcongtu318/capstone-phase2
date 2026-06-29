@@ -20,6 +20,10 @@ spec:
     metadata:
       labels:
         app: sqs-worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
     spec:
       securityContext:
         runAsNonRoot: true
@@ -35,16 +39,30 @@ spec:
             capabilities:
               drop:
                 - ALL
-          # PLACEHOLDER (sandbox): busybox:1.36 — EKS NAT-less runtime phải dùng
-          # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/busybox:1.36
-          # TODO: đổi sang image ECR Private khi Sub-team 2 build xong
           # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/sqs-worker:<commit-sha>
-          image: busybox:1.36
-          command: ["sleep", "infinity"]
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-self-heal-worker
+          ports:
+            - containerPort: 9090
+              name: metrics
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          envFrom:
+            - configMapRef:
+                name: sqs-worker-config
+          env:
+            - name: ARGOCD_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: argocd-token
+                  key: token
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
+              cpu: 200m
+              memory: 256Mi
             limits:
-              memory: "128Mi"
-              cpu: "100m"
+              cpu: 1000m
+              memory: 1Gi

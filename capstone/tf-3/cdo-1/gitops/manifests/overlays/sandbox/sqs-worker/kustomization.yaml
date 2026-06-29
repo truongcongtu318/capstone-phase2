@@ -11,3 +11,7 @@ resources:
 #     target:
 #       kind: Deployment
 #       name: sqs-worker
+
+images:
+  - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-self-heal-worker
+    newTag: sha-latest

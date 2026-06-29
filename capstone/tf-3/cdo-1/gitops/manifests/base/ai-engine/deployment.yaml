@@ -34,27 +34,28 @@ spec:
           # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/nginx:1.25
           # TODO: đổi sang image ECR Private khi AI team build xong
           # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/ai-engine:<commit-sha>
-          image: nginx:1.25
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine-demo
           ports:
-            - containerPort: 80 # TODO: đổi thành 8080 khi có code thật
+            - containerPort: 8080
+              name: http
           resources:
             requests:
-              memory: "1024Mi"
-              cpu: "500m"
+              cpu: 500m
+              memory: 1Gi
             limits:
-              memory: "2048Mi"
-              cpu: "1000m"
+              cpu: 1000m
+              memory: 2Gi
           livenessProbe:
             httpGet:
               path: /health
-              port: 80
-            initialDelaySeconds: 15
-            periodSeconds: 20
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /ready
-              port: 80
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3

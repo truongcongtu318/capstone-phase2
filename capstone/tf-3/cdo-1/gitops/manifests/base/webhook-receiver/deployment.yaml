@@ -26,6 +26,10 @@ spec:
     metadata:
       labels:
         app: webhook-receiver
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8443"
+        prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: webhook-receiver
       containers:
@@ -34,13 +38,26 @@ spec:
           # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/nginx:1.25
           # TODO: đổi sang image ECR Private khi Sub-team 2 (Member 4) build xong
           # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/webhook-receiver:<commit-sha>
-          image: nginx:1.25
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-webhook-receiver
           ports:
-            - containerPort: 80 # TODO: đổi thành 8443 khi có code thật
+            - containerPort: 8443
+              name: https
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8443
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8443
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
+              cpu: 100m
+              memory: 128Mi
             limits:
-              memory: "128Mi"
-              cpu: "100m"
+              cpu: 500m
+              memory: 512Mi
