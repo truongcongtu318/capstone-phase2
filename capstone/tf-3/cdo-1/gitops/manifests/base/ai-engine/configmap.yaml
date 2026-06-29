@@ -1,7 +1,7 @@
 # ============================================================
 # configmap.yaml - ai-engine
-# Sở hữu: Member 7 (khung) — nội dung thật do AI team
-# Sync Wave: "-2"
+# Sync Wave: "-2" — apply trước Deployment (Wave 0)
+# ST2 Handoff: nội dung thật thay thế placeholder
 # ============================================================
 apiVersion: v1
 kind: ConfigMap
@@ -12,4 +12,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
 data:
-  PLACEHOLDER_KEY: "placeholder-value"
+  AWS_REGION: "us-east-1"
+  BEDROCK_MODEL_ID: "anthropic.claude-3-sonnet-20240229-v1:0"
+  AI_ENGINE_PORT: "8080"
+

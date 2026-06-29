@@ -1,11 +1,7 @@
 # ============================================================
 # configmap.yaml - webhook-receiver
-# Sở hữu: Member 7 (khung) — nội dung thật do Member 4 (Sub-team 2)
-# Sync Wave: "-2"
-#
-# PLACEHOLDER: chỉ đủ để test thứ tự Sync Wave -2 chạy trước Wave -1/0.
-# Nội dung thật (cooldown timeout theo tenant tier, DynamoDB table
-# name, SQS queue URL...) sẽ điền khi Member 4 xác nhận cấu hình.
+# Sync Wave: "-2" — apply trước Deployment (Wave 0)
+# ST2 Handoff: nội dung thật thay thế placeholder
 # ============================================================
 apiVersion: v1
 kind: ConfigMap
@@ -16,9 +12,9 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
 data:
-  # TODO: điền giá trị thật khi có
-  PLACEHOLDER_KEY: "placeholder-value"
-  # Ví dụ field thật sẽ cần (theo project-rules.md mục V.1):
-  # COOLDOWN_SECONDS_BASIC_TIER: "300"
-  # COOLDOWN_SECONDS_PRO_TIER: "180"
-  # DYNAMODB_LOCK_TABLE: "tf-3-aiops-idempotency-lock"
+  AWS_DEFAULT_REGION: "us-east-1"
+  SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue"
+  DYNAMODB_LOCK_TABLE: "tf-3-aiops-app-idempotency-lock"
+  COOLDOWN_SECONDS_BASIC_TIER: "300"
+  COOLDOWN_SECONDS_PRO_TIER: "180"
+  DRY_RUN: "false"

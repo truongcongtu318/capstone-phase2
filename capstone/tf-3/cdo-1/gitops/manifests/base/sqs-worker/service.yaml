@@ -1,17 +1,17 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: webhook-receiver
+  name: sqs-worker
   labels:
-    app: webhook-receiver
+    app: sqs-worker
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   type: ClusterIP
   selector:
-    app: webhook-receiver
+    app: sqs-worker
   ports:
-    - name: http-webhook
-      port: 8443
-      targetPort: 8443
+    - name: metrics
+      port: 9090
+      targetPort: 9090
       protocol: TCP

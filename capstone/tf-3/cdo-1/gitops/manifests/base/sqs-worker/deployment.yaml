@@ -1,9 +1,10 @@
 # ============================================================
 # deployment.yaml - sqs-worker (base)
-# Sở hữu: Member 7 (khung) — code thật do Member 5/6 (Sub-team 2)
+# Sở hữu: Member 7 (khung) — code thật do ST2 (Member 5/6) bàn giao
 #
-# PLACEHOLDER: dùng busybox sleep tạm (không cần expose port, vì
-# sqs-worker là background daemon, không phải HTTP server).
+# ST2 Handoff: image ECR thật tf-3-self-heal-worker, port metrics 9090.
+# Worker là SQS daemon, không expose HTTP app port — chỉ /metrics trên 9090.
+# Image tag sha-PENDING — override tại overlays/sandbox/sqs-worker/kustomization.yaml.
 # ============================================================
 apiVersion: apps/v1
 kind: Deployment
@@ -20,12 +21,15 @@ spec:
     metadata:
       labels:
         app: sqs-worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
-      # ServiceAccount đồng bộ với security-policies/rbac.yaml
       serviceAccountName: self-heal-executor
       containers:
         - name: sqs-worker
@@ -35,16 +39,42 @@ spec:
             capabilities:
               drop:
                 - ALL
-          # PLACEHOLDER (sandbox): busybox:1.36 — EKS NAT-less runtime phải dùng
-          # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/busybox:1.36
-          # TODO: đổi sang image ECR Private khi Sub-team 2 build xong
-          # image: 544011261607.dkr.ecr.us-east-1.amazonaws.com/sqs-worker:<commit-sha>
-          image: busybox:1.36
-          command: ["sleep", "infinity"]
+          # ST2 Handoff image — tag được override tại sandbox overlay
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-self-heal-worker:sha-PENDING
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            - name: SQS_QUEUE_URL
+              value: "https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue"
+            - name: SNS_TOPIC_ARN
+              value: "arn:aws:sns:us-east-1:474013238625:tf3-cdo1-sandbox-alerts-escalation"
+            - name: FIREHOSE_STREAM_NAME
+              value: "tf3-cdo1-sandbox-audit-stream"
+            - name: DYNAMODB_TABLE_NAME
+              value: "tf-3-aiops-app-idempotency-lock"
+            - name: DYNAMODB_STATE_TABLE
+              value: "tf-3-aiops-app-state"
+            - name: AI_ENGINE_URL
+              value: "http://ai-engine.self-heal-system.svc.cluster.local:8080"
+            - name: DRY_RUN
+              value: "false"
+            - name: ARGOCD_SERVER_URL
+              value: "http://argocd-server.argocd.svc.cluster.local"
+            - name: CODECOMMIT_REPO_URL
+              value: "<CodeCommit HTTPS clone URL — pending ST2 confirmation>"
+            - name: CODECOMMIT_BRANCH
+              value: "main"
+          envFrom:
+            - secretRef:
+                name: sqs-worker-argocd-secret
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
               memory: "128Mi"
               cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
