@@ -21,7 +21,7 @@ spec:
       - name: repo-url
         value: "https://github.com/truongcongtu318/capstone-phase2.git"
       - name: target-branch
-        value: "team-3"
+        value: "main"
       - name: namespace
       - name: workload-type
         value: "deployment"
@@ -50,7 +50,8 @@ spec:
           - name: replicas
           - name: incident-id
       container:
-        # Sử dụng git image nhỏ gọn và cài đặt python để thực thi patch script tiện lợi
+        # PLACEHOLDER (sandbox): alpine/git:v2.43.0 — EKS NAT-less runtime phải dùng
+        # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/alpine-git:v2.43.0
         image: alpine/git:v2.43.0
         command: ["/bin/sh", "-c"]
         args:
