@@ -30,8 +30,8 @@ ALERTS_QUEUED = Counter(
 
 class AlertLabel(BaseModel):
     alertname: str
-    namespace: str
-    service: str
+    namespace: Optional[str] = None
+    service: Optional[str] = None
     severity: Optional[str] = None
     pod: Optional[str] = None
     container: Optional[str] = None
@@ -68,26 +68,42 @@ def health():
 
 @app.post("/alerts", status_code=202)
 async def receive_alerts(
-    payload: AlertmanagerPayload,
+    payload: dict,
     x_tenant_id: Optional[str] = Header(None)
 ):
-    for alert in payload.alerts:
+    import logging
+    try:
+        parsed_payload = AlertmanagerPayload(**payload)
+    except Exception as e:
+        logging.error(f"VALIDATION ERROR: {str(e)}")
+        raise HTTPException(status_code=422, detail=str(e))
+
+    for alert in parsed_payload.alerts:
         if alert.status != "firing":
             continue
 
+        if alert.labels.alertname not in ["PodOOMKilled", "ServiceStuck", "SQSQueueBacklog"]:
+            continue
+
         namespace = alert.labels.namespace
+        if not namespace:
+            continue
 
         # Bước 1: kiểm tra tenant_id khớp namespace
         expected_tenant_id = TENANT_ID_BY_NAMESPACE.get(namespace)
-        if not expected_tenant_id or x_tenant_id != expected_tenant_id:
+        if not expected_tenant_id:
+            continue
+
+        if x_tenant_id != expected_tenant_id:
             SECURITY_VIOLATIONS.inc()
             raise HTTPException(status_code=403, detail="SECURITY_VIOLATION")
 
         # Bước 2: DynamoDB lock
+        service_name = alert.labels.service or "unknown-service"
         lock_key = build_lock_key(
             tenant_id=expected_tenant_id,
             namespace=namespace,
-            service_name=alert.labels.service,
+            service_name=service_name,
             alert_name=alert.labels.alertname
         )
         cooldown = COOLDOWN_BY_NAMESPACE.get(namespace, 300)
@@ -99,6 +115,7 @@ async def receive_alerts(
         message = json.dumps(scrub_dict(alert.model_dump()))
         _push_sqs(message)
         ALERTS_QUEUED.labels(tenant_id=expected_tenant_id).inc()
+
 
     return {"status": "accepted"}
 
