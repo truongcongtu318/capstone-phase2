@@ -22,3 +22,8 @@ output "oidc_provider" {
   description = "OIDC provider URL (no https:// prefix)"
   value       = replace(aws_iam_openid_connect_provider.this.url, "https://", "")
 }
+
+output "argocd_codecommit_role_arn" {
+  description = "IAM role ARN for ArgoCD repo-server to access CodeCommit"
+  value       = aws_iam_role.argocd_codecommit.arn
+}
