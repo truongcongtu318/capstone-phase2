@@ -41,3 +41,19 @@ registry.k8s.io/ingress-nginx/kube-webhook-certgen:v20221220-controller-v1.5.1-5
 docker.io/alexeiled/stress-ng:latest alexeiled/stress-ng:latest
 docker.io/library/alpine:3.20 alpine:3.20
 docker.io/library/busybox:1.36 busybox:1.36
+
+# ==============================================================================
+# F. External Secrets Operator (1 Image)
+# ==============================================================================
+ghcr.io/external-secrets/external-secrets:v0.9.13 external-secrets/external-secrets:v0.9.13
+
+# ==============================================================================
+# G. Argo Workflows (2 Images)
+# ==============================================================================
+quay.io/argoproj/workflow-controller:v3.5.5 argoworkflows/workflow-controller:v3.5.5
+quay.io/argoproj/argocli:v3.5.5 argoworkflows/argocli:v3.5.5
+
+# ==============================================================================
+# H. Argo Rollouts (1 Image)
+# ==============================================================================
+quay.io/argoproj/argo-rollouts:v1.6.6 argorollouts/argo-rollouts:v1.6.6
