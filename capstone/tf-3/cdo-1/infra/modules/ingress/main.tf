@@ -146,12 +146,6 @@ data "aws_iam_policy_document" "lbc" {
       "elasticloadbalancing:CreateTargetGroup",
     ]
     resources = ["*"]
-
-    condition {
-      test     = "Null"
-      variable = "aws:RequestTag/elbv2.k8s.aws/cluster"
-      values   = ["false"]
-    }
   }
 
   statement {
@@ -176,18 +170,6 @@ data "aws_iam_policy_document" "lbc" {
       "arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*",
       "arn:aws:elasticloadbalancing:*:*:targetgroup/*/*",
     ]
-
-    condition {
-      test     = "Null"
-      variable = "aws:RequestTag/elbv2.k8s.aws/cluster"
-      values   = ["true"]
-    }
-
-    condition {
-      test     = "Null"
-      variable = "aws:ResourceTag/elbv2.k8s.aws/cluster"
-      values   = ["false"]
-    }
   }
 
   statement {
