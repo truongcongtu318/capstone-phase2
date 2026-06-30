@@ -40,6 +40,12 @@ resource "helm_release" "external_secrets" {
         limits   = { cpu = "200m", memory = "256Mi" }
         requests = { cpu = "100m", memory = "128Mi" }
       }
+      env = [
+        {
+          name  = "AWS_STS_REGIONAL_ENDPOINTS"
+          value = "regional"
+        }
+      ]
     })
   ]
 }
