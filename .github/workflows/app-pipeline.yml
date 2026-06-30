@@ -5,11 +5,13 @@ on:
     branches: [ main ]
     paths:
       - 'capstone/tf-3/cdo-1/app/**'
+      - '.github/workflows/app-pipeline.yml'
       - 'capstone/tf-3/ai/demo/**'
   pull_request:
     branches: [ main ]
     paths:
       - 'capstone/tf-3/cdo-1/app/**'
+      - '.github/workflows/app-pipeline.yml'
       - 'capstone/tf-3/ai/demo/**'
 
 permissions:
