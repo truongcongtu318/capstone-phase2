@@ -51,3 +51,43 @@ resource "aws_iam_role_policy_attachment" "node_ecr" {
   role       = aws_iam_role.node.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
+
+# ── CloudWatch Observability Add-on IRSA ────────────────────────────────────
+
+# aws_iam_openid_connect_provider.this is already created in main.tf.
+# Reference it directly — no data block needed.
+
+resource "aws_iam_role" "cloudwatch_agent" {
+  name        = "${var.cluster_name}-cloudwatch-agent-role"
+  description = "IRSA role for amazon-cloudwatch-observability add-on"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.this.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            # The add-on creates its ServiceAccount in the amazon-cloudwatch
+            # namespace under this well-known name — fixed by AWS, not configurable.
+            # aws_iam_openid_connect_provider.this.url includes "https://", which
+            # must be stripped for the condition key.
+            "${replace(aws_iam_openid_connect_provider.this.url, "https://", "")}:sub" = "system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"
+            "${replace(aws_iam_openid_connect_provider.this.url, "https://", "")}:aud" = "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = var.global_tags
+}
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
+  role       = aws_iam_role.cloudwatch_agent.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
