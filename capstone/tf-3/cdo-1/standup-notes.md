@@ -52,3 +52,9 @@
 1. **Team 3:** Check xem Kyverno có đang block luồng Fast Lane không.
 2. **Team 1:** Tạo và cấp IAM Role giới hạn (chỉ mở DynamoDB, SNS, SQS, Firehose... trong namespace `tenant-payment` và `checkout`) cho Team 2 & 3.
 3. **Team 2 + 3:** Phối hợp test thông Alert & Webhook trước khi deploy env chung.
+
+## 29/6/2026: Báo cáo tiến độ task từng nhóm 
+- Team 1: các task hầu hết là xong , nhưng đang thiếu 1 S3 bucket , code commit thiếu repo cho team 3 dùng để up lên còn lại đang đọc docs , đủ những gì cần cho team 2 3 , nếu có gì cần bổ sung thì 2 team báo để update 
+- Team 2:  Hoàn thành webhook receiver , SQS Worker, test local pass, đã viết /metrics ở webhook receiver và sqs worker cho team 3 lấy
+- Team 3:  các task hầu hết xong , nhưng còn đang lấy cái metrics, endpoint để test ,
+3 team thảo luận thêm về contract với bên AI , nghiên cứu thêm phần >= 10 scenarios, phải giả lập thêm phần các kịch bản ,  3 pattern ...
