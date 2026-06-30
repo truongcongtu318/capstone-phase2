@@ -3,7 +3,7 @@
 # Phân tích tin nhắn alert, gọi module ai_client chẩn đoán lỗi.
 # Gọi module patch_executor để vá lỗi, và ghi nhận audit logs bất biến qua audit_logger.
 # (Trigger CI/CD pipeline demo)
-
+# demo cicd
 import os
 import sys
 import json
