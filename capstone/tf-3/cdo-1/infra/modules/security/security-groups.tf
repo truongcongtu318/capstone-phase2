@@ -17,7 +17,7 @@ resource "aws_security_group" "alb_internal" {
   tags = merge(
     local.module_tags,
     {
-      Name = "sg-alb-internal"
+      Name = "alb-internal-sg"
     }
   )
 }
