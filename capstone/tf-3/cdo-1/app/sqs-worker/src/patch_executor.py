@@ -67,9 +67,21 @@ def _argocd(method: str, path: str, body: dict | None = None, dry_run: bool = Fa
     import httpx
     url = f"{ARGOCD_URL}{path}"
     url = url.replace("http://", "https://")
-    content_type = "application/merge-patch+json" if method.lower() == "patch" else "application/json"
+    content_type = "application/json"
     headers = {"Authorization": f"Bearer {ARGOCD_TOKEN}", "Content-Type": content_type}
-    resp = getattr(httpx, method)(url, json=body or {}, headers=headers, timeout=15.0, verify=False)
+    
+    # Nếu là request PATCH, ArgoCD gRPC gateway yêu cầu body phải map với protobuf ApplicationPatchRequest
+    # (chứa trường "patch" là json string và "patchType" là string)
+    if method.lower() == "patch" and body is not None:
+        import json
+        payload = {
+            "patch": json.dumps(body),
+            "patchType": "merge"
+        }
+    else:
+        payload = body or {}
+
+    resp = getattr(httpx, method)(url, json=payload, headers=headers, timeout=15.0, verify=False)
     resp.raise_for_status()
     log.info("argocd %s %s → %s", method.upper(), path, resp.status_code)
 
@@ -77,7 +89,7 @@ def _argocd(method: str, path: str, body: dict | None = None, dry_run: bool = Fa
 def _argocd_suspend(app: str, dry_run: bool) -> None:
     """Tắt ArgoCD auto-sync (set manual) TRƯỚC khi patch K8s."""
     try:
-        _argocd("patch", f"/api/v1/applications/{app}?patchType=merge",
+        _argocd("patch", f"/api/v1/applications/{app}",
                 {"spec": {"syncPolicy": {"automated": None}}}, dry_run)
     except Exception as e:
         log.warning("Failed to suspend argocd app %s: %s", app, e)
@@ -86,7 +98,7 @@ def _argocd_suspend(app: str, dry_run: bool) -> None:
 def _argocd_resume(app: str, dry_run: bool) -> None:
     """Bật lại auto-sync + force sync SAU khi patch K8s."""
     try:
-        _argocd("patch", f"/api/v1/applications/{app}?patchType=merge",
+        _argocd("patch", f"/api/v1/applications/{app}",
                 {"spec": {"syncPolicy": {"automated": {"prune": True, "selfHeal": True}}}}, dry_run)
         _argocd("post", f"/api/v1/applications/{app}/sync", dry_run=dry_run)
     except Exception as e:
