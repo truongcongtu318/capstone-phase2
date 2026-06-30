@@ -6,7 +6,7 @@
 # Worker là SQS daemon, không expose HTTP app port — chỉ /metrics trên 9090.
 # Image tag sha-PENDING — override tại overlays/sandbox/sqs-worker/kustomization.yaml.
 # ============================================================
-#
+##
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -78,7 +78,7 @@ spec:
             - name: ARGOCD_SERVER_URL
               value: "https://argocd-server.argocd.svc.cluster.local"
             - name: CODECOMMIT_REPO_URL
-              value: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops"
+              value: "codecommit::us-east-1://tf3-cdo1-sandbox-gitops"
             - name: CODECOMMIT_BRANCH
               value: "main"
           envFrom:
