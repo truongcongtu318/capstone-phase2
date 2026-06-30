@@ -65,7 +65,6 @@ TENANT_ID_BY_NAMESPACE = {
 def health():
     return {"status": "healthy"}
 
-
 @app.post("/alerts", status_code=202)
 async def receive_alerts(
     payload: dict,
@@ -77,14 +76,14 @@ async def receive_alerts(
     except Exception as e:
         logging.error(f"VALIDATION ERROR: {str(e)}")
         raise HTTPException(status_code=422, detail=str(e))
-
+        
     for alert in parsed_payload.alerts:
         if alert.status != "firing":
             continue
-
+            
         if alert.labels.alertname not in ["PodOOMKilled", "ServiceStuck", "SQSQueueBacklog"]:
             continue
-
+            
         namespace = alert.labels.namespace
         if not namespace:
             continue
@@ -93,7 +92,7 @@ async def receive_alerts(
         expected_tenant_id = TENANT_ID_BY_NAMESPACE.get(namespace)
         if not expected_tenant_id:
             continue
-
+            
         if x_tenant_id != expected_tenant_id:
             SECURITY_VIOLATIONS.inc()
             raise HTTPException(status_code=403, detail="SECURITY_VIOLATION")
@@ -115,7 +114,6 @@ async def receive_alerts(
         message = json.dumps(scrub_dict(alert.model_dump()))
         _push_sqs(message)
         ALERTS_QUEUED.labels(tenant_id=expected_tenant_id).inc()
-
 
     return {"status": "accepted"}
 
