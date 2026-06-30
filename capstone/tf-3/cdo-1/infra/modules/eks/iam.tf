@@ -91,3 +91,63 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
   role       = aws_iam_role.cloudwatch_agent.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
+
+# ── ArgoCD IRSA (CodeCommit Read) ───────────────────────────────────────────
+
+# Allows ArgoCD repo-server ServiceAccount in namespace 'argocd' to
+# authenticate with CodeCommit via IRSA for GitOps source pull.
+
+resource "aws_iam_role" "argocd_codecommit" {
+  name        = "${var.cluster_name}-argocd-codecommit-role"
+  description = "IRSA role for ArgoCD repo-server to pull from CodeCommit"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.this.arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(aws_iam_openid_connect_provider.this.url, "https://", "")}:sub" = "system:serviceaccount:argocd:argocd-repo-server"
+            "${replace(aws_iam_openid_connect_provider.this.url, "https://", "")}:aud" = "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = var.global_tags
+}
+
+resource "aws_iam_policy" "argocd_codecommit_read" {
+  name        = "${var.cluster_name}-argocd-codecommit-read"
+  description = "Allow ArgoCD repo-server to pull from CodeCommit"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "codecommit:GitPull",
+          "codecommit:GetBranch",
+          "codecommit:GetCommit",
+          "codecommit:GetRepository",
+          "codecommit:ListBranches"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = var.global_tags
+}
+
+resource "aws_iam_role_policy_attachment" "argocd_codecommit_read" {
+  role       = aws_iam_role.argocd_codecommit.name
+  policy_arn = aws_iam_policy.argocd_codecommit_read.arn
+}

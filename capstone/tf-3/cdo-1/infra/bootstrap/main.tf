@@ -316,3 +316,47 @@ resource "aws_iam_role_policy_attachment" "apply_admin" {
   role       = aws_iam_role.github_actions_apply.name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
+
+# =============================================================================
+# ECR LIFECYCLE POLICIES — Giữ tối đa 10 images mới nhất
+# =============================================================================
+
+locals {
+  app_ecr_repositories = [
+    "tf-3-self-heal-worker",
+    "tf-3-webhook-receiver",
+    "tf-3-ai-engine-demo",
+  ]
+}
+
+resource "aws_ecr_lifecycle_policy" "app" {
+  for_each   = toset(local.app_ecr_repositories)
+  repository = each.key
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep last 10 tagged images (sha- prefix from app-pipeline.yml)"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["sha-"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 10
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Expire untagged images after 1 day"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
+        }
+        action = { type = "expire" }
+      }
+    ]
+  })
+}
