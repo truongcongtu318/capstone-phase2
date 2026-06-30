@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Send synthetic alert messages to the self-heal SQS queue to exercise QueueBacklog.
+# Send synthetic alert messages to the self-heal SQS queue to exercise SQSQueueBacklog.
 
 QUEUE_URL=${QUEUE_URL:-}
 MESSAGE_COUNT=${MESSAGE_COUNT:-150}
@@ -22,7 +22,7 @@ report_evidence() {
 message_body() {
   local index=$1
   cat <<EOF
-{"source":"member-9-chaos","type":"QueueBacklog","sequence":${index},"service":"sqs-worker","severity":"warning"}
+{"source":"member-9-chaos","type":"SQSQueueBacklog","sequence":${index},"service":"sqs-worker","severity":"warning"}
 EOF
 }
 

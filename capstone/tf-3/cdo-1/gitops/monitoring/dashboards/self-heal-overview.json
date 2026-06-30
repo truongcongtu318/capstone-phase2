@@ -76,7 +76,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(ALERTS{alertstate=\"firing\",alertname=~\"PodOOMKilled|PodCrashLooping|QueueBacklog\"}) or vector(0)",
+          "expr": "sum(ALERTS{alertstate=\"firing\",alertname=~\"PodOOMKilled|PodCrashLooping|SQSQueueBacklog\"}) or vector(0)",
           "instant": true
         }
       ]
@@ -290,7 +290,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "ALERTS{alertstate=\"firing\",alertname=~\"PodOOMKilled|PodCrashLooping|QueueBacklog\"}",
+          "expr": "ALERTS{alertstate=\"firing\",alertname=~\"PodOOMKilled|PodCrashLooping|SQSQueueBacklog\"}",
           "format": "table",
           "instant": true
         }

@@ -119,7 +119,7 @@ file_contains "${GITOPS_DIR}/security-policies/rbac.yaml" 'namespace: tenant-che
 file_contains "${GITOPS_DIR}/security-policies/network-policies/webhook-netpolicy.yaml" 'name: webhook-netpolicy' "webhook NetworkPolicy declared"
 file_contains "${GITOPS_DIR}/security-policies/network-policies/ai-engine-netpolicy.yaml" 'name: ai-engine-netpolicy' "ai-engine NetworkPolicy declared"
 file_contains "${GITOPS_DIR}/monitoring/prometheus-rules.yaml" 'alert: PodOOMKilled' "PodOOMKilled alert declared"
-file_contains "${GITOPS_DIR}/monitoring/prometheus-rules.yaml" 'alert: QueueBacklog' "QueueBacklog alert declared"
+file_contains "${GITOPS_DIR}/monitoring/prometheus-rules.yaml" 'alert: SQSQueueBacklog' "SQSQueueBacklog alert declared"
 file_contains "${GITOPS_DIR}/monitoring/alertmanager-config.yaml" 'webhook-receiver.self-heal-system.svc.cluster.local' "Alertmanager routes to webhook receiver"
 file_exists "${GITOPS_DIR}/manifests/base/webhook-receiver/service.yaml" "webhook-receiver Service manifest"
 file_exists "${GITOPS_DIR}/manifests/base/sqs-worker/serviceaccount.yaml" "sqs-worker self-heal-executor ServiceAccount manifest"

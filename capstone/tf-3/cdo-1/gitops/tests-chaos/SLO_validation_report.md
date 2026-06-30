@@ -151,7 +151,7 @@ Note: Account ID 474013238625 is the ST2 confirmed account. Legacy references to
 | Kyverno policy manifest | PASS | `security-policies/restrict-mutations.yaml` declares `ClusterPolicy/restrict-mutations` |
 | RBAC self-heal executor manifests | PASS | `security-policies/rbac.yaml` declares `self-heal-executor-role` and tenant RoleBindings |
 | NetworkPolicy manifests | PASS | `webhook-netpolicy` and `ai-engine-netpolicy` declared |
-| Prometheus alerts | PASS | `PodOOMKilled`, `PodCrashLooping`, and `QueueBacklog` declared |
+| Prometheus alerts | PASS | `PodOOMKilled`, `PodCrashLooping`, and `SQSQueueBacklog` declared |
 | Alertmanager route | PASS | `cdo1-self-heal-routing` routes to `webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts` |
 | ArgoCD tenant-payment-app | PASS | argo-apps/tenant-payment-app.yaml created |
 | ArgoCD tenant-checkout-app | PASS | argo-apps/tenant-checkout-app.yaml created |
@@ -202,7 +202,7 @@ Note: Account ID 474013238625 is the ST2 confirmed account. Legacy references to
 |---|---|---|---|---|---|---|
 | Pod OOM | `oom-simulator.sh` creates stress-ng pod | `PodOOMKilled` | PATCH_MEMORY_LIMIT or escalation | READY_FOR_CLUSTER_RUN | TBD | syntax PASS; dry-run supported |
 | DB Network Block | `network-blockade.sh` denies DB CIDR egress | DB connection failure | Escalate or recover | READY_FOR_DRY_RUN | TBD | syntax PASS; `DRY_RUN=true` supported |
-| Queue Backlog | `queue-backlog-stress.sh` sends SQS messages | `QueueBacklog` | Scale worker or escalate | READY_FOR_DRY_RUN | TBD | syntax PASS; waits for queue URL |
+| Queue Backlog | `queue-backlog-stress.sh` sends SQS messages | `SQSQueueBacklog` | Scale worker or escalate | READY_FOR_DRY_RUN | TBD | syntax PASS; waits for queue URL |
 | Full E2E | Alertmanager → webhook → worker → audit | matched alert | remediation + verify + audit | PENDING_EKS_DEPLOY | TBD | waiting for SHA tags + cluster access |
 
 ## Evidence Commands

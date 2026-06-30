@@ -256,7 +256,7 @@ Hệ thống triển khai 5 cơ chế phòng vệ độc lập để ngăn chặ
 **Tăng/giảm Pod Replicas (HPA & Self-Heal Engine):**
 
 *   **HPA cơ bản:** Tự động tăng/giảm replicas của Webhook Receiver (HPA trỏ vào Argo Rollouts custom resource `Rollout`) và Tenant Applications (HPA trỏ vào `Deployment`) dựa trên CPU metrics nội bộ cụm.
-*   **Self-Heal Alert-driven Scaling (Cho SQS Queue Backlog):** HPA không can thiệp trực tiếp vào SQS depth. Thay vào đó, Prometheus watch metrics SQS qua CloudWatch exporter và AlertManager kích hoạt alert `QueueBacklog`. Webhook Receiver tiếp nhận alert, gọi AI Engine quyết định và kích hoạt action `SCALE_REPLICAS` (đúng enum trong AI API Contract, tăng replicas của worker deployment) qua luồng GitOps/Direct Patch.
+*   **Self-Heal Alert-driven Scaling (Cho SQS Queue Backlog):** HPA không can thiệp trực tiếp vào SQS depth. Thay vào đó, Prometheus watch metrics SQS qua CloudWatch exporter và AlertManager kích hoạt alert `SQSQueueBacklog`. Webhook Receiver tiếp nhận alert, gọi AI Engine quyết định và kích hoạt action `SCALE_REPLICAS` (đúng enum trong AI API Contract, tăng replicas của worker deployment) qua luồng GitOps/Direct Patch.
 
 | Chiều | Điều kiện kích hoạt | Thời gian duy trì | Action |
 |---|---|---|---|
