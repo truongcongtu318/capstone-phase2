@@ -104,3 +104,24 @@ resource "aws_eks_addon" "coredns" {
 
   depends_on = [aws_eks_node_group.this]
 }
+
+# ── CloudWatch Observability Add-on ──────────────────────────────────────────
+
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name                = aws_eks_cluster.this.name
+  addon_name                  = "amazon-cloudwatch-observability"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  # Pass the IRSA role so the add-on's ServiceAccount can call CloudWatch APIs.
+  service_account_role_arn = aws_iam_role.cloudwatch_agent.arn
+
+  tags = var.global_tags
+
+  # The add-on deploys DaemonSet pods onto nodes, so the node group must
+  # exist first. It also needs the IAM attachment before pods can start.
+  depends_on = [
+    aws_eks_node_group.this,
+    aws_iam_role_policy_attachment.cloudwatch_agent,
+  ]
+}
