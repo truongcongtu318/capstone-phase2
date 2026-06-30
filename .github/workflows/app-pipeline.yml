@@ -146,7 +146,7 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore(gitops): update image tags to sha-${{ github.sha }} [skip ci]"
+          commit-message: "chore(gitops): update image tags to sha-${{ github.sha }} [skip ci] 1"
           title: "🤖 GitOps: Update image tags to sha-${{ github.sha }}"
           body: |
             Automated image tag update for `webhook-receiver`, `sqs-worker`, and `ai-engine`.
