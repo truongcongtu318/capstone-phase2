@@ -1,0 +1,80 @@
+# ============================================================
+# deployment.yaml - webhook-receiver (base)
+# Sở hữu: Member 7 (khung) — image thật do ST2 (Member 4) bàn giao
+#
+# ST2 Handoff: image ECR thật đã nhận, port 8443, SA webhook-receiver + IRSA.
+# Image tag sha-PENDING — cần ST2 cung cấp SHA thật, sau đó
+# override tại overlays/sandbox/webhook-receiver/kustomization.yaml.
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-receiver
+  labels:
+    app: webhook-receiver
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-receiver
+  template:
+    metadata:
+      labels:
+        app: webhook-receiver
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8443"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: webhook-receiver
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: webhook-receiver
+          # ST2 Handoff image — tag được override tại sandbox overlay
+          # SHA thật cần ST2 confirm; hiện dùng sha-PENDING làm placeholder tag
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-webhook-receiver:sha-PENDING
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http-webhook
+              containerPort: 8443
+              protocol: TCP
+          env:
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            - name: SQS_QUEUE_URL
+              value: "https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue"
+            - name: DYNAMODB_TABLE_NAME
+              value: "tf-3-aiops-app-idempotency-lock"
+            - name: DRY_RUN
+              value: "false"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8443
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8443
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

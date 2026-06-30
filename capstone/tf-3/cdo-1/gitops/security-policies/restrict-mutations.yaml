@@ -1,6 +1,186 @@
-# ☸️ Kyverno Admission Controller Guardrails Policy
-# TODO: Viết Kyverno ClusterPolicy khóa cứng quyền mutations.
-# Chỉ cho phép thay đổi:
-# - spec.replicas
-# - spec.template.spec.containers[*].resources.limits
-# Chặn đứng mọi nỗ lực sửa đổi cấu hình K8s khác trong namespace `self-heal-system`.
+# ============================================================
+# restrict-mutations.yaml (Kyverno ClusterPolicy)
+# Sở hữu: Member 7
+# Sync Wave: "-3"
+#
+# CHIẾN LƯỢC: Kyverno không "whitelist field rồi deny phần còn lại"
+# trong 1 rule duy nhất một cách gọn gàng — nên tách 3 rule độc lập:
+#   Rule 1: Chặn TUYỆT ĐỐI các field nguy hiểm (privileged, hostPath,
+#           image, ports) trên Deployment/StatefulSet tại namespace
+#           tenant, BẤT KỂ ai gửi request (ngoại trừ ArgoCD controller).
+#   Rule 2: Chặn mọi request PATCH/UPDATE vào Deployment/StatefulSet
+#           trong namespace tenant nếu KHÔNG đến từ ServiceAccount
+#           self-heal-executor hoặc ArgoCD controller (đã loại bỏ sqs-worker).
+#   Rule 3: Cấm tuyệt đối mọi mutation (bất kể field gì)
+#           trong các namespace hệ thống bảo vệ (argocd, observability)
+#           từ ServiceAccount self-heal-executor.
+#
+# Test case PHẢI pass trước khi merge (chạy bằng kubectl --as):
+#   1. (as self-heal-executor) patch resources.limits.memory -> PASS
+#   2. (as self-heal-executor) patch spec.replicas -> PASS
+#   3. (as self-heal-executor) patch container image -> REJECT (Rule 1)
+#   4. (as self-heal-executor) patch securityContext.privileged=true -> REJECT (Rule 1)
+#   5. (as default SA khác) patch resources.limits dù field hợp lệ -> REJECT (Rule 2)
+#   6. (as self-heal-executor) patch Deployment trong ns=kube-system -> REJECT (Rule 3)
+# ============================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-mutations
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+    policies.kyverno.io/title: Restrict Self-Heal Mutations
+    policies.kyverno.io/description: >-
+      Chỉ cho phép ServiceAccount self-heal-executor sửa spec.replicas hoặc
+      resources.limits trên Deployment/StatefulSet của namespace tenant.
+      Chặn tuyệt đối thay đổi image/hostPath/privileged (ngoại trừ ArgoCD controller)
+      và chặn mọi mutation trong namespace hệ thống từ self-heal-executor.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    # --------------------------------------------------------
+    # Rule 1: Chặn field nguy hiểm tuyệt đối, bất kể ai gửi request
+    # --------------------------------------------------------
+    - name: deny-dangerous-fields
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+              namespaces:
+                - tenant-payment
+                - tenant-checkout
+              operations:
+                - UPDATE
+      exclude:
+        any:
+          - subjects:
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
+      validate:
+        message: >-
+          Chỉ được phép sửa spec.replicas hoặc resources.limits.
+          Không được đổi image, mount hostPath, hoặc chạy privileged container.
+        deny:
+          conditions:
+            any:
+              # Chặn privileged container
+              - key: "{{ request.object.spec.template.spec.containers[].securityContext.privileged || [] }}"
+                operator: AnyIn
+                value: [true]
+              # Chặn mount hostPath volume
+              - key: "{{ request.object.spec.template.spec.volumes[].hostPath || [] }}"
+                operator: NotEquals
+                value: []
+              # Chặn đổi image: so sánh danh sách image cũ vs mới, khác nhau -> deny
+              - key: "{{ request.object.spec.template.spec.containers[].image || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].image || [] }}"
+              # Chặn đổi command
+              - key: "{{ request.object.spec.template.spec.containers[].command || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].command || [] }}"
+              # Chặn đổi args
+              - key: "{{ request.object.spec.template.spec.containers[].args || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].args || [] }}"
+              # Chặn đổi env
+              - key: "{{ request.object.spec.template.spec.containers[].env || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].env || [] }}"
+              # Chặn đổi ports
+              - key: "{{ request.object.spec.template.spec.containers[].ports || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].ports || [] }}"
+              # Chặn đổi serviceAccountName
+              - key: "{{ request.object.spec.template.spec.serviceAccountName || '' }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.serviceAccountName || '' }}"
+              # Chặn đổi livenessProbe
+              - key: "{{ request.object.spec.template.spec.containers[].livenessProbe || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].livenessProbe || [] }}"
+              # Chặn đổi readinessProbe
+              - key: "{{ request.object.spec.template.spec.containers[].readinessProbe || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].readinessProbe || [] }}"
+              # Chặn đổi resources.requests
+              - key: "{{ request.object.spec.template.spec.containers[].resources.requests || [] }}"
+                operator: NotEquals
+                value: "{{ request.oldObject.spec.template.spec.containers[].resources.requests || [] }}"
+
+    # --------------------------------------------------------
+    # Rule 2: Chỉ self-heal-executor mới được PATCH/UPDATE
+    # Deployment/StatefulSet trong namespace tenant.
+    # --------------------------------------------------------
+    - name: only-self-heal-executor-can-patch
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+              namespaces:
+                - tenant-payment
+                - tenant-checkout
+              operations:
+                - UPDATE
+      exclude:
+        any:
+          - subjects:
+              - kind: ServiceAccount
+                name: self-heal-executor
+                namespace: self-heal-system
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
+      validate:
+        message: >-
+          Chỉ ServiceAccount self-heal-executor (namespace self-heal-system)
+          hoặc ArgoCD controller mới có quyền sửa đổi Deployment/StatefulSet của tenant.
+        deny: {}
+
+    # --------------------------------------------------------
+    # Rule 3: Cấm tuyệt đối mọi mutation trong namespace hệ thống từ self-heal-executor
+    #
+    # ĐÃ XÁC NHẬN (test thật trên Kyverno v1.12.5 và v1.18.1): Kyverno có configmap
+    # `resourceFilters` mặc định loại trừ TOÀN BỘ resource trong
+    # kube-system khỏi admission webhook ([*/*,kube-system,*]) - đây là
+    # hành vi mặc định AN TOÀN của chính Kyverno (tránh tự treo cluster
+    # nếu lỡ chặn nhầm CoreDNS/kube components), KHÔNG sửa được bằng
+    # ClusterPolicy. Rule này do đó CHỈ có hiệu lực với argocd và
+    # observability (không bị filter mặc định).
+    #
+    # Lớp bảo vệ thật cho kube-system là RBAC K8s, không phải Kyverno:
+    # ServiceAccount self-heal-executor chỉ được cấp quyền patch trên
+    # tenant-payment, tenant-checkout (xem ma trận RBAC trong project-rules.md
+    # mục IV.2) - không có quyền gì trên kube-system, nên dù Kyverno không
+    # chặn được, RBAC vẫn chặn.
+    # --------------------------------------------------------
+    - name: deny-system-namespace-mutation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+              namespaces:
+                - argocd
+                - observability
+              operations:
+                - UPDATE
+                - DELETE
+            subjects:
+              - kind: ServiceAccount
+                name: self-heal-executor
+                namespace: self-heal-system
+      validate:
+        message: >-
+          Không hành động tự chữa lành nào được phép sửa đổi resource
+          trong namespace hệ thống (argocd, observability). kube-system
+          được bảo vệ bởi RBAC, không phải Kyverno (xem comment trên).
+        deny: {}

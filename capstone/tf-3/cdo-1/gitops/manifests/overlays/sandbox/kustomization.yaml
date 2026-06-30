@@ -1,3 +1,10 @@
 # Global Kustomization Overlay for Sandbox
-# TODO: Tập hợp tất cả các components overlays con: webhook-receiver, sqs-worker, ai-engine.
+# Tập hợp tất cả các components overlays con: webhook-receiver, sqs-worker, ai-engine.
 # Định nghĩa namespace chung `self-heal-system` cho toàn bộ sandbox environment.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: self-heal-system
+resources:
+  - webhook-receiver
+  - sqs-worker
+  - ai-engine

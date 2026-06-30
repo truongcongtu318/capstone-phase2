@@ -1,0 +1,36 @@
+# ============================================================
+# hpa.yaml - ai-engine
+# Sở hữu: Member 7
+# Sync Wave: "-2" — cùng wave với deployment để scale ngay khi sẵn sàng
+#
+# HPA theo dõi CPU utilization. Khi CPU vượt 70%, scale out đến 5 replicas.
+# metrics-server phải được cài trong cluster (Sub-team 1 đảm nhiệm).
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-engine-hpa
+  labels:
+    app: ai-engine
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-engine
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

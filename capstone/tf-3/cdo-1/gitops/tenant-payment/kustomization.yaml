@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+helmGlobals:
+  chartHome: .
+helmCharts:
+  - name: order-service
+    releaseName: order-service
+    version: "0.1.0"
+    valuesFile: ./order-service/values.yaml
+    namespace: tenant-payment
+  - name: order-api
+    releaseName: order-api
+    version: "0.1.0"
+    valuesFile: ./order-api/values.yaml
+    namespace: tenant-payment
+  - name: payment-worker
+    releaseName: payment-worker
+    version: "0.1.0"
+    valuesFile: ./payment-worker/values.yaml
+    namespace: tenant-payment

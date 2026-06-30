@@ -1,0 +1,44 @@
+# ============================================================
+# ingress.yaml - webhook-receiver
+# Sở hữu: Member 7
+# Sync Wave: "1" — deploy SAU CÙNG, sau khi workload (Wave 0) đã sẵn sàng
+#
+# CHƯA TEST ĐƯỢC TRÊN KIND: ALB Ingress Controller chỉ hoạt động thật
+# trên AWS EKS (do Sub-team 1 cài qua infra/modules/ingress/). Trên
+# Kind, resource này sẽ tồn tại nhưng KHÔNG có IP/ALB thật cấp phát -
+# annotation kubernetes.io/ingress.class sẽ không khớp controller nào
+# trên Kind nên Ingress sẽ ở trạng thái "pending" vô hạn, đây là hành
+# vi ĐÚNG MONG ĐỢI khi test local, không phải lỗi.
+#
+# Theo project-rules.md mục III.1: sg-alb-internal chỉ cho TCP 443 từ
+# VPN/Internal Client hoặc Alert Relay Component - ALB này PHẢI là
+# internal (scheme: internal), KHÔNG được public, vì Alertmanager gọi
+# vào webhook qua kết nối nội bộ VPC, không qua Internet.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: webhook-receiver-ingress
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    # NOTE: Khi Sub-team 2 (Member 4) deploy app thật nghe HTTPS port 8443,
+    # đổi lại thành: alb.ingress.kubernetes.io/backend-protocol: HTTPS
+    # TODO: điền certificate-arn thật khi Sub-team 1 cấp ACM cert
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:544011261607:certificate/<cert-id>
+    alb.ingress.kubernetes.io/security-groups: sg-alb-internal
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /alerts
+            pathType: Prefix
+            backend:
+              service:
+                name: webhook-receiver
+                port:
+                  number: 8443

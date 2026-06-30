@@ -1,2 +1,14 @@
-# Kustomization Base config
-# TODO: Định nghĩa danh sách resources cơ sở cho AI Engine: deployment.yaml, service.yaml, external-secret.yaml.
+# TODO: thêm external-secret.yaml vào resources khi External Secrets
+# Operator (ESO) đã cài trong cluster - bỏ tạm vì Kind local chưa có
+# CRD ExternalSecret, thêm vào ngay sẽ làm ArgoCD sync fail.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - hpa.yaml
+  - fake-source-secret.yaml
+  - secretstore.yaml
+  - external-secret.yaml

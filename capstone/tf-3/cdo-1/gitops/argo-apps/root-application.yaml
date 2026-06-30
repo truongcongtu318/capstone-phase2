@@ -1,8 +1,40 @@
+# ============================================================
+# root-application.yaml
+# Sở hữu: Member 7
+#
+# ArgoCD "App-of-Apps" root - Application DUY NHẤT apply bằng tay.
+# Tự quét toàn bộ gitops/argo-apps/ và tạo ra các Application con
+# (webhook-receiver-app.yaml, sqs-worker-app.yaml, ai-engine-app.yaml).
+#
+# LƯU Ý:
+# - repoURL trỏ về GitHub (dùng để test local trên Kind). Theo README
+#   gốc, production sẽ dùng AWS CodeCommit - cần đổi lại repoURL +
+#   credential (SSH key qua IRSA) khi Sub-team 1 cấp xong OIDC role.
+# - targetRevision = main (nhánh chính thức sau khi merge).
+#   Đã đổi từ team-3 → main trước khi merge vào main branch.
+# ============================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: root-application
   namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
-  # TODO: Cấu hình Root ArgoCD App-of-Apps kết nối AWS CodeCommit repository.
-  # Tự động đồng bộ các K8s Application con: webhook-receiver, sqs-worker, ai-engine.
+  project: default
+  source:
+    repoURL: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
+    targetRevision: main
+    path: capstone/tf-3/cdo-1/gitops/argo-apps
+    # TODO: khi chuyển sang CodeCommit, đổi repoURL thành dạng:
+    #   https://git-codecommit.us-east-1.amazonaws.com/v1/repos/<repo-name>
+    # và cấu hình repo credential trong ArgoCD (argocd repo add ...)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

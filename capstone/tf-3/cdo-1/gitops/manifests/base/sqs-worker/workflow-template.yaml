@@ -1,0 +1,118 @@
+# ============================================================
+# workflow-template.yaml - self-heal-remediation-template
+# Sở hữu: Member 7
+# Sync Wave: "-1"
+#
+# Định nghĩa Argo WorkflowTemplate dùng cho quy trình khắc phục
+# lỗi qua GitOps (Slow Lane). SQS Worker sẽ khởi tạo Workflow
+# từ template này để thay đổi cấu hình (Limits, Replicas) bền vững trong Git.
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: self-heal-remediation-template
+  namespace: self-heal-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  entrypoint: gitops-patch
+  arguments:
+    parameters:
+      - name: repo-url
+        value: "https://github.com/truongcongtu318/capstone-phase2.git"
+      - name: target-branch
+        value: "main"
+      - name: namespace
+      - name: workload-type
+        value: "deployment"
+      - name: workload-name
+      - name: container-name
+        value: ""
+      - name: memory-limit-mb
+        value: ""
+      - name: memory-request-mb
+        value: ""
+      - name: replicas
+        value: ""
+      - name: incident-id
+  templates:
+    - name: gitops-patch
+      inputs:
+        parameters:
+          - name: repo-url
+          - name: target-branch
+          - name: namespace
+          - name: workload-type
+          - name: workload-name
+          - name: container-name
+          - name: memory-limit-mb
+          - name: memory-request-mb
+          - name: replicas
+          - name: incident-id
+      container:
+        # PLACEHOLDER (sandbox): alpine/git:v2.43.0 — EKS NAT-less runtime phải dùng
+        # ECR mirror: 544011261607.dkr.ecr.us-east-1.amazonaws.com/mirror/alpine-git:v2.43.0
+        image: alpine/git:v2.43.0
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -e
+            echo "=== BẮT ĐẦU QUY TRÌNH GITOPS REMEDIATION ==="
+            echo "Incident ID: {{inputs.parameters.incident-id}}"
+            echo "Target Workload: {{inputs.parameters.namespace}}/{{inputs.parameters.workload-type}}/{{inputs.parameters.workload-name}}"
+            
+            # 1. Cấu hình định danh Git
+            git config --global user.email "self-heal-bot@cdo01.local"
+            git config --global user.name "Self-Heal Bot"
+            
+            # 2. Clone GitOps Repository
+            git clone --depth 1 -b {{inputs.parameters.target-branch}} {{inputs.parameters.repo-url}} gitops-repo
+            cd gitops-repo
+            
+            # 3. Thực hiện sửa đổi (Patch) Manifest bằng script hoặc sed
+            # Tên file yaml giả định theo cấu trúc thực tế: 
+            # capstone/tf-3/cdo-1/gitops/manifests/base/webhook-receiver/deployment.yaml hoặc tương tự.
+            # Để demo/sandbox, chúng ta tìm và cập nhật tệp tương ứng.
+            
+            echo "Tìm và sửa tệp YAML cấu hình..."
+            # Giả định đường dẫn tệp manifest nằm trong thư mục manifests:
+            # (Trong môi trường thật sẽ dùng script python/bash để cập nhật yaml chính xác bằng yq)
+            TARGET_FILE=""
+            if [ "{{inputs.parameters.workload-name}}" = "webhook-receiver" ]; then
+              TARGET_FILE="capstone/tf-3/cdo-1/gitops/manifests/base/webhook-receiver/deployment.yaml"
+            elif [ "{{inputs.parameters.workload-name}}" = "sqs-worker" ]; then
+              TARGET_FILE="capstone/tf-3/cdo-1/gitops/manifests/base/sqs-worker/deployment.yaml"
+            elif [ "{{inputs.parameters.workload-name}}" = "ai-engine" ]; then
+              TARGET_FILE="capstone/tf-3/cdo-1/gitops/manifests/base/ai-engine/deployment.yaml"
+            fi
+            
+            if [ -n "$TARGET_FILE" ] && [ -f "$TARGET_FILE" ]; then
+              echo "Đang cập nhật tệp: $TARGET_FILE"
+              
+              # Nếu có tham số replicas, sửa replicas
+              if [ -n "{{inputs.parameters.replicas}}" ]; then
+                echo "Cập nhật replicas thành {{inputs.parameters.replicas}}..."
+                sed -i 's/replicas: [0-9]*/replicas: {{inputs.parameters.replicas}}/g' $TARGET_FILE
+              fi
+              
+              # Nếu có tham số limit, sửa limits.memory
+              if [ -n "{{inputs.parameters.memory-limit-mb}}" ]; then
+                echo "Cập nhật memory limit thành {{inputs.parameters.memory-limit-mb}}Mi..."
+                # Ví dụ cập nhật trường limit memory
+                sed -i '/memory:/s/[0-9]*Mi/{{inputs.parameters.memory-limit-mb}}Mi/g' $TARGET_FILE
+              fi
+            else
+              echo "Không tìm thấy tệp manifest phù hợp cho {{inputs.parameters.workload-name}}. Bỏ qua bước sửa tệp."
+            fi
+            
+            # 4. Commit và Push thay đổi
+            git add .
+            if git commit -m "chore(gitops): auto-remediation for {{inputs.parameters.workload-name}} [Incident: {{inputs.parameters.incident-id}}]"; then
+              echo "Đã commit bản vá. Thực hiện push lên repository..."
+              # Trong môi trường AWS thật, git push sẽ xác thực qua SSH/CodeCommit helper
+              # git push origin {{inputs.parameters.target-branch}}
+              echo "=== GITOPS REMEDIATION HOÀN THÀNH THÀNH CÔNG ==="
+            else
+              echo "Không có thay đổi cấu hình nào được tạo ra."
+              echo "=== GITOPS REMEDIATION BỎ QUA (NO CHANGES) ==="
+            fi

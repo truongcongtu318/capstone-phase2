@@ -1,0 +1,51 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cdo1-self-heal-alerts
+  namespace: observability
+  labels:
+    cdo1-monitoring: "enabled"
+    app.kubernetes.io/part-of: cdo1-self-heal
+spec:
+  groups:
+    - name: self-heal.oom
+      interval: 30s
+      rules:
+        - alert: PodOOMKilled
+          expr: |
+            changes(kube_pod_container_status_restarts_total[5m]) > 0
+            and on(pod, namespace)
+            kube_pod_container_status_last_terminated_reason{reason="OOMKilled",namespace=~"tenant-.*"} == 1
+          for: 0m
+          labels:
+            severity: critical
+            service: "{{ $labels.container }}"
+          annotations:
+            summary: "OOMKilled {{ $labels.pod }} in {{ $labels.namespace }}"
+
+    - name: self-heal.stuck
+      interval: 30s
+      rules:
+        - alert: ServiceStuck
+          expr: |
+            kube_deployment_status_replicas_available{namespace=~"tenant-.*"}
+              / kube_deployment_spec_replicas{namespace=~"tenant-.*"} < 0.5
+          for: 2m
+          labels:
+            severity: warning
+            service: "{{ $labels.deployment }}"
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} stuck in {{ $labels.namespace }}"
+
+    - name: self-heal.backlog
+      interval: 60s
+      rules:
+        - alert: SQSQueueBacklog
+          expr: aws_sqs_approximate_number_of_messages_visible{queue_name=~".*self-heal.*"} > 100
+          for: 1m
+          labels:
+            severity: warning
+            namespace: tenant-payment
+            service: "payment-worker"
+          annotations:
+            summary: "SQS queue backlog detected"

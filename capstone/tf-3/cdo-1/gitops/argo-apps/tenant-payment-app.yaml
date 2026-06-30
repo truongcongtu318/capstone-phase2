@@ -1,0 +1,30 @@
+# ============================================================
+# tenant-payment-app.yaml
+# Sở hữu: Member 7
+# Sync Wave: "1" — deploy SAU các system app (Wave 0)
+#
+# ArgoCD Application tên "tenant-payment-app" — pattern {namespace}-app.
+# Worker suy ra tên này từ namespace "tenant-payment" khi suspend/resume autosync.
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-payment-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
+    targetRevision: main
+    path: capstone/tf-3/cdo-1/gitops/tenant-payment
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-payment
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - CreateNamespace=true

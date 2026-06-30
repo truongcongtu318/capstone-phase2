@@ -1,0 +1,56 @@
+# ============================================================
+# rbac.yaml - self-heal-executor
+# Sở hữu: Member 7
+#
+# Cấp quyền cho self-heal-executor ServiceAccount để thực hiện
+# các hành động vá lỗi (Fast Lane / Slow Lane) trong các namespace tenant.
+# CẤM tuyệt đối thao tác trên các namespace hệ thống.
+# ============================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: self-heal-executor-role
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: self-heal-executor-binding
+  namespace: tenant-payment
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+subjects:
+  - kind: ServiceAccount
+    name: self-heal-executor
+    namespace: self-heal-system
+roleRef:
+  kind: ClusterRole
+  name: self-heal-executor-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: self-heal-executor-binding
+  namespace: tenant-checkout
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+subjects:
+  - kind: ServiceAccount
+    name: self-heal-executor
+    namespace: self-heal-system
+roleRef:
+  kind: ClusterRole
+  name: self-heal-executor-role
+  apiGroup: rbac.authorization.k8s.io

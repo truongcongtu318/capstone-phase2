@@ -1,0 +1,68 @@
+# ============================================================
+# deployment.yaml - ai-engine (base)
+# Sở hữu: Member 7 (khung) — image demo thật do ST2 bàn giao
+#
+# ST2 Handoff: image ECR tf-3-ai-engine-demo, port 8080.
+# QUAN TRỌNG (Zero Trust): pod AI Engine TUYỆT ĐỐI không có
+# kubeconfig/kubectl/K8s SDK. ServiceAccount ai-engine không có
+# ClusterRole/Role nào — chỉ gọi Bedrock qua IRSA (khi cần).
+#
+# Image tag sha-PENDING — override tại overlays/sandbox/ai-engine/kustomization.yaml.
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-engine
+  labels:
+    app: ai-engine
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-engine
+  template:
+    metadata:
+      labels:
+        app: ai-engine
+    spec:
+      serviceAccountName: ai-engine
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: ai-engine
+          # ST2 Handoff image — tag được override tại sandbox overlay
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine-demo:sha-PENDING
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              memory: "1024Mi"
+              cpu: "500m"
+            limits:
+              memory: "2048Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3

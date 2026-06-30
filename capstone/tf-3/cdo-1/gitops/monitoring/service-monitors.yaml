@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: webhook-receiver
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app: webhook-receiver
+  namespaceSelector:
+    matchNames:
+      - self-heal-system
+  endpoints:
+    - port: metrics
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sqs-worker
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app: sqs-worker
+  namespaceSelector:
+    matchNames:
+      - self-heal-system
+  endpoints:
+    - port: metrics
+      path: /metrics

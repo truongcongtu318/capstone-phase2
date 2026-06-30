@@ -1,2 +1,9 @@
-# Kustomization Base config
-# TODO: Định nghĩa danh sách resources cơ sở cho Webhook Receiver: deployment.yaml, service.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - analysis-template.yaml
+  - ingress.yaml

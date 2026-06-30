@@ -1,0 +1,43 @@
+# ============================================================
+# analysis-template.yaml - webhook-receiver-analysis
+# Sở hữu: Member 7
+# Sync Wave: "-1"
+#
+# Định nghĩa Argo Rollouts AnalysisTemplate để đánh giá chất lượng
+# bản deploy mới của Webhook Receiver trong quá trình Canary Rollout.
+# Nếu tỷ lệ lỗi > 1% hoặc P99 latency > 800ms, tự động abort canary.
+#
+# ST2 Handoff: đổi metric từ nginx_ingress sang metric thật của app:
+#   - http_request_duration_seconds{handler="/alerts"}
+#   - webhook_alerts_queued_total
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: webhook-receiver-analysis
+  namespace: self-heal-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  metrics:
+    # 1. Đo lường P99 latency endpoint /alerts (Phải dưới 800ms)
+    - name: webhook-latency-p99
+      interval: 1m
+      successCondition: result[0] < 0.8
+      failureLimit: 3
+      provider:
+        prometheus:
+          address: http://prometheus-operated.observability.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{handler="/alerts"}[1m])) by (le))
+
+    # 2. Đo lường tỷ lệ alert queued thành công (phải > 0 trong 5m khi test)
+    - name: webhook-alert-queue-rate
+      interval: 1m
+      successCondition: result[0] >= 0
+      failureLimit: 5
+      provider:
+        prometheus:
+          address: http://prometheus-operated.observability.svc.cluster.local:9090
+          query: |
+            sum(rate(webhook_alerts_queued_total[1m]))

@@ -1,0 +1,53 @@
+# ============================================================
+# deployment.yaml - order-service (tenant-payment)
+# Mục đích: Test workload cho E2E chaos test — OOMKilled alert flow.
+#
+# Memory limit ban đầu 256Mi; khi sqs-worker xử lý alert OOMKilled
+# từ container "order-service", worker sẽ PATCH_MEMORY_LIMIT lên 512Mi.
+#
+# Alert payload cần khớp:
+#   namespace: tenant-payment
+#   deployment: order-service
+#   container: order-service
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: tenant-payment
+  labels:
+    app: order-service
+    tenant: payment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+        tenant: payment
+    spec:
+      serviceAccountName: order-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: order-service
+          # Dùng nginx mirror từ ECR để không cần NAT gateway
+          # Thay bằng image order-service thật nếu có
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/mirror/nginx:1.25
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              # Ban đầu 256Mi — worker sẽ patch lên 512Mi sau khi nhận OOMKilled alert
+              memory: "256Mi"
+              cpu: "250m"

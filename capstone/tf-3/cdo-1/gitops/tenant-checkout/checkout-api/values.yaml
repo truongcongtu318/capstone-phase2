@@ -1,0 +1,11 @@
+resources:
+  limits:
+    memory: "256Mi"
+    cpu: "500m"
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+replicaCount: 1
+serviceName: checkout-api
+containerName: main
+namespace: tenant-checkout

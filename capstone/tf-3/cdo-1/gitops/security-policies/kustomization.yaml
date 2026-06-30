@@ -1,0 +1,17 @@
+# ============================================================
+# security-policies/kustomization.yaml
+# Sở hữu: Member 7
+# Sync Wave: "-3"
+#
+# Tập hợp toàn bộ chính sách bảo mật cụm: Kyverno ClusterPolicy,
+# NetworkPolicies, ClusterRole và RoleBindings.
+# ============================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - restrict-mutations.yaml
+  - network-policies/ai-engine-netpolicy.yaml
+  - network-policies/webhook-netpolicy.yaml
+  - rbac.yaml
+  - namespaces.yaml
+

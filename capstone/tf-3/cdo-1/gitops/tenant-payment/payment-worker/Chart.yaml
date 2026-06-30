@@ -1,0 +1,5 @@
+apiVersion: v2
+name: payment-worker
+description: Self-heal E2E test service
+type: application
+version: 0.1.0

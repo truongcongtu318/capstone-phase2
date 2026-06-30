@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-receiver
+  labels:
+    app: webhook-receiver
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  type: ClusterIP
+  selector:
+    app: webhook-receiver
+  ports:
+    - name: http-webhook
+      port: 8443
+      targetPort: 8443
+      protocol: TCP

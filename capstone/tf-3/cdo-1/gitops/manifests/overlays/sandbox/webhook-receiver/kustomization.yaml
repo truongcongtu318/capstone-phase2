@@ -1,2 +1,16 @@
-# Kustomization Sandbox Overlay config
-# TODO: Kustomize overlay trỏ về base và apply các files patch: patch-env.yaml.
+# ============================================================
+# overlays/sandbox/webhook-receiver/kustomization.yaml
+# Sở hữu: Member 7
+#
+# ST2 Handoff: thêm images override để pin ECR image.
+# SHA tag "sha-fix" — cần ST2 cung cấp tag thật sau khi CI build.
+# Khi có SHA: đổi newTag thành giá trị thật, e.g. sha-a1b2c3d
+# ============================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../base/webhook-receiver
+
+images:
+  - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-webhook-receiver
+    newTag: sha-fix
