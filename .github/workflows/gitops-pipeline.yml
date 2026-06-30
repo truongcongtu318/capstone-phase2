@@ -38,3 +38,43 @@ jobs:
         run: |
           # Check định dạng YAML (hỗ trợ cả tệp chứa nhiều document phân tách bằng ---)
           python3 -c "import yaml, glob; [list(yaml.safe_load_all(open(f))) for f in glob.glob('capstone/tf-3/cdo-1/gitops/**/*.yaml', recursive=True) if '/templates/' not in f]"
+
+  sync-to-codecommit:
+    name: Sync GitOps to AWS CodeCommit
+    needs: validate-manifests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for git operations
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-github-ci-apply
+          aws-region: us-east-1
+
+      - name: Sync with CodeCommit
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global credential.helper '!aws codecommit credential-helper $@'
+          git config --global credential.UseHttpPath true
+          
+          echo "🔄 Setting up CodeCommit remote..."
+          git remote add codecommit https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
+          
+          echo "⬇️ Fetching latest from CodeCommit..."
+          git fetch codecommit
+          
+          echo "🔀 Rebasing GitHub changes on top of CodeCommit (preserving Self-Heal commits)..."
+          # Try to rebase main onto codecommit/main. If codecommit/main doesn't exist yet, this will fail gracefully.
+          git pull --rebase codecommit main || echo "No remote main branch or rebase failed (maybe first time push)"
+          
+          echo "🚀 Pushing synchronized code to CodeCommit..."
+          git push codecommit HEAD:main
