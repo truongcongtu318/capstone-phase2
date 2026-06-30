@@ -8,3 +8,4 @@ pyyaml
 prometheus-client
 pytest
 pytest-cov
+git-remote-codecommit
