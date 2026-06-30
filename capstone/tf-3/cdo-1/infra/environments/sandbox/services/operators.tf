@@ -29,6 +29,18 @@ resource "helm_release" "external_secrets" {
         repository = "${local.ecr_registry}/external-secrets/external-secrets"
         tag        = "v0.9.13"
       }
+      certController = {
+        image = {
+          repository = "${local.ecr_registry}/external-secrets/external-secrets"
+          tag        = "v0.9.13"
+        }
+      }
+      webhook = {
+        image = {
+          repository = "${local.ecr_registry}/external-secrets/external-secrets"
+          tag        = "v0.9.13"
+        }
+      }
       serviceAccount = {
         create = true
         name   = "external-secrets"
