@@ -37,3 +37,8 @@ output "ai_engine_irsa_role_arn" {
   description = "IAM role ARN for AI Engine Bedrock"
   value       = aws_iam_role.ai_engine_irsa.arn
 }
+
+output "eso_irsa_role_arn" {
+  description = "ARN IAM Role IRSA cho External Secrets Operator — đọc tf3-cdo1-sandbox/* từ Secrets Manager"
+  value       = aws_iam_role.eso_irsa.arn
+}

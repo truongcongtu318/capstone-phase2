@@ -532,8 +532,8 @@ resource "aws_iam_role_policy" "worker_irsa" {
 
 
 # =============================================================================
-# SECRETS MANAGER � ArgoCD Auth Token (cho SQS Worker)
-# # Team 3 s? update gi� tr? th?t sau khi deploy ArgoCD
+# SECRETS MANAGER � ArgoCD Auth Token (cho SQS Worker)
+# # Team 3 s? update gi� tr? th?t sau khi deploy ArgoCD
 # =============================================================================
 
 resource "aws_secretsmanager_secret" "argocd_auth" {
@@ -545,7 +545,7 @@ resource "aws_secretsmanager_secret" "argocd_auth" {
 }
 
 # =============================================================================
-# IAM ROLE � IRSA cho AI Engine Bedrock (ai-engine)
+# IAM ROLE � IRSA cho AI Engine Bedrock (ai-engine)
 # ServiceAccount: ai-engine trong namespace self-heal-system
 # =============================================================================
 
@@ -595,10 +595,55 @@ resource "aws_iam_role_policy" "ai_engine_irsa" {
 }
 
 # =============================================================================
-# UPDATE: B? sung quy?n d?c Secrets Manager cho Worker IRSA
+# IAM ROLE — IRSA cho External Secrets Operator
+# ServiceAccount: external-secrets trong namespace external-secrets-system
+# Cho phép ESO đọc tf3-cdo1-sandbox/* từ AWS Secrets Manager để cấp
+# ARGOCD_AUTH_TOKEN cho sqs-worker qua ExternalSecret → ClusterSecretStore
 # =============================================================================
 
+resource "aws_iam_role" "eso_irsa" {
+  name = "${var.name_prefix}-${var.environment}-irsa-eso-secrets-reader"
 
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = var.oidc_provider_arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")}:sub" : "system:serviceaccount:external-secrets-system:external-secrets",
+            "${replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")}:aud" : "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
 
+  tags = local.module_tags
+}
+
+resource "aws_iam_role_policy" "eso_irsa" {
+  name = "eso-irsa-policy"
+  role = aws_iam_role.eso_irsa.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SecretsManagerRead"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+        ]
+        Resource = "arn:aws:secretsmanager:us-east-1:474013238625:secret:tf3-cdo1-sandbox/*"
+      }
+    ]
+  })
+}
 
 

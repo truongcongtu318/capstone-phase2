@@ -32,6 +32,9 @@ resource "helm_release" "external_secrets" {
       serviceAccount = {
         create = true
         name   = "external-secrets"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = module.observability.eso_irsa_role_arn
+        }
       }
       resources = {
         limits   = { cpu = "200m", memory = "256Mi" }
