@@ -22,3 +22,8 @@ output "node_iam_role_arn" {
   value       = module.karpenter.node_iam_role_arn
   description = "ARN of Karpenter node role"
 }
+
+output "argocd_codecommit_role_arn" {
+  value       = module.eks.argocd_codecommit_role_arn
+  description = "IAM role ARN for ArgoCD repo-server to access CodeCommit"
+}
