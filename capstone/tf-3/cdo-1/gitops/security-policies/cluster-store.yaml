@@ -1,0 +1,32 @@
+# ============================================================
+# cluster-secret-store.yaml
+# Sở hữu: Sub-team 2 (Member 5/6)
+# Sync Wave: "-1" — apply trước ExternalSecret trong các app khác
+#
+# ClusterSecretStore cluster-wide cho phép ExternalSecret ở bất kỳ
+# namespace nào đọc secret từ AWS Secrets Manager.
+#
+# YÊU CẦU ST1 (infra):
+#   - IAM Role tf3-cdo1-sandbox-irsa-eso-secrets-reader phải tồn tại
+#     (xem infra/modules/observability/main.tf resource "aws_iam_role" "eso_irsa")
+#   - ESO ServiceAccount "external-secrets" trong ns "external-secrets-system"
+#     phải có annotation:
+#     eks.amazonaws.com/role-arn: <eso_irsa_role_arn>
+#     (xem infra/environments/sandbox/services/operators.tf)
+# ============================================================
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secrets-manager
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: us-east-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets
+            namespace: external-secrets-system
