@@ -19,6 +19,9 @@ resource "helm_release" "external_secrets" {
   namespace        = "external-secrets-system"
   create_namespace = true
 
+  timeout = 900
+  wait    = false
+
   values = [
     yamlencode({
       installCRDs = true
@@ -49,6 +52,9 @@ resource "helm_release" "kyverno" {
   version          = "3.2.6"
   namespace        = "kyverno"
   create_namespace = true
+
+  timeout = 900
+  wait    = false
 
   values = [
     yamlencode({
@@ -105,6 +111,9 @@ resource "helm_release" "argo_workflows" {
   namespace        = "argo"
   create_namespace = true
 
+  timeout = 900
+  wait    = false
+
   values = [
     yamlencode({
       installCRDs = true
@@ -126,15 +135,9 @@ resource "helm_release" "argo_workflows" {
           repository = "argoworkflows/workflow-controller"
         }
       }
-      executor = {
-        image = {
-          repository = "argoworkflows/workflow-controller"
-        }
-        resources = {
-          limits   = { cpu = "500m", memory = "512Mi" }
-          requests = { cpu = "100m", memory = "128Mi" }
-        }
-      }
+      # executor mặc định chart dùng argoproj/argoexec
+      # không cần override vì wait=false
+      # executor chỉ chạy khi có workflow submitted, không cần cho CRD
     })
   ]
 }
@@ -150,6 +153,9 @@ resource "helm_release" "argo_rollouts" {
   version          = "2.35.0"
   namespace        = "argo-rollouts"
   create_namespace = true
+
+  timeout = 900
+  wait    = false
 
   values = [
     yamlencode({
