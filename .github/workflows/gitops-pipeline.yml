@@ -74,7 +74,8 @@ jobs:
           
           echo "🔀 Rebasing GitHub changes on top of CodeCommit (preserving Self-Heal commits)..."
           if git ls-remote --exit-code --heads codecommit main >/dev/null 2>&1; then
-            git pull --rebase codecommit main || {
+            # -X theirs forces Git to favor GitHub's code (current branch) in any conflict with CodeCommit (upstream)
+            git pull --rebase -X theirs codecommit main || {
               echo "⚠️ Rebase failed due to conflicts — aborting"
               git rebase --abort 2>/dev/null || true
               exit 1
