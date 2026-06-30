@@ -142,13 +142,15 @@ jobs:
           sed -i "s/newTag: sha-.*/newTag: $IMAGE_TAG/" $OVERLAY/sqs-worker/kustomization.yaml
           sed -i "s/newTag: sha-.*/newTag: $IMAGE_TAG/" $OVERLAY/ai-engine/kustomization.yaml
 
-      - name: Commit and push
-        env:
-          IMAGE_TAG: sha-${{ github.sha }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/
-          git diff --cached --quiet && echo "No tag change, skipping commit" && exit 0
-          git commit -m "chore(gitops): update image tags to $IMAGE_TAG [skip ci]"
-          git push origin main
+      - name: Create Pull Request for GitOps
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(gitops): update image tags to sha-${{ github.sha }} [skip ci]"
+          title: "🤖 GitOps: Update image tags to sha-${{ github.sha }}"
+          body: |
+            Automated image tag update for `webhook-receiver`, `sqs-worker`, and `ai-engine`.
+            Triggered by commit: ${{ github.sha }}
+          branch: "gitops/update-tags-${{ github.sha }}"
+          base: main
+          signoff: false
