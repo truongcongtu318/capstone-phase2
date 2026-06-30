@@ -30,7 +30,7 @@ metadata:
     # đổi lại thành: alb.ingress.kubernetes.io/backend-protocol: HTTPS
     # TODO: điền certificate-arn thật khi Sub-team 1 cấp ACM cert
     # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:544011261607:certificate/<cert-id>
-    alb.ingress.kubernetes.io/security-groups: alb-internal-sg
+    alb.ingress.kubernetes.io/security-groups: sg-07df9918169c891ce
 spec:
   rules:
     - http:
