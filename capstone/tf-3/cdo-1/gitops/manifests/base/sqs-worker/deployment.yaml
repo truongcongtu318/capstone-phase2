@@ -32,6 +32,9 @@ spec:
         runAsUser: 1000
         fsGroup: 1000
       serviceAccountName: self-heal-executor
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: sqs-worker
           securityContext:
@@ -42,6 +45,9 @@ spec:
                 - ALL
           # ST2 Handoff image — tag được override tại sandbox overlay
           image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-self-heal-worker:sha-PENDING
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           ports:
             - name: metrics
               containerPort: 9090
@@ -70,7 +76,7 @@ spec:
             - name: DRY_RUN
               value: "false"
             - name: ARGOCD_SERVER_URL
-              value: "http://argocd-server.argocd.svc.cluster.local"
+              value: "https://argocd-server.argocd.svc.cluster.local"
             - name: CODECOMMIT_REPO_URL
               value: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops"
             - name: CODECOMMIT_BRANCH
