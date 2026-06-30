@@ -249,7 +249,7 @@ def poll_messages() -> None:
         endpoint_url=settings.sqs_endpoint_url
     )
 
-    logger.info(f"Starting SQS Polling on: {settings.sqs_queue_url}")
+    logger.info(f"Starting SQS Polling on : {settings.sqs_queue_url}")
     while True:
         try:
             response = sqs_client.receive_message(
