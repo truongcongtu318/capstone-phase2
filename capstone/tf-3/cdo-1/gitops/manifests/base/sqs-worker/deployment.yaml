@@ -78,7 +78,7 @@ spec:
             - name: ARGOCD_SERVER_URL
               value: "https://argocd-server.argocd.svc.cluster.local"
             - name: CODECOMMIT_REPO_URL
-              value: "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops"
+              value: "codecommit::us-east-1://tf3-cdo1-sandbox-gitops"
             - name: CODECOMMIT_BRANCH
               value: "main"
           envFrom:
