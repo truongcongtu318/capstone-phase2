@@ -11,7 +11,7 @@ resources:
 configMapGenerator:
   - name: cdo1-self-heal-dashboard
     files:
-      - self-heal-overview.json=dashboards/self-heal-overview.json
+      - self-heal-overview.json=dashboards/self-heal-overview.json #
 
 generatorOptions:
   disableNameSuffixHash: true
