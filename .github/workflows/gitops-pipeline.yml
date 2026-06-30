@@ -67,14 +67,21 @@ jobs:
           git config --global credential.UseHttpPath true
           
           echo "🔄 Setting up CodeCommit remote..."
-          git remote add codecommit https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
+          git remote add codecommit https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops || git remote set-url codecommit https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
           
           echo "⬇️ Fetching latest from CodeCommit..."
           git fetch codecommit
           
           echo "🔀 Rebasing GitHub changes on top of CodeCommit (preserving Self-Heal commits)..."
-          # Try to rebase main onto codecommit/main. If codecommit/main doesn't exist yet, this will fail gracefully.
-          git pull --rebase codecommit main || echo "No remote main branch or rebase failed (maybe first time push)"
+          if git ls-remote --exit-code --heads codecommit main >/dev/null 2>&1; then
+            git pull --rebase codecommit main || {
+              echo "⚠️ Rebase failed due to conflicts — aborting"
+              git rebase --abort 2>/dev/null || true
+              exit 1
+            }
+          else
+            echo "⚠️ Remote branch 'main' does not exist yet. Skipping pull."
+          fi
           
           echo "🚀 Pushing synchronized code to CodeCommit..."
           git push codecommit HEAD:main
