@@ -135,8 +135,11 @@ resource "helm_release" "kube_prometheus_stack" {
             receiver        = "self-heal-receiver"
           }
           receivers = [
-            {
-              name = "self-heal-receiver"
+              {
+                name = "null"
+              },
+              {
+                name = "self-heal-receiver"
               webhook_configs = [
                 {
                   url           = local.alert_receiver_url
@@ -402,7 +405,7 @@ resource "aws_iam_role_policy" "webhook_irsa" {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
+        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-app-idempotency-lock"
       },
       {
         Sid    = "KMSAccess"
@@ -503,7 +506,7 @@ resource "aws_iam_role_policy" "worker_irsa" {
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-idempotency-lock"
+        Resource = "arn:aws:dynamodb:*:*:table/tf-3-aiops-app-idempotency-lock"
       },
       {
         Sid    = "CodeCommitAccess"
@@ -522,6 +525,78 @@ resource "aws_iam_role_policy" "worker_irsa" {
 }
 
 
+
+
+
+
+
+
+# =============================================================================
+# SECRETS MANAGER — ArgoCD Auth Token (cho SQS Worker)
+# # Team 3 s? update giá tr? th?t sau khi deploy ArgoCD
+# =============================================================================
+
+resource "aws_secretsmanager_secret" "argocd_auth" {
+  name                    = "tf3-cdo1-sandbox/argocd-auth-token"
+  description             = "ArgoCD ServiceAccount bearer token cho SQS Worker t? d?ng suspend/resume auto-sync"
+  recovery_window_in_days = 0
+
+  tags = local.module_tags
+}
+
+# =============================================================================
+# IAM ROLE — IRSA cho AI Engine Bedrock (ai-engine)
+# ServiceAccount: ai-engine trong namespace self-heal-system
+# =============================================================================
+
+resource "aws_iam_role" "ai_engine_irsa" {
+  name = "${var.name_prefix}-${var.environment}-irsa-ai-engine-bedrock"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = var.oidc_provider_arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")}:sub" : "system:serviceaccount:self-heal-system:ai-engine",
+            "${replace(var.oidc_provider_arn, "/^arn:aws:iam::[0-9]+:oidc-provider\\//", "")}:aud" : "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = local.module_tags
+}
+
+resource "aws_iam_role_policy" "ai_engine_irsa" {
+  name = "ai-engine-irsa-policy"
+  role = aws_iam_role.ai_engine_irsa.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "BedrockAccess"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+        ]
+        Resource = "arn:aws:bedrock:us-east-1::foundation-model/*"
+      }
+    ]
+  })
+}
+
+# =============================================================================
+# UPDATE: B? sung quy?n d?c Secrets Manager cho Worker IRSA
+# =============================================================================
 
 
 
