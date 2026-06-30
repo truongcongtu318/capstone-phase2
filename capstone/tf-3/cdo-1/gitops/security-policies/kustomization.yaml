@@ -14,5 +14,5 @@ resources:
   - network-policies/webhook-netpolicy.yaml
   - rbac.yaml
   - namespaces.yaml
-  - cluster-secret-store.yaml
+  - cluster-store.yaml
 

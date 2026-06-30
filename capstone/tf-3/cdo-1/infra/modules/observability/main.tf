@@ -43,6 +43,10 @@ resource "kubernetes_namespace" "observability" {
       "self-heal.tf3-cdo1/mutate-ok" = "false"
     }
   }
+
+  lifecycle {
+    ignore_changes = [metadata[0].annotations]
+  }
 }
 
 # =============================================================================
