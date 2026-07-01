@@ -32,6 +32,7 @@ resource "aws_eks_node_group" "this" {
   node_role_arn   = aws_iam_role.node.arn
   subnet_ids      = var.private_subnet_ids
   version         = var.eks_version
+  instance_types  = ["t3.large"]
 
   scaling_config {
     min_size     = 1
