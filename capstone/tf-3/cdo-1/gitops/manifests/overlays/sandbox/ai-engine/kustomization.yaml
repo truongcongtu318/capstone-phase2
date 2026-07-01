@@ -14,4 +14,4 @@ resources:
 
 images:
   - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine
-    newTag: sha-79f0dab0646dd758459078001c4df483f884dc58
+    newTag: sha-a727a746532016b18dc658fc838713b4a8f5ebdd
