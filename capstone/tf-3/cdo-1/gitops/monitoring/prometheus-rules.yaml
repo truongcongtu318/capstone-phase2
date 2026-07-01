@@ -13,13 +13,17 @@ spec:
       rules:
         - alert: PodOOMKilled
           expr: |
-            changes(kube_pod_container_status_restarts_total[5m]) > 0
-            and on(pod, namespace)
-            kube_pod_container_status_last_terminated_reason{reason="OOMKilled",namespace=~"tenant-.*"} == 1
+            label_replace(
+              (
+                changes(kube_pod_container_status_restarts_total{namespace=~"tenant-.*"}[5m]) > 0
+                and on(pod, namespace)
+                kube_pod_container_status_last_terminated_reason{reason="OOMKilled",namespace=~"tenant-.*"} == 1
+              ),
+              "service", "$1", "pod", "^(.+)-[a-z0-9]{5,10}-[a-z0-9]{5}$"
+            )
           for: 0m
           labels:
             severity: critical
-            service: "{{ $labels.container }}"
           annotations:
             summary: "OOMKilled {{ $labels.pod }} in {{ $labels.namespace }}"
 

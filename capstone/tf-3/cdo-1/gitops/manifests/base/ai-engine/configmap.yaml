@@ -40,9 +40,10 @@ data:
   TELEMETRY_RUNTIME_MODE: "bench"
   BENCH_TELEMETRY_SOURCE_KIND: "benchmark_fixture"
 
-  # RCA hyperparameters
+  # RCA hyperparameters — tuned for CDO 56-point synthetic window (50 baseline + 6 anomaly)
   USE_BARO_RCA: "True"
   BARO_TOP_K: "3"
-  BASELINE_LENGTH: "600"
-  BOCPD_HAZARD: "50"
+  BASELINE_LENGTH: "50"     # match _BASELINE_COUNT in sqs-worker; was 600
+  BOCPD_HAZARD: "10"        # more sensitive; was 50
+  ANALYSIS_WINDOW_SIZE: "10"  # smaller window for faster correlation; was 120
   CORRELATION_THRESHOLD: "0.25"

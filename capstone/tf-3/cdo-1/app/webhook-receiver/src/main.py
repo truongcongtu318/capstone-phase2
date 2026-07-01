@@ -52,8 +52,8 @@ class AlertmanagerPayload(BaseModel):
     alerts: List[Alert]
 
 COOLDOWN_BY_NAMESPACE = {
-    "tenant-payment":  180,
-    "tenant-checkout": 300,
+    "tenant-payment":  settings.cooldown_payment_seconds,
+    "tenant-checkout": settings.cooldown_checkout_seconds,
 }
 
 TENANT_ID_BY_NAMESPACE = {
