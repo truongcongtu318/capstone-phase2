@@ -36,9 +36,11 @@ resource "aws_eks_node_group" "this" {
 
   scaling_config {
     min_size     = 1
-    desired_size = 3
-    max_size     = 5
+    desired_size = 2
+    max_size     = 3
   }
+
+  capacity_type = "SPOT"
 
   tags = var.global_tags
 
