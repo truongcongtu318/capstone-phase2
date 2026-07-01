@@ -82,43 +82,55 @@ resource "helm_release" "kyverno" {
       installCRDs = true
       replicaCount = 1
       global = {
-        imageRegistry = local.ecr_registry
+        image = {
+          registry = local.ecr_registry
+        }
       }
       admissionController = {
         replicas = 1
-        image = {
-          registry   = local.ecr_registry
-          repository = "kyverno/kyverno"
-          tag        = "v1.12.5"
+        container = {
+          image = {
+            registry   = local.ecr_registry
+            repository = "kyverno/kyverno"
+            tag        = "v1.12.5"
+          }
         }
-        initImage = {
-          registry   = local.ecr_registry
-          repository = "kyverno/kyvernopre"
-          tag        = "v1.12.5"
+        initContainer = {
+          image = {
+            registry   = local.ecr_registry
+            repository = "kyverno/kyvernopre"
+            tag        = "v1.12.5"
+          }
         }
       }
       backgroundController = {
         replicas = 1
-        image = {
-          registry   = local.ecr_registry
-          repository = "kyverno/background-controller"
-          tag        = "v1.12.5"
+        container = {
+          image = {
+            registry   = local.ecr_registry
+            repository = "kyverno/background-controller"
+            tag        = "v1.12.5"
+          }
         }
       }
       cleanupController = {
         replicas = 1
-        image = {
-          registry   = local.ecr_registry
-          repository = "kyverno/cleanup-controller"
-          tag        = "v1.12.5"
+        container = {
+          image = {
+            registry   = local.ecr_registry
+            repository = "kyverno/cleanup-controller"
+            tag        = "v1.12.5"
+          }
         }
       }
       reportsController = {
         replicas = 1
-        image = {
-          registry   = local.ecr_registry
-          repository = "kyverno/reports-controller"
-          tag        = "v1.12.5"
+        container = {
+          image = {
+            registry   = local.ecr_registry
+            repository = "kyverno/reports-controller"
+            tag        = "v1.12.5"
+          }
         }
       }
       cleanupJobs = {
