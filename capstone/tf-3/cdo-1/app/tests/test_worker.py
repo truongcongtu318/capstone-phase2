@@ -474,6 +474,16 @@ def test_webhook_client_ddb_lock_key():
 # 5. PROMETHEUS CLIENT TESTS
 # ---------------------------------------------------------------------------
 
+def test_pod_oom_event_queries_restarts_total_not_last_terminated_reason():
+    """kube_pod_container_status_last_terminated_reason chỉ tồn tại SAU lần OOMKill
+    đầu tiên và luôn bằng 1 khi có — không có baseline "0" nào để BOCPD so sánh,
+    nên AI engine luôn trả NO_ANOMALY. kube_pod_container_status_restarts_total là
+    counter tăng dần từ 0 ngay từ khi container start — có baseline thật."""
+    query_template = prometheus_query_client.SIGNAL_TO_PROM_QUERY["pod_oom_event"]
+    assert "kube_pod_container_status_restarts_total" in query_template
+    assert "last_terminated_reason" not in query_template
+
+
 @patch("httpx.Client.get")
 def test_prometheus_query_range_parses_values(mock_get):
     mock_response = MagicMock()

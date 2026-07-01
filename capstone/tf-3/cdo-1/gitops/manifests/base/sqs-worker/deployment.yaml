@@ -78,7 +78,7 @@ spec:
             - name: PROMETHEUS_QUERY_WINDOW_SECONDS
               value: "600"
             - name: PROMETHEUS_QUERY_STEP_SECONDS
-              value: "30"
+              value: "10"
             - name: DRY_RUN
               value: "false"
             - name: ARGOCD_SERVER_URL
