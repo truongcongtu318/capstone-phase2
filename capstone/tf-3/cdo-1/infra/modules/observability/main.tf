@@ -126,6 +126,15 @@ resource "helm_release" "kube_prometheus_stack" {
             repository = "prometheus/alertmanager"
             tag        = "v0.27.0"
           }
+          # Mặc định của prometheus-operator là "OnNamespace": route của một
+          # AlertmanagerConfig chỉ áp dụng cho alert có namespace label bằng
+          # đúng namespace của chính CR đó. CR routing đa-tenant của CDO nằm ở
+          # namespace "observability" nhưng phải xử lý alert có namespace
+          # "tenant-payment"/"tenant-checkout" -> bắt buộc "None" để route áp
+          # dụng cho mọi alert bất kể namespace nào phát sinh.
+          alertmanagerConfigMatcherStrategy = {
+            type = "None"
+          }
         }
         config = {
           global = {
