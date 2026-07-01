@@ -59,3 +59,23 @@ def test_cross_tenant_returns_403():
         headers={"X-Tenant-Id": "6c8b4b2b-4d45-4209-a1b4-4b532d56a31c"}  # checkout ID nhưng payload là payment
     )
     assert response.status_code == 403
+
+# Test 4: Alertmanager webhook_config (CRD v1alpha1) không hỗ trợ custom header —
+# tenant_id phải đọc được từ query param của URL thay thế.
+@patch.object(webhook_main, "_push_sqs")
+@patch.object(webhook_main, "acquire_lock", return_value=True)
+def test_valid_alert_with_tenant_id_query_param_returns_202(mock_lock, mock_sqs):
+    response = client.post(
+        "/alerts?tenant_id=d3b07384-d113-495f-9f58-20d18d357d75",
+        json=VALID_PAYLOAD,
+    )
+    assert response.status_code == 202
+    assert mock_sqs.called
+
+# Test 5: query param sai tenant vẫn phải bị 403 (không chỉ header mới được check)
+def test_cross_tenant_query_param_returns_403():
+    response = client.post(
+        "/alerts?tenant_id=6c8b4b2b-4d45-4209-a1b4-4b532d56a31c",
+        json=VALID_PAYLOAD,  # payload namespace=tenant-payment nhưng query param là tenant-checkout
+    )
+    assert response.status_code == 403

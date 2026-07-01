@@ -26,21 +26,19 @@ spec:
             value: "tenant-checkout"
         receiver: webhook-tenant-checkout
 
+  # LƯU Ý: WebhookConfig.httpConfig (CRD v1alpha1) không có field "headers" —
+  # chỉ có authorization/basicAuth/oauth2/tlsConfig/proxyURL/followRedirects.
+  # Header X-Tenant-Id tuỳ ý KHÔNG THỂ gửi qua Alertmanager thật (K8s API âm
+  # thầm prune field lạ không có trong OpenAPI schema của CRD — không lỗi,
+  # không cảnh báo). Dùng query param trên URL thay thế; webhook-receiver
+  # đọc "tenant_id" query param khi thiếu header X-Tenant-Id.
   receivers:
     - name: unmatched-alerts
     - name: webhook-tenant-payment
       webhookConfigs:
-        - url: "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts"
+        - url: "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts?tenant_id=d3b07384-d113-495f-9f58-20d18d357d75"
           sendResolved: false
-          httpConfig:
-            headers:
-              - key: "X-Tenant-Id"
-                value: "d3b07384-d113-495f-9f58-20d18d357d75"
     - name: webhook-tenant-checkout
       webhookConfigs:
-        - url: "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts"
+        - url: "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts?tenant_id=6c8b4b2b-4d45-4209-a1b4-4b532d56a31c"
           sendResolved: false
-          httpConfig:
-            headers:
-              - key: "X-Tenant-Id"
-                value: "6c8b4b2b-4d45-4209-a1b4-4b532d56a31c"
