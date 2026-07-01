@@ -172,6 +172,11 @@ $RECYCLE.BIN/
 \#*\#
 
 # ────────────────────────────────────────
+# AI engine test fixtures — contain UUIDs that trigger gitleaks false positives
+# ────────────────────────────────────────
+**/cdo_simulator/test_jsons/
+
+# ────────────────────────────────────────
 # AI / Claude tooling (project-internal)
 # ────────────────────────────────────────
 

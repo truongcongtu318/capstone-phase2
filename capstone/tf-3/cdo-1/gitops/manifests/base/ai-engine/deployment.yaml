@@ -2,7 +2,7 @@
 # deployment.yaml - ai-engine (base)
 # Sở hữu: Member 7 (khung) — image demo thật do ST2 bàn giao
 #
-# ST2 Handoff: image ECR tf-3-ai-engine-demo, port 8080.
+# ST2 Handoff: image ECR tf-3-ai-engine (real detect_decide_verify), port 8080.
 # QUAN TRỌNG (Zero Trust): pod AI Engine TUYỆT ĐỐI không có
 # kubeconfig/kubectl/K8s SDK. ServiceAccount ai-engine không có
 # ClusterRole/Role nào — chỉ gọi Bedrock qua IRSA (khi cần).
@@ -34,8 +34,8 @@ spec:
         fsGroup: 1000
       containers:
         - name: ai-engine
-          # ST2 Handoff image — tag được override tại sandbox overlay
-          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine-demo:sha-PENDING
+          # Real AI engine (detect_decide_verify) — tag được override tại sandbox overlay
+          image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine:sha-PENDING
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -45,6 +45,15 @@ spec:
           ports:
             - containerPort: 8080
               protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: ai-engine-config
+          env:
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               memory: "1024Mi"
@@ -66,3 +75,6 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}

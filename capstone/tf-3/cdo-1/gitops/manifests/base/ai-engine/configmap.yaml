@@ -1,7 +1,6 @@
 # ============================================================
-# configmap.yaml - ai-engine
+# configmap.yaml - ai-engine (real detect_decide_verify engine)
 # Sync Wave: "-2" — apply trước Deployment (Wave 0)
-# ST2 Handoff: nội dung thật thay thế placeholder
 # ============================================================
 apiVersion: v1
 kind: ConfigMap
@@ -12,7 +11,38 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
 data:
-  AWS_REGION: "us-east-1"
-  BEDROCK_MODEL_ID: "anthropic.claude-3-sonnet-20240229-v1:0"
-  AI_ENGINE_PORT: "8080"
+  # CDO-01 platform profile (baked vào image tại ./adr/)
+  PLATFORM_PROFILE_PATH: "./adr/platform_profile_cdo01.json"
+  PLATFORM_PROFILE_SCHEMA_PATH: "./adr/platform_profile.schema.json"
+  DATASET_DIR: "./adr"
+  RUNBOOKS_PATH: "./adr/runbooks.json"
+  DEPENDENCY_GRAPH_PATH: "./adr/dependency_graph.json"
 
+  # CDO-01 namespace/system identity
+  SYSTEM_NAME: "CDO-CHECKOUT-PAYMENT"
+  DEFAULT_NAMESPACE: "tenant-checkout"
+  DEFAULT_SERVICE: "checkout-api"
+  DEFAULT_DEPLOYMENT_TEMPLATE: "deployment/{{target_service}}"
+  ALLOWED_NAMESPACES: "tenant-checkout,tenant-payment"
+
+  # API server — port 8080 theo CDO contract
+  API_HOST: "0.0.0.0"
+  API_PORT: "8080"
+
+  # LLM decision (bật để xem reasoning; tắt cho chạy rule-based thuần)
+  USE_LLM_DECISION: "True"
+  USE_LLM_FAULT_TYPE: "False"
+  LLM_PROVIDER: "bedrock"
+  # LLM_MODEL được inject qua Secret (ai-engine-llm-secret) để tránh hardcode
+  AWS_REGION: "us-east-1"
+
+  # Telemetry mode — bench: CDO gửi telemetry_window trực tiếp trong request
+  TELEMETRY_RUNTIME_MODE: "bench"
+  BENCH_TELEMETRY_SOURCE_KIND: "benchmark_fixture"
+
+  # RCA hyperparameters
+  USE_BARO_RCA: "True"
+  BARO_TOP_K: "3"
+  BASELINE_LENGTH: "600"
+  BOCPD_HAZARD: "50"
+  CORRELATION_THRESHOLD: "0.25"

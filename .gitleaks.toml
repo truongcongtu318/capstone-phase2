@@ -1,0 +1,12 @@
+# .gitleaks.toml — Gitleaks configuration for capstone-phase2
+# Allowlist paths that contain test fixtures with UUID/idempotency keys
+# (false positives — not real secrets).
+
+title = "capstone-phase2 gitleaks config"
+
+[allowlist]
+  description = "Ignore test fixture JSON files — UUIDs flagged as generic-api-key are idempotency keys, not secrets"
+  paths = [
+    '''.*/cdo_simulator/test_jsons/.*\.json''',
+    '''.*/test_jsons/.*\.json''',
+  ]

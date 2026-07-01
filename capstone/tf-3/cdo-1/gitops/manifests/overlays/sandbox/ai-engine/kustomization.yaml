@@ -3,7 +3,7 @@
 # Sở hữu: Member 7
 #
 # ST2 Handoff: thêm images override để pin ECR image.
-# SHA tag "sha-fix" — cần ST2 cung cấp tag thật sau khi CI build.
+# SHA tag "sha-PENDING" — được CI app-pipeline.yml cập nhật tự động sau khi build.
 # ============================================================
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -11,5 +11,5 @@ resources:
   - ../../../base/ai-engine
 
 images:
-  - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine-demo
-    newTag: sha-f37eaf176649a7dfcf193752011492be91f28294
+  - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine
+    newTag: sha-PENDING
