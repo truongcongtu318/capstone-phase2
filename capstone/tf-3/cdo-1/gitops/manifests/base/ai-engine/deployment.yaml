@@ -37,6 +37,7 @@ spec:
           # Real AI engine (detect_decide_verify) — tag được override tại sandbox overlay
           image: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine:sha-PENDING
           securityContext:
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:
@@ -47,6 +48,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: ai-engine-config
+          env:
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               memory: "1024Mi"
@@ -68,3 +75,6 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}
