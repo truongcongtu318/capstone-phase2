@@ -243,12 +243,16 @@ resource "helm_release" "karpenter" {
   wait    = false
 
   set {
-    name  = "image.repository"
+    name  = "controller.image.repository"
     value = "${local.ecr_registry}/karpenter/controller"
   }
   set {
-    name  = "image.tag"
+    name  = "controller.image.tag"
     value = "1.0.6"
+  }
+  set {
+    name  = "controller.image.digest"
+    value = ""
   }
 
   values = [
