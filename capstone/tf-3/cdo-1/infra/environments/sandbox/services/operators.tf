@@ -264,6 +264,16 @@ resource "helm_release" "karpenter" {
           tag        = "1.0.6"
           digest     = ""
         }
+        env = [
+          {
+            name  = "AWS_REGION"
+            value = "us-east-1"
+          },
+          {
+            name  = "AWS_DEFAULT_REGION"
+            value = "us-east-1"
+          }
+        ]
         resources = {
           limits   = { cpu = "500m", memory = "512Mi" }
           requests = { cpu = "200m", memory = "256Mi" }
