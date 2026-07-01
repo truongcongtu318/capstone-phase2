@@ -226,3 +226,54 @@ resource "helm_release" "argo_rollouts" {
     })
   ]
 }
+
+# -----------------------------------------------------------------------------
+# 5. Karpenter Controller (v0.37.0)
+# -----------------------------------------------------------------------------
+
+resource "helm_release" "karpenter" {
+  name             = "karpenter"
+  repository       = "oci://public.ecr.aws/karpenter"
+  chart            = "karpenter"
+  version          = "0.37.0"
+  namespace        = "karpenter"
+  create_namespace = true
+
+  timeout = 900
+  wait    = false
+
+  set {
+    name  = "image.repository"
+    value = "${local.ecr_registry}/karpenter/controller"
+  }
+  set {
+    name  = "image.tag"
+    value = "0.37.0"
+  }
+  set {
+    name  = "image.digest"
+    value = ""
+  }
+
+  values = [
+    yamlencode({
+      serviceAccount = {
+        create = true
+        name   = "karpenter"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = "arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-karpenter-controller-role"
+        }
+      }
+      settings = {
+        clusterName = local.cluster_name
+      }
+      controller = {
+        resources = {
+          limits   = { cpu = "500m", memory = "512Mi" }
+          requests = { cpu = "200m", memory = "256Mi" }
+        }
+      }
+    })
+  ]
+}
+
