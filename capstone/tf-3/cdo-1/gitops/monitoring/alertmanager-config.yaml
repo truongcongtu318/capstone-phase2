@@ -8,6 +8,10 @@ metadata:
     app.kubernetes.io/part-of: cdo1-self-heal
 spec:
   route:
+    # Prometheus Operator bắt buộc root route phải có receiver, kể cả khi
+    # mọi alert thật đều được match bởi routes[] bên dưới. Dùng làm fallback
+    # câm (không webhookConfigs) cho alert nào lọt qua 2 matcher namespace.
+    receiver: unmatched-alerts
     groupBy: ["alertname", "namespace", "service"]
     groupWait: 10s
     groupInterval: 30s
@@ -23,6 +27,7 @@ spec:
         receiver: webhook-tenant-checkout
 
   receivers:
+    - name: unmatched-alerts
     - name: webhook-tenant-payment
       webhookConfigs:
         - url: "http://webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts"
