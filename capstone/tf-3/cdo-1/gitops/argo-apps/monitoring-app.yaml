@@ -1,0 +1,39 @@
+# ============================================================
+# monitoring-app.yaml
+# Sở hữu: Member 7
+# Sync Wave: "-1" — deploy sau Namespace(-4)/Security(-3), cùng tier Service,
+# trước Deployments(0) để PrometheusRule/AlertmanagerConfig sẵn sàng
+# trước khi app bắt đầu sinh alert.
+#
+# Bug đã fix (2026-07-01): gitops/monitoring/ (PrometheusRule +
+# AlertmanagerConfig + ServiceMonitors) chưa từng được ArgoCD sync — thiếu
+# hẳn Application này trong root-application. Hậu quả: AlertmanagerConfig
+# (route theo namespace + header X-Tenant-Id riêng từng tenant) không tồn
+# tại trên cluster → Alertmanager dùng route mặc định của Helm chart (1
+# receiver chung, KHÔNG có header X-Tenant-Id) → webhook-receiver luôn
+# nhận x_tenant_id=None → 403 SECURITY_VIOLATION cho MỌI alert, dù
+# PrometheusRule tự nó vẫn fire đúng (được ai đó apply tay trước đó,
+# ngoài luồng GitOps).
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
+    targetRevision: main
+    path: capstone/tf-3/cdo-1/gitops/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
