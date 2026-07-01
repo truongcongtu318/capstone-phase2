@@ -242,24 +242,6 @@ resource "helm_release" "karpenter" {
   timeout = 900
   wait    = false
 
-  set {
-    name  = "controller.image.repository"
-    value = "${local.ecr_registry}/karpenter/controller"
-  }
-  set {
-    name  = "controller.image.tag"
-    value = "1.0.6"
-  }
-  set {
-    name  = "controller.image.digest"
-    value = ""
-  }
-
-  set {
-    name  = "settings.aws.region"
-    value = "us-east-1"
-  }
-
   values = [
     yamlencode({
       serviceAccount = {
@@ -273,9 +255,15 @@ resource "helm_release" "karpenter" {
         clusterName = local.cluster_name
         aws = {
           isolatedVPC = true
+          region      = "us-east-1"
         }
       }
       controller = {
+        image = {
+          repository = "${local.ecr_registry}/karpenter/controller"
+          tag        = "1.0.6"
+          digest     = ""
+        }
         resources = {
           limits   = { cpu = "500m", memory = "512Mi" }
           requests = { cpu = "200m", memory = "256Mi" }
