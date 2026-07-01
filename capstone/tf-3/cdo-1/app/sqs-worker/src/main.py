@@ -10,7 +10,7 @@ import json
 import time
 import uuid
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # Cấu hình log
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -95,29 +95,46 @@ def _process_message(sqs_client, message) -> None:
         telemetry_value: float = 1000.0
         if alertname == "PodOOMKilled":
             signal_name = "pod_oom_event"
-            telemetry_value = 1.0  # OOM event count; context in labels.pod_name/container
+            telemetry_value = 1.0
         elif alertname == "PodCrashLooping":
             signal_name = "container_restart_count"
             telemetry_value = 5.0
         elif alertname == "ServiceStuck":
             signal_name = "service_unhealthy"
-            telemetry_value = 1.0  # 1 = unhealthy state
+            telemetry_value = 1.0
 
-        telemetry_window = [{
-            "ts": alert.get("startsAt") or datetime.now(timezone.utc).isoformat(),
+        # BOCPD needs a time series (≥10 rows) to detect change points.
+        # Generate 20 baseline points at 0.0 followed by the anomaly spike.
+        _BASELINE_COUNT = 20
+        _INTERVAL_SECONDS = 60
+        now = datetime.now(timezone.utc)
+        point_labels = {
+            "system": "CDO-PAYMENT" if namespace == "tenant-payment" else "CDO-CHECKOUT",
+            "namespace": namespace,
+            "deployment": service,
+            "alertname": alertname,
+            "pod_name": labels.get("pod", f"{service}-pod"),
+            "container": labels.get("container", "main"),
+        }
+        telemetry_window = [
+            {
+                "ts": (now - timedelta(seconds=(_BASELINE_COUNT - i) * _INTERVAL_SECONDS)).isoformat(),
+                "tenant_id": tenant_id,
+                "service": service,
+                "signal_name": signal_name,
+                "value": 0.0,
+                "labels": point_labels,
+            }
+            for i in range(_BASELINE_COUNT)
+        ]
+        telemetry_window.append({
+            "ts": now.isoformat(),
             "tenant_id": tenant_id,
             "service": service,
             "signal_name": signal_name,
             "value": telemetry_value,
-            "labels": {
-                "system": "CDO-PAYMENT" if namespace == "tenant-payment" else "CDO-CHECKOUT",
-                "namespace": namespace,
-                "deployment": service,
-                "alertname": alertname,
-                "pod_name": labels.get("pod", f"{service}-pod"),
-                "container": labels.get("container", "main")
-            }
-        }]
+            "labels": point_labels,
+        })
 
         # 4. Invoke AI Engine /v1/detect
         # Mỗi API call có idempotency_key riêng độc lập (UUIDv4 per-call).
@@ -182,18 +199,19 @@ def _process_message(sqs_client, message) -> None:
             return
 
         # 8. Build post-remediation telemetry & Call /v1/verify
-        post_telemetry_window = [{
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "tenant_id": tenant_id,
-            "service": service,
-            "signal_name": signal_name,
-            "value": 0.0,  # remediated
-            "labels": {
-                "system": "CDO-PAYMENT" if namespace == "tenant-payment" else "CDO-CHECKOUT",
-                "namespace": namespace,
-                "deployment": service
+        # Send series showing signal has returned to baseline (0.0) after healing.
+        verify_now = datetime.now(timezone.utc)
+        post_telemetry_window = [
+            {
+                "ts": (verify_now - timedelta(seconds=(_BASELINE_COUNT - i) * _INTERVAL_SECONDS)).isoformat(),
+                "tenant_id": tenant_id,
+                "service": service,
+                "signal_name": signal_name,
+                "value": 0.0,
+                "labels": point_labels,
             }
-        }]
+            for i in range(_BASELINE_COUNT + 1)
+        ]
 
         action_executed = {
             "action": exec_result.action,
