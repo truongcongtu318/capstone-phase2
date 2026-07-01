@@ -11,7 +11,7 @@ public.ecr.aws/eks/aws-load-balancer-controller:v2.8.1 amazon/aws-load-balancer-
 # B. Karpenter Node Provisioner (1 Image)
 # ==============================================================================
 public.ecr.aws/karpenter/controller:0.37.0 karpenter/controller:0.37.0
-public.ecr.aws/karpenter/controller:v1.0.6 karpenter/controller:1.0.6
+public.ecr.aws/karpenter/controller:1.0.6 karpenter/controller:1.0.6
 
 # ==============================================================================
 # C. Kyverno Admission Controller (5 Images)
