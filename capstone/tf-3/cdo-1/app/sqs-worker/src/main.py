@@ -90,20 +90,18 @@ def _process_message(sqs_client, message) -> None:
 
         # 3. Build telemetry window payload for AI Engine
         # signal_name must be one of CONTRACT_SIGNAL_NAMES (telemetry-contract.md §2).
+        # All telemetry values must be float — real AI engine calls float(point.value)
         signal_name = "queue_backlog"
-        telemetry_value: object = 1000
+        telemetry_value: float = 1000.0
         if alertname == "PodOOMKilled":
             signal_name = "pod_oom_event"
-            telemetry_value = (
-                f"OOMKilled: Container {labels.get('container', 'main')}, "
-                f"Pod {labels.get('pod', service)}"
-            )
+            telemetry_value = 1.0  # OOM event count; context in labels.pod_name/container
         elif alertname == "PodCrashLooping":
             signal_name = "container_restart_count"
-            telemetry_value = 5
+            telemetry_value = 5.0
         elif alertname == "ServiceStuck":
             signal_name = "service_unhealthy"
-            telemetry_value = "Readiness probe failed: service not responding"
+            telemetry_value = 1.0  # 1 = unhealthy state
 
         telemetry_window = [{
             "ts": alert.get("startsAt") or datetime.now(timezone.utc).isoformat(),
