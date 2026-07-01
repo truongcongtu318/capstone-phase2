@@ -381,6 +381,11 @@ def test_patch_executor_helpers():
         "container-api"
     )
     assert body_mem["spec"]["template"]["spec"]["containers"][0]["resources"]["limits"]["memory"] == "384Mi"
+    # Kyverno deny-dangerous-fields chỉ cho phép sửa spec.replicas hoặc
+    # resources.limits — resources.requests bị chặn tuyệt đối (kể cả cho
+    # self-heal-executor). AI runbook luôn gửi kèm memory_request_mb, nhưng
+    # patch body KHÔNG được chứa "requests" nếu không K8s API trả 400.
+    assert "requests" not in body_mem["spec"]["template"]["spec"]["containers"][0]["resources"]
 
     body_scale = patch_executor._patch_body("SCALE_REPLICAS", {"replicas": 5}, "container-api")
     assert body_scale["spec"]["replicas"] == 5

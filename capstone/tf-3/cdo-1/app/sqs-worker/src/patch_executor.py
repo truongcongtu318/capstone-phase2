@@ -158,17 +158,22 @@ def _patch_body(action: str, params: dict, container: str) -> dict:
     Xây patch body JSON cho K8s PATCH API theo action enum.
 
     Supported actions:
-      PATCH_MEMORY_LIMIT → cập nhật resources.limits/requests.memory
+      PATCH_MEMORY_LIMIT → cập nhật resources.limits.memory (CHỈ limits)
       SCALE_REPLICAS     → cập nhật spec.replicas
       RESTART_DEPLOYMENT → rolling restart qua annotation
+
+    Kyverno ClusterPolicy restrict-mutations (rule deny-dangerous-fields) chỉ cho
+    phép sửa spec.replicas hoặc resources.limits trên Deployment/StatefulSet của
+    tenant — resources.requests bị chặn tuyệt đối, kể cả cho self-heal-executor.
+    AI runbook (platform_profile_cdo01.json) luôn gửi kèm memory_request_mb trong
+    params, nhưng patch body KHÔNG được set resources.requests, nếu không K8s API
+    trả 400 "admission webhook ... denied". Cố tình bỏ qua memory_request_mb.
     """
     if action == "PATCH_MEMORY_LIMIT":
         ml = params.get("memory_limit_mb")
         if not ml:
             raise ValueError("PATCH_MEMORY_LIMIT cần 'memory_limit_mb'")
         res: dict = {"limits": {"memory": _k8s_mem(ml)}}
-        if mr := params.get("memory_request_mb"):
-            res["requests"] = {"memory": _k8s_mem(mr)}
         return {"spec": {"template": {"spec": {"containers": [{"name": container, "resources": res}]}}}}
 
     if action == "SCALE_REPLICAS":
