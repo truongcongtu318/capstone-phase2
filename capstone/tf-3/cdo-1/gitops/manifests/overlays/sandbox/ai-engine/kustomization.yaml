@@ -12,4 +12,4 @@ resources:
 
 images:
   - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine
-    newTag: sha-PENDING
+    newTag: sha-98fd54fe27732c15a353003aa34d25c81e87e522
