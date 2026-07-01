@@ -103,10 +103,13 @@ def _process_message(sqs_client, message) -> None:
             signal_name = "service_unhealthy"
             telemetry_value = 1.0
 
-        # BOCPD needs a time series (≥10 rows) to detect change points.
-        # Generate 20 baseline points at 0.0 followed by the anomaly spike.
-        _BASELINE_COUNT = 20
+        # BOCPD needs: baseline ≥ EVAL_BOCPD_BASELINE_LENGTH (50) + multiple
+        # consecutive anomaly points to reach posterior threshold (BOCPD_HAZARD=50).
+        # Single spike → too weak. 50 baseline + 6 anomaly = reliable detection.
+        _BASELINE_COUNT = 50
+        _ANOMALY_COUNT = 6
         _INTERVAL_SECONDS = 60
+        _TOTAL = _BASELINE_COUNT + _ANOMALY_COUNT
         now = datetime.now(timezone.utc)
         point_labels = {
             "system": "CDO-PAYMENT" if namespace == "tenant-payment" else "CDO-CHECKOUT",
@@ -118,23 +121,15 @@ def _process_message(sqs_client, message) -> None:
         }
         telemetry_window = [
             {
-                "ts": (now - timedelta(seconds=(_BASELINE_COUNT - i) * _INTERVAL_SECONDS)).isoformat(),
+                "ts": (now - timedelta(seconds=(_TOTAL - 1 - i) * _INTERVAL_SECONDS)).isoformat(),
                 "tenant_id": tenant_id,
                 "service": service,
                 "signal_name": signal_name,
-                "value": 0.0,
+                "value": telemetry_value if i >= _BASELINE_COUNT else 0.0,
                 "labels": point_labels,
             }
-            for i in range(_BASELINE_COUNT)
+            for i in range(_TOTAL)
         ]
-        telemetry_window.append({
-            "ts": now.isoformat(),
-            "tenant_id": tenant_id,
-            "service": service,
-            "signal_name": signal_name,
-            "value": telemetry_value,
-            "labels": point_labels,
-        })
 
         # 4. Invoke AI Engine /v1/detect
         # Mỗi API call có idempotency_key riêng độc lập (UUIDv4 per-call).
@@ -199,18 +194,18 @@ def _process_message(sqs_client, message) -> None:
             return
 
         # 8. Build post-remediation telemetry & Call /v1/verify
-        # Send series showing signal has returned to baseline (0.0) after healing.
+        # Send full series all at 0.0 — signal returned to baseline after healing.
         verify_now = datetime.now(timezone.utc)
         post_telemetry_window = [
             {
-                "ts": (verify_now - timedelta(seconds=(_BASELINE_COUNT - i) * _INTERVAL_SECONDS)).isoformat(),
+                "ts": (verify_now - timedelta(seconds=(_TOTAL - 1 - i) * _INTERVAL_SECONDS)).isoformat(),
                 "tenant_id": tenant_id,
                 "service": service,
                 "signal_name": signal_name,
                 "value": 0.0,
                 "labels": point_labels,
             }
-            for i in range(_BASELINE_COUNT + 1)
+            for i in range(_TOTAL)
         ]
 
         action_executed = {
