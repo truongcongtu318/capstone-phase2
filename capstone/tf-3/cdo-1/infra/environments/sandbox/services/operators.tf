@@ -255,6 +255,11 @@ resource "helm_release" "karpenter" {
     value = ""
   }
 
+  set {
+    name  = "settings.aws.region"
+    value = "us-east-1"
+  }
+
   values = [
     yamlencode({
       serviceAccount = {
