@@ -25,7 +25,7 @@ from src import ai_client
 from src import circuit_breaker
 from src import main
 from src import patch_executor
-from src import prometheus_client
+from src import prometheus_query_client
 from src.ai_client import AIClientError
 from src.patch_executor import ExecutionResult, PreStateSnapshot
 from src import main as worker_main
@@ -170,7 +170,7 @@ def test_to_ai_action_executed_rounds_time_and_maps_dry_run_status():
 
 
 @patch("time.sleep")
-@patch.object(worker_main.prometheus_client, "build_telemetry_window")
+@patch.object(worker_main.prometheus_query_client, "build_telemetry_window")
 @patch.object(worker_main.ai_client, "detect")
 @patch.object(worker_main.ai_client, "decide")
 @patch.object(worker_main.ai_client, "verify")
@@ -489,7 +489,7 @@ def test_prometheus_query_range_parses_values(mock_get):
     }
     mock_get.return_value = mock_response
 
-    points = prometheus_client.query_range("up", window_seconds=60, step_seconds=30)
+    points = prometheus_query_client.query_range("up", window_seconds=60, step_seconds=30)
 
     assert points == [
         {"ts": 1700000000.0, "value": 0.0},
@@ -504,24 +504,24 @@ def test_prometheus_query_range_empty_result_returns_empty_list(mock_get):
     mock_response.json.return_value = {"status": "success", "data": {"resultType": "matrix", "result": []}}
     mock_get.return_value = mock_response
 
-    assert prometheus_client.query_range("up", window_seconds=60, step_seconds=30) == []
+    assert prometheus_query_client.query_range("up", window_seconds=60, step_seconds=30) == []
 
 
 @patch("httpx.Client.get")
 def test_prometheus_query_range_connection_error_returns_empty_list(mock_get):
     mock_get.side_effect = httpx.ConnectError("connection refused")
 
-    assert prometheus_client.query_range("up", window_seconds=60, step_seconds=30) == []
+    assert prometheus_query_client.query_range("up", window_seconds=60, step_seconds=30) == []
 
 
-@patch.object(prometheus_client, "query_range")
+@patch.object(prometheus_query_client, "query_range")
 def test_build_telemetry_window_uses_prometheus_series(mock_query_range):
     mock_query_range.return_value = [
         {"ts": 1700000000.0, "value": 0.0},
         {"ts": 1700000030.0, "value": 1.0},
     ]
 
-    window = prometheus_client.build_telemetry_window(
+    window = prometheus_query_client.build_telemetry_window(
         namespace="tenant-payment",
         service="order-api",
         signal_name="pod_oom_event",
@@ -538,9 +538,9 @@ def test_build_telemetry_window_uses_prometheus_series(mock_query_range):
     assert window[0]["labels"] == {"deployment": "order-api"}
 
 
-@patch.object(prometheus_client, "query_range", return_value=[])
+@patch.object(prometheus_query_client, "query_range", return_value=[])
 def test_build_telemetry_window_falls_back_when_prometheus_empty(mock_query_range):
-    window = prometheus_client.build_telemetry_window(
+    window = prometheus_query_client.build_telemetry_window(
         namespace="tenant-payment",
         service="order-api",
         signal_name="pod_oom_event",
@@ -555,7 +555,7 @@ def test_build_telemetry_window_falls_back_when_prometheus_empty(mock_query_rang
 
 
 def test_build_telemetry_window_unknown_signal_returns_fallback():
-    window = prometheus_client.build_telemetry_window(
+    window = prometheus_query_client.build_telemetry_window(
         namespace="tenant-payment",
         service="order-api",
         signal_name="not_a_real_signal",
