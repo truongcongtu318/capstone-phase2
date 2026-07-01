@@ -105,6 +105,7 @@ def _process_message(sqs_client, message) -> None:
                 "system": "CDO-PAYMENT" if namespace == "tenant-payment" else "CDO-CHECKOUT",
                 "namespace": namespace,
                 "deployment": service,
+                "alertname": alertname,
                 "pod_name": labels.get("pod", f"{service}-pod"),
                 "container": labels.get("container", "main")
             }
