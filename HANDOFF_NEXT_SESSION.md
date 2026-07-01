@@ -12,14 +12,14 @@
 | `webhook-receiver/src/config.py + main.py`: cooldown đọc từ env var | ✅ |
 | `prometheus-rules.yaml`: label_replace để extract service name từ pod name | ✅ |
 
-### Đã hoàn thành session này (TDD — xem `sqs-worker/src/prometheus_client.py`):
+### Đã hoàn thành session này (TDD — xem `sqs-worker/src/prometheus_query_client.py`):
 | Item | Trạng thái |
 |------|-----------|
-| `sqs-worker/src/prometheus_client.py` — module mới: `query_range()` gọi Prometheus `/api/v1/query_range`, `build_telemetry_window()` build telemetry_window thật (fallback 1 điểm value=1.0 nếu Prometheus rỗng/lỗi/signal không map được) | ✅ |
-| `sqs-worker/src/main.py` — xóa synthetic baseline (56 điểm giả), gọi `prometheus_client.build_telemetry_window()`; `post_telemetry_window` verify rút gọn còn 1 điểm value=0.0 | ✅ |
+| `sqs-worker/src/prometheus_query_client.py` — module mới: `query_range()` gọi Prometheus `/api/v1/query_range`, `build_telemetry_window()` build telemetry_window thật (fallback 1 điểm value=1.0 nếu Prometheus rỗng/lỗi/signal không map được) | ✅ |
+| `sqs-worker/src/main.py` — xóa synthetic baseline (56 điểm giả), gọi `prometheus_query_client.build_telemetry_window()`; `post_telemetry_window` verify rút gọn còn 1 điểm value=0.0 | ✅ |
 | `sqs-worker/src/config.py` — thêm `prometheus_url`, `prometheus_query_window_seconds` (600s), `prometheus_query_step_seconds` (30s) | ✅ |
 | `gitops/manifests/base/sqs-worker/deployment.yaml` — thêm env `PROMETHEUS_URL`, `PROMETHEUS_QUERY_WINDOW_SECONDS`, `PROMETHEUS_QUERY_STEP_SECONDS` | ✅ |
-| `tests/test_worker.py` — 6 test case mới cho prometheus_client (query_range success/empty/connection-error, build_telemetry_window success/fallback/unknown-signal) + cập nhật `test_worker_process_message_success` mock `prometheus_client.build_telemetry_window` và assert đúng namespace/service/signal_name được truyền vào | ✅ |
+| `tests/test_worker.py` — 6 test case mới cho prometheus_query_client (query_range success/empty/connection-error, build_telemetry_window success/fallback/unknown-signal) + cập nhật `test_worker_process_message_success` mock `prometheus_query_client.build_telemetry_window` và assert đúng namespace/service/signal_name được truyền vào | ✅ |
 | `requirements.txt` (sqs-worker) — không cần đổi, `httpx` đã có sẵn | ✅ |
 | NetworkPolicy — không cần đổi: `self-heal-system` chưa có NetworkPolicy nào target `app=sqs-worker`, nên egress ra `observability` namespace (Prometheus) không bị chặn | ✅ |
 
@@ -34,7 +34,7 @@ Toàn bộ 22 test pass, coverage 76.74% (>70% CI gate), `ruff check` sạch.
 | **Bug 1**: `execution_time_seconds` gửi lên `/v1/verify` là `float` (từ `time.monotonic()` diff), nhưng AI schema `ActionExecuted.execution_time_seconds` là `Optional[int]` (Pydantic strict — float có phần thập phân sẽ raise `int_from_float`). Verify thật (không dry-run) gần như luôn bị AI trả 422. | ✅ Fixed — `main.py::_to_ai_action_executed()` làm tròn bằng `round()` |
 | **Bug 2**: Khi `DRY_RUN=true`, `patch_executor.execute()` trả `status="DRY_RUN"`, gửi thẳng lên `/v1/verify`, nhưng AI schema `ActionExecuted.status` là `Literal["COMPLETED","FAILED"]` — không có `DRY_RUN` → cũng 422. | ✅ Fixed — map `DRY_RUN` → `COMPLETED` trong `_to_ai_action_executed()` |
 | Worker giờ chờ đúng `decide_resp["verify_policy"]["window_seconds"]` (do AI Engine chỉ định, mặc định 120s theo `runbook_catalog.py`) trước khi verify, thay vì verify ngay lập tức. Bỏ qua chờ khi `dry_run=True`. | ✅ Implemented — `main.py` gọi `time.sleep(wait_seconds)` |
-| `post_telemetry_window` giờ re-query Prometheus thật qua `prometheus_client.build_telemetry_window()` (cùng hàm dùng cho detect), không còn gửi 1 điểm `0.0` bịa. | ✅ Implemented |
+| `post_telemetry_window` giờ re-query Prometheus thật qua `prometheus_query_client.build_telemetry_window()` (cùng hàm dùng cho detect), không còn gửi 1 điểm `0.0` bịa. | ✅ Implemented |
 | **Gap chưa fix (cần trao đổi chéo team AI, CDO không tự sửa được)**: `verifier.py::verify_action()` chỉ coi `success=False`/`regression_detected=True` khi `signal_name` chứa chuỗi `"error"` hoặc `"latency"`. 4 signal của CDO (`pod_oom_event`, `container_restart_count`, `service_unhealthy`, `queue_backlog`) không chứa 2 từ đó → `/v1/verify` **luôn trả `success=True, next_action=DONE`** bất kể dữ liệu gửi lên là gì. Verify hiện tại không thực sự kiểm chứng được kết quả tự chữa lành cho các loại lỗi CDO đang xử lý. | ⚠️ Open — cần AI team mở rộng `verifier.py` hoặc CDO gửi thêm signal dạng `*_error_rate`/`*_latency` |
 | **Gap khác đã ghi nhận (chưa fix)**: `engine.py::detect_anomalies()` tự tính `baseline_len = max(10, int(len(df_metrics)*0.8))`, **không dùng** biến `BASELINE_LENGTH` từ configmap cho API live (chỉ dùng cho benchmark offline `recovery_orchestrator.py`). Việc tune `BASELINE_LENGTH=50` trong round trước không có tác dụng với `/v1/detect` thật; chỉ `BOCPD_HAZARD` là thực sự ảnh hưởng. | ⚠️ Ghi nhận — cần theo dõi khi test OOMKill thật để biết cửa sổ 10 phút/30s-step (~20 điểm, baseline≈16) có đủ để BOCPD phát hiện hay không |
 

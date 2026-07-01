@@ -31,7 +31,7 @@ from src.config import settings
 from src import ai_client
 from src import circuit_breaker
 from src import patch_executor
-from src import prometheus_client
+from src import prometheus_query_client
 from src.metrics import (
     start_metrics_server,
     MESSAGES_PROCESSED, CB_SKIPS, EXECUTIONS, ESCALATIONS, ROLLBACKS,
@@ -129,7 +129,7 @@ def _process_message(sqs_client, message) -> None:
         # Worker (Hands) tự query Prometheus lấy time series thật của pod đang gặp sự
         # cố — thay vì gửi dữ liệu bịa. AI Engine (Brain) không được phép tự gọi
         # Prometheus/K8s API (Brain/Hands separation).
-        telemetry_window = prometheus_client.build_telemetry_window(
+        telemetry_window = prometheus_query_client.build_telemetry_window(
             namespace=namespace,
             service=service,
             signal_name=signal_name,
@@ -208,7 +208,7 @@ def _process_message(sqs_client, message) -> None:
             logger.info(f"Waiting {wait_seconds}s (verify_policy.window_seconds) before verify...")
             time.sleep(wait_seconds)
 
-        post_telemetry_window = prometheus_client.build_telemetry_window(
+        post_telemetry_window = prometheus_query_client.build_telemetry_window(
             namespace=namespace,
             service=service,
             signal_name=signal_name,
