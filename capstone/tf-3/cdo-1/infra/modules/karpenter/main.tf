@@ -58,6 +58,14 @@ resource "aws_iam_role" "controller" {
           Resource = "*"
         },
         {
+          Sid    = "KarpenterEKS"
+          Effect = "Allow"
+          Action = [
+            "eks:DescribeCluster"
+          ]
+          Resource = "arn:aws:eks:*:*:cluster/*"
+        },
+        {
           Sid    = "KarpenterPricing"
           Effect = "Allow"
           Action = [
