@@ -117,24 +117,28 @@ def _process_message(sqs_client, message) -> None:
         elif alertname == "ServiceStuck":
             signal_name = "service_unhealthy"
 
+        pod_name = labels.get("pod", f"{service}-pod")
         point_labels = {
             "system": "CDO-PAYMENT" if namespace == "tenant-payment" else "CDO-CHECKOUT",
             "namespace": namespace,
             "deployment": service,
             "alertname": alertname,
-            "pod_name": labels.get("pod", f"{service}-pod"),
+            "pod_name": pod_name,
             "container": labels.get("container", "main"),
         }
 
         # Worker (Hands) tự query Prometheus lấy time series thật của pod đang gặp sự
         # cố — thay vì gửi dữ liệu bịa. AI Engine (Brain) không được phép tự gọi
-        # Prometheus/K8s API (Brain/Hands separation).
+        # Prometheus/K8s API (Brain/Hands separation). Match CHÍNH XÁC theo tên pod
+        # (không phải regex prefix theo service) để tránh lấy nhầm pod khác cùng
+        # prefix tên (vd nhiều pod cùng bắt đầu bằng "order-api").
         telemetry_window = prometheus_query_client.build_telemetry_window(
             namespace=namespace,
             service=service,
             signal_name=signal_name,
             tenant_id=tenant_id,
             point_labels=point_labels,
+            pod=pod_name,
         )
 
         # 4. Invoke AI Engine /v1/detect
@@ -214,6 +218,7 @@ def _process_message(sqs_client, message) -> None:
             signal_name=signal_name,
             tenant_id=tenant_id,
             point_labels=point_labels,
+            pod=pod_name,
         )
 
         action_executed = _to_ai_action_executed(exec_result)

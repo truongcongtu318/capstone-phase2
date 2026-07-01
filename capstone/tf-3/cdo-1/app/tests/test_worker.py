@@ -484,6 +484,31 @@ def test_pod_oom_event_queries_restarts_total_not_last_terminated_reason():
     assert "last_terminated_reason" not in query_template
 
 
+@patch.object(prometheus_query_client, "query_range")
+def test_build_telemetry_window_matches_exact_pod_name(mock_query_range):
+    """pod=~"{service}.*" là regex mờ — nếu 2 pod cùng prefix (vd pod thật
+    order-api-7d9b4895ff-xxx và pod test order-api-oomtest-abcde) đều khớp,
+    Prometheus trả về nhiều series và query_range() chỉ lấy results[0] — có thể
+    vô tình lấy nhầm pod khoẻ mạnh thay vì pod đang alert. Phải match CHÍNH XÁC
+    theo tên pod lấy từ alert.labels.pod, không dùng regex prefix mờ."""
+    mock_query_range.return_value = [{"ts": 1700000000.0, "value": 5.0}]
+
+    prometheus_query_client.build_telemetry_window(
+        namespace="tenant-payment",
+        service="order-api",
+        signal_name="pod_oom_event",
+        tenant_id="tenant-id-123",
+        point_labels={},
+        pod="order-api-oomtest-abcde",
+    )
+
+    query_sent = mock_query_range.call_args[0][0]
+    assert query_sent == (
+        'kube_pod_container_status_restarts_total'
+        '{namespace="tenant-payment",pod="order-api-oomtest-abcde"}'
+    )
+
+
 @patch("httpx.Client.get")
 def test_prometheus_query_range_parses_values(mock_get):
     mock_response = MagicMock()

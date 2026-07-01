@@ -22,14 +22,20 @@ logger = logging.getLogger(__name__)
 # "0" nào trong series để BOCPD so sánh, nên AI engine luôn trả NO_ANOMALY dù
 # pod đang OOMKill loop thật. restarts_total là counter tăng dần từ 0 ngay từ
 # khi container start, có baseline thật trước khi restart đầu tiên xảy ra.
+# pod_oom_event/container_restart_count match CHÍNH XÁC theo tên pod (không
+# phải regex prefix "{service}.*") — nếu 2 pod chia sẻ cùng prefix tên (vd pod
+# thật "order-api-7d9b4895ff-xxx" và pod test "order-api-oomtest-abcde" đều bắt
+# đầu bằng "order-api"), regex mờ sẽ khớp NHIỀU series cùng lúc; query_range()
+# chỉ lấy results[0] (thứ tự Prometheus trả về không đảm bảo cố định) nên có
+# thể vô tình lấy nhầm pod khoẻ mạnh thay vì pod đang thực sự bị alert.
 SIGNAL_TO_PROM_QUERY = {
     "pod_oom_event": (
         'kube_pod_container_status_restarts_total'
-        '{{namespace="{namespace}",pod=~"{service}.*"}}'
+        '{{namespace="{namespace}",pod="{pod}"}}'
     ),
     "container_restart_count": (
         'kube_pod_container_status_restarts_total'
-        '{{namespace="{namespace}",pod=~"{service}.*"}}'
+        '{{namespace="{namespace}",pod="{pod}"}}'
     ),
     "service_unhealthy": (
         'kube_deployment_status_replicas_available{{namespace="{namespace}",deployment="{service}"}}'
@@ -76,8 +82,13 @@ def build_telemetry_window(
     signal_name: str,
     tenant_id: str,
     point_labels: Dict[str, str],
+    pod: str = "",
 ) -> List[Dict[str, Any]]:
     """Build telemetry_window thật từ Prometheus cho signal_name tương ứng.
+
+    `pod` là tên pod CHÍNH XÁC lấy từ alert.labels.pod — bắt buộc cho các
+    signal match theo pod (pod_oom_event, container_restart_count) để tránh
+    khớp nhầm sang pod khác chia sẻ cùng prefix tên service.
 
     Nếu không có mapping PromQL hoặc Prometheus không trả data (pod mới bị OOMKill,
     chưa có lịch sử) -> fallback về 1 điểm đơn hiện tại, để AI Engine vẫn nhận được
@@ -88,7 +99,7 @@ def build_telemetry_window(
         logger.warning(f"No Prometheus query mapping for signal_name '{signal_name}'. Using fallback point.")
         return [_fallback_point(tenant_id, service, signal_name, point_labels)]
 
-    query = query_template.format(namespace=namespace, service=service)
+    query = query_template.format(namespace=namespace, service=service, pod=pod)
     series = query_range(query, settings.prometheus_query_window_seconds, settings.prometheus_query_step_seconds)
 
     if not series:
