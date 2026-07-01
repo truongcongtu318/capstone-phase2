@@ -13,4 +13,4 @@ resources:
 
 images:
   - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-webhook-receiver
-    newTag: sha-87287c88d16a062218eae8eb4640d7df74c0445f
+    newTag: sha-f3cc50e90d21079b924d1fb6e0a0f791517754c3
