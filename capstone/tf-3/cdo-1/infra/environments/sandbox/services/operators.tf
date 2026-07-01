@@ -228,14 +228,14 @@ resource "helm_release" "argo_rollouts" {
 }
 
 # -----------------------------------------------------------------------------
-# 5. Karpenter Controller (v0.37.0)
+# 5. Karpenter Controller (v1.0.6)
 # -----------------------------------------------------------------------------
 
 resource "helm_release" "karpenter" {
   name             = "karpenter"
   repository       = "oci://public.ecr.aws/karpenter"
   chart            = "karpenter"
-  version          = "0.37.0"
+  version          = "1.0.6"
   namespace        = "karpenter"
   create_namespace = true
 
@@ -248,7 +248,7 @@ resource "helm_release" "karpenter" {
   }
   set {
     name  = "image.tag"
-    value = "0.37.0"
+    value = "1.0.6"
   }
   set {
     name  = "image.digest"
@@ -266,6 +266,9 @@ resource "helm_release" "karpenter" {
       }
       settings = {
         clusterName = local.cluster_name
+        aws = {
+          isolatedVPC = true
+        }
       }
       controller = {
         resources = {
