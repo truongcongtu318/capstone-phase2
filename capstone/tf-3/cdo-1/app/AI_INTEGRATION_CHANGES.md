@@ -156,3 +156,125 @@ Nội dung chính:
 `.env` và configmap để `LLM_MODEL=` trống. Cần điền trước khi chạy với `USE_LLM_DECISION=True`. Ví dụ:
 - `us.anthropic.claude-3-5-sonnet-20241022-v2:0` (Bedrock cross-region inference)
 - `us.anthropic.claude-3-haiku-20240307-v1:0` (nhanh, rẻ hơn)
+
+---
+
+## 6. Kube-linter fix: `readOnlyRootFilesystem`
+
+**Vấn đề:** kube-linter enforce policy `no-read-only-root-fs` — deployment phải có `readOnlyRootFilesystem: true`. AI engine ban đầu không có → CI fail.
+
+**Fix trong `gitops/manifests/base/ai-engine/deployment.yaml`:**
+```yaml
+securityContext:
+  readOnlyRootFilesystem: true      # bắt buộc theo policy
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+env:
+  - name: HOME
+    value: /tmp                     # Python libs write to /tmp thay vì root fs
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+volumes:
+  - name: tmp
+    emptyDir: {}                    # /tmp cần writable cho temp files
+```
+
+> Note: AI engine (và Python nói chung) cần `/tmp` writable. Giải pháp đúng là mount emptyDir vào `/tmp` + set `HOME=/tmp` — không phải bỏ `readOnlyRootFilesystem`.
+
+---
+
+## 7. Gitleaks fix: False positive từ test JSON files
+
+**Vấn đề:** gitleaks quét git history và phát hiện UUID trong `cdo_simulator/test_jsons/*.json` là "generic-api-key" (15 findings). Đây là `idempotency_key` test fixture, không phải secret thật.
+
+**Fix 1: `.gitleaks.toml`** (tạo mới ở repo root):
+```toml
+[allowlist]
+  description = "Ignore test fixture JSON files — UUIDs flagged as generic-api-key are idempotency keys"
+  paths = [
+    '''.*/cdo_simulator/test_jsons/.*\.json''',
+    '''.*/test_jsons/.*\.json''',
+  ]
+```
+
+**Fix 2: `.gitignore`** — thêm dòng để ngăn commit test JSON vào tương lai:
+```
+**/cdo_simulator/test_jsons/
+```
+
+---
+
+## 8. Terraform IAM: Allow cross-region inference profile (Llama 4 Scout)
+
+**Vấn đề:** Llama 4 Scout (`us.meta.llama4-scout-17b-instruct-v1:0`) dùng cross-region inference — ARN type là `inference-profile/*`, không phải `foundation-model/*`. IAM policy cũ chỉ có `foundation-model/*` → Bedrock API trả `AccessDeniedException`.
+
+**File:** `capstone/tf-3/cdo-1/infra/modules/observability/main.tf`
+
+```hcl
+# Trước:
+Resource = [
+  "arn:aws:bedrock:us-east-1::foundation-model/*",
+]
+
+# Sau:
+Resource = [
+  "arn:aws:bedrock:us-east-1::foundation-model/*",
+  "arn:aws:bedrock:us-east-1::inference-profile/*",
+]
+```
+
+> Apply qua `cd infra/environments/sandbox/services && terraform apply`
+
+---
+
+## 9. LLM_MODEL: Chọn Llama 4 Scout
+
+**Cập nhật tại 2 chỗ:**
+
+**`capstone/tf-3/cdo-1/gitops/manifests/base/ai-engine/configmap.yaml`** (cho EKS):
+```yaml
+LLM_MODEL: "us.meta.llama4-scout-17b-instruct-v1:0"
+```
+
+**`capstone/tf-3/ai/ai-engine/detect_decide_verify/.env`** (cho local test, gitignored):
+```
+LLM_MODEL=us.meta.llama4-scout-17b-instruct-v1:0
+```
+
+> Model ID phải có prefix `us.` để dùng cross-region inference profile. Không dùng `meta.llama4-scout-17b-instruct-v1:0` (thiếu prefix → fallback về foundation-model ARN → fail với model này).
+
+---
+
+## 10. AI engine `.env` local testing
+
+**File:** `capstone/tf-3/ai/ai-engine/detect_decide_verify/.env` (gitignored — không push lên)
+
+Config chính cho local dev:
+- `PLATFORM_PROFILE_PATH=./adr/platform_profile_cdo01.json`
+- `TELEMETRY_RUNTIME_MODE=bench` — CDO gửi telemetry_window trực tiếp trong request body
+- `USE_LLM_DECISION=True`, `LLM_PROVIDER=bedrock`, `LLM_MODEL=us.meta.llama4-scout-17b-instruct-v1:0`
+- `AWS_ACCESS_KEY_ID=`, `AWS_SECRET_ACCESS_KEY=` (trống — dùng IRSA trên EKS / `AWS_PROFILE` local)
+
+> Config trên EKS đến từ `configmap.yaml`, không phải `.env`. `.env` chỉ dùng khi chạy AI engine local.
+
+---
+
+## Tổng hợp: Files đã thay đổi
+
+| File | Loại thay đổi |
+|---|---|
+| `app/sqs-worker/src/main.py` | signal_name fix + namespace_override |
+| `app/sqs-worker/src/patch_executor.py` | namespace_override parameter |
+| `app/webhook-receiver/src/main.py` | thêm PodCrashLooping |
+| `app/platform_profile_cdo01.json` | file mới — CDO platform profile |
+| `gitops/manifests/base/ai-engine/deployment.yaml` | image + readOnlyRootFilesystem + emptyDir |
+| `gitops/manifests/base/ai-engine/configmap.yaml` | env vars cho real AI engine |
+| `gitops/manifests/overlays/sandbox/ai-engine/kustomization.yaml` | image name tf-3-ai-engine |
+| `.github/workflows/app-pipeline.yml` | build real AI engine, not demo |
+| `infra/modules/observability/main.tf` | inference-profile/* IAM resource |
+| `capstone/tf-3/ai/ai-engine/detect_decide_verify/adr/platform_profile_cdo01.json` | copy vào AI engine image |
+| `capstone/tf-3/ai/ai-engine/detect_decide_verify/.env` | local config (gitignored) |
+| `.gitleaks.toml` | allowlist test fixture UUIDs |
+| `.gitignore` | ignore cdo_simulator/test_jsons/ |
