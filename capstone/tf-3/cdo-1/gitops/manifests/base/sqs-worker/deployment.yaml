@@ -81,6 +81,22 @@ spec:
               value: "codecommit::us-east-1://tf3-cdo1-sandbox-gitops"
             - name: CODECOMMIT_BRANCH
               value: "main"
+            # ── Tracing: tắt hoàn toàn Amazon OpenTelemetry Distro (bao gồm
+            # cả XRay sampler và ServiceEvents instrumentation)
+            # vì ADOT Collector (cloudwatch-agent.amazon-cloudwatch)
+            # chưa được cài lên cluster. Bật lại khi operators.tf deploy xong.
+            - name: OTEL_SDK_DISABLED
+              value: "true"
+            - name: OTEL_TRACES_EXPORTER
+              value: "none"
+            - name: OTEL_METRICS_EXPORTER
+              value: "none"
+            # Tắt XRay sampler (kết nối port 2000)
+            - name: OTEL_TRACES_SAMPLER
+              value: "always_off"
+            # Tắt ServiceEvents instrumentation layer riêng của Amazon Distro
+            - name: AMAZON_SERVICEEVENTS_ENABLED
+              value: "false"
           envFrom:
             - secretRef:
                 name: sqs-worker-argocd-secret

@@ -4,7 +4,8 @@
 #
 # ST2 Handoff: thêm images override để pin ECR image.
 # SHA tag "sha-PENDING" — được CI app-pipeline.yml cập nhật tự động sau khi build.
-# Force sync trigger: 2026-07-01
+# Force sync trigger: 2026-07-01 12:20
+# Post-cleanup: pipeline now syncs only gitops folder
 # ============================================================
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -13,4 +14,4 @@ resources:
 
 images:
   - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-ai-engine
-    newTag: sha-98fd54fe27732c15a353003aa34d25c81e87e522
+    newTag: sha-431e22976cfef2fd73ae4beb2308974ab858960d
