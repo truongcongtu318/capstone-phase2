@@ -16,9 +16,7 @@ locals {
     sts              = "com.amazonaws.${data.aws_region.current.name}.sts"
     git_codecommit   = "com.amazonaws.${data.aws_region.current.name}.git-codecommit"
     codecommit       = "com.amazonaws.${data.aws_region.current.name}.codecommit"
-    sns                  = "com.amazonaws.${data.aws_region.current.name}.sns"
-    acm                  = "com.amazonaws.${data.aws_region.current.name}.acm"
-    elasticloadbalancing = "com.amazonaws.${data.aws_region.current.name}.elasticloadbalancing"
+    sns              = "com.amazonaws.${data.aws_region.current.name}.sns"
   }
 }
 

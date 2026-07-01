@@ -1,8 +1,3 @@
-output "alb_dns_name" {
-  description = "Internal ALB DNS name — populated after a workload Ingress using the alb-internal IngressClass is created"
-  value       = module.ingress.alb_dns_name
-}
-
 output "grafana_service_name" {
   description = "K8s Service name của Grafana — dùng cho smoke test sau khi deploy"
   value       = module.observability.grafana_service_name
@@ -67,7 +62,7 @@ output "gitops_repo_clone_url" {
 }
 
 # -----------------------------------------------------------------------------
-# IAM ROLE � AI Engine IRSA
+# IAM ROLE � AI Engine IRSA
 # -----------------------------------------------------------------------------
 
 output "ai_engine_irsa_role_arn" {

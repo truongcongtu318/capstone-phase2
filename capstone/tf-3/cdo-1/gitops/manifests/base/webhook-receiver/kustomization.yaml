@@ -6,4 +6,3 @@ resources:
   - serviceaccount.yaml
   - configmap.yaml
   - analysis-template.yaml
-  - ingress.yaml

@@ -1,8 +1,3 @@
-output "sg_alb_internal_id" {
-  description = "SG cho Internal ALB"
-  value       = aws_security_group.alb_internal.id
-}
-
 output "sg_eks_workload_id" {
   description = "SG cho EKS workload pods"
   value       = aws_security_group.eks_workload.id
