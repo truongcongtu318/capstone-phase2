@@ -73,6 +73,12 @@ spec:
               value: "tf-3-aiops-app-state"
             - name: AI_ENGINE_URL
               value: "http://ai-engine.self-heal-system.svc.cluster.local:8080"
+            - name: PROMETHEUS_URL
+              value: "http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090"
+            - name: PROMETHEUS_QUERY_WINDOW_SECONDS
+              value: "600"
+            - name: PROMETHEUS_QUERY_STEP_SECONDS
+              value: "30"
             - name: DRY_RUN
               value: "false"
             - name: ARGOCD_SERVER_URL

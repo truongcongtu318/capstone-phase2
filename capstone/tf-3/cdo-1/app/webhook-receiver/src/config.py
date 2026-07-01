@@ -25,4 +25,8 @@ class Settings(BaseSettings):
     port: int = 8443
     aws_region: str = "us-east-1"
 
+    # Cooldown seconds per tenant tier (override via env for testing)
+    cooldown_payment_seconds: int = 180   # Pro tier default
+    cooldown_checkout_seconds: int = 300  # Basic tier default
+
 settings = Settings()

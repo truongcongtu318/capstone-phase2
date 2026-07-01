@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     # ai_engine_url local: "http://localhost:8080"
     ai_engine_url: str
 
+    # Prometheus — worker (Hands) tự query lấy telemetry_window thật, AI Engine (Brain)
+    # không được phép tự gọi Prometheus.
+    prometheus_url: str = "http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090"
+    prometheus_query_window_seconds: int = 600
+    prometheus_query_step_seconds: int = 30
+
     aws_region: str = "us-east-1"
     dry_run: bool = False
 

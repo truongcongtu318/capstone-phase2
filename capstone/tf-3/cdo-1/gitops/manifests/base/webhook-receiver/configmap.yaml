@@ -17,4 +17,7 @@ data:
   DYNAMODB_LOCK_TABLE: "tf-3-aiops-app-idempotency-lock"
   COOLDOWN_SECONDS_BASIC_TIER: "300"
   COOLDOWN_SECONDS_PRO_TIER: "180"
+  # Cooldown per namespace — set to 1s for OOMKill pattern testing; revert to 180/300 after
+  COOLDOWN_PAYMENT_SECONDS: "1"
+  COOLDOWN_CHECKOUT_SECONDS: "1"
   DRY_RUN: "false"

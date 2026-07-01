@@ -10,7 +10,6 @@ import json
 import time
 import uuid
 import logging
-from datetime import datetime, timezone, timedelta
 
 # Cấu hình log
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -32,6 +31,7 @@ from src.config import settings
 from src import ai_client
 from src import circuit_breaker
 from src import patch_executor
+from src import prometheus_client
 from src.metrics import (
     start_metrics_server,
     MESSAGES_PROCESSED, CB_SKIPS, EXECUTIONS, ESCALATIONS, ROLLBACKS,
@@ -51,6 +51,25 @@ TENANT_ID_BY_NAMESPACE = {
     "tenant-payment":  "d3b07384-d113-495f-9f58-20d18d357d75",
     "tenant-checkout": "6c8b4b2b-4d45-4209-a1b4-4b532d56a31c",
 }
+
+# AI Engine's ActionExecuted schema (server.py) only accepts status COMPLETED|FAILED —
+# there is no DRY_RUN literal. Map our internal DRY_RUN status to COMPLETED at the API boundary.
+_AI_STATUS_MAP = {"DRY_RUN": "COMPLETED"}
+
+
+def _to_ai_action_executed(exec_result) -> dict:
+    """Map ExecutionResult sang schema ActionExecuted mà /v1/verify yêu cầu.
+
+    AI Engine's Pydantic model chỉ nhận execution_time_seconds kiểu int (không nhận
+    float có phần thập phân — sẽ raise int_from_float validation error), và status
+    chỉ có COMPLETED|FAILED (không có DRY_RUN).
+    """
+    return {
+        "action": exec_result.action,
+        "target": exec_result.target,
+        "status": _AI_STATUS_MAP.get(exec_result.status, exec_result.status),
+        "execution_time_seconds": round(exec_result.execution_time_seconds),
+    }
 
 def _process_message(sqs_client, message) -> None:
     """Xử lý chi tiết một message nhận được từ SQS."""
@@ -90,24 +109,14 @@ def _process_message(sqs_client, message) -> None:
 
         # 3. Build telemetry window payload for AI Engine
         # signal_name must be one of CONTRACT_SIGNAL_NAMES (telemetry-contract.md §2).
-        # All telemetry values must be float — real AI engine calls float(point.value)
         signal_name = "queue_backlog"
-        telemetry_value: float = 1000.0
         if alertname == "PodOOMKilled":
             signal_name = "pod_oom_event"
-            telemetry_value = 1.0
         elif alertname == "PodCrashLooping":
             signal_name = "container_restart_count"
-            telemetry_value = 5.0
         elif alertname == "ServiceStuck":
             signal_name = "service_unhealthy"
-            telemetry_value = 1.0
 
-        # BOCPD needs a time series (≥10 rows) to detect change points.
-        # Generate 20 baseline points at 0.0 followed by the anomaly spike.
-        _BASELINE_COUNT = 20
-        _INTERVAL_SECONDS = 60
-        now = datetime.now(timezone.utc)
         point_labels = {
             "system": "CDO-PAYMENT" if namespace == "tenant-payment" else "CDO-CHECKOUT",
             "namespace": namespace,
@@ -116,25 +125,17 @@ def _process_message(sqs_client, message) -> None:
             "pod_name": labels.get("pod", f"{service}-pod"),
             "container": labels.get("container", "main"),
         }
-        telemetry_window = [
-            {
-                "ts": (now - timedelta(seconds=(_BASELINE_COUNT - i) * _INTERVAL_SECONDS)).isoformat(),
-                "tenant_id": tenant_id,
-                "service": service,
-                "signal_name": signal_name,
-                "value": 0.0,
-                "labels": point_labels,
-            }
-            for i in range(_BASELINE_COUNT)
-        ]
-        telemetry_window.append({
-            "ts": now.isoformat(),
-            "tenant_id": tenant_id,
-            "service": service,
-            "signal_name": signal_name,
-            "value": telemetry_value,
-            "labels": point_labels,
-        })
+
+        # Worker (Hands) tự query Prometheus lấy time series thật của pod đang gặp sự
+        # cố — thay vì gửi dữ liệu bịa. AI Engine (Brain) không được phép tự gọi
+        # Prometheus/K8s API (Brain/Hands separation).
+        telemetry_window = prometheus_client.build_telemetry_window(
+            namespace=namespace,
+            service=service,
+            signal_name=signal_name,
+            tenant_id=tenant_id,
+            point_labels=point_labels,
+        )
 
         # 4. Invoke AI Engine /v1/detect
         # Mỗi API call có idempotency_key riêng độc lập (UUIDv4 per-call).
@@ -198,27 +199,24 @@ def _process_message(sqs_client, message) -> None:
             sqs_client.delete_message(QueueUrl=settings.sqs_queue_url, ReceiptHandle=receipt_handle)
             return
 
-        # 8. Build post-remediation telemetry & Call /v1/verify
-        # Send series showing signal has returned to baseline (0.0) after healing.
-        verify_now = datetime.now(timezone.utc)
-        post_telemetry_window = [
-            {
-                "ts": (verify_now - timedelta(seconds=(_BASELINE_COUNT - i) * _INTERVAL_SECONDS)).isoformat(),
-                "tenant_id": tenant_id,
-                "service": service,
-                "signal_name": signal_name,
-                "value": 0.0,
-                "labels": point_labels,
-            }
-            for i in range(_BASELINE_COUNT + 1)
-        ]
+        # 8. Chờ đúng verify_policy.window_seconds AI Engine chỉ định (decide response)
+        # trước khi thu thập telemetry hậu-remediation, rồi re-query Prometheus thật
+        # cho post_telemetry_window — không dùng dữ liệu bịa.
+        verify_policy = decide_resp.get("verify_policy") or {}
+        wait_seconds = verify_policy.get("window_seconds", 0)
+        if wait_seconds and not settings.dry_run:
+            logger.info(f"Waiting {wait_seconds}s (verify_policy.window_seconds) before verify...")
+            time.sleep(wait_seconds)
 
-        action_executed = {
-            "action": exec_result.action,
-            "target": exec_result.target,
-            "status": exec_result.status,
-            "execution_time_seconds": exec_result.execution_time_seconds
-        }
+        post_telemetry_window = prometheus_client.build_telemetry_window(
+            namespace=namespace,
+            service=service,
+            signal_name=signal_name,
+            tenant_id=tenant_id,
+            point_labels=point_labels,
+        )
+
+        action_executed = _to_ai_action_executed(exec_result)
 
         verify_idem_key = str(uuid.uuid4())
         logger.info("Invoking /v1/verify...")
