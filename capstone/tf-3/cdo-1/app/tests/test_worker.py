@@ -169,6 +169,31 @@ def test_to_ai_action_executed_rounds_time_and_maps_dry_run_status():
     assert mapped2["execution_time_seconds"] == 8
 
 
+@patch.object(worker_main.prometheus_query_client, "build_telemetry_window")
+def test_build_full_telemetry_window_appends_resource_usage_signal(mock_build_window):
+    """Mọi alert (không riêng OOMKilled) phải gửi kèm 1 tín hiệu memory usage thật
+    thứ 2 (container_resource_usage) cùng pod, để AI Engine RCA có đủ evidence tránh
+    fallback hardcode service sai khi tín hiệu chính chỉ có 1 cột mỏng."""
+    primary = [{"signal_name": "pod_oom_event", "value": 1.0}]
+    secondary = [{"signal_name": "container_resource_usage", "value": 5e7}]
+    mock_build_window.side_effect = [primary, secondary]
+
+    result = worker_main._build_full_telemetry_window(
+        "tenant-payment", "order-api", "pod_oom_event", "tenant-id-123", {}, "order-api-abcde"
+    )
+
+    assert result == primary + secondary
+    assert mock_build_window.call_count == 2
+    first_call, second_call = mock_build_window.call_args_list
+    assert first_call.kwargs["signal_name"] == "pod_oom_event"
+    assert second_call.kwargs["signal_name"] == "container_resource_usage"
+    # cả 2 lệnh gọi phải cùng namespace/service/pod với tín hiệu chính
+    for call in (first_call, second_call):
+        assert call.kwargs["namespace"] == "tenant-payment"
+        assert call.kwargs["service"] == "order-api"
+        assert call.kwargs["pod"] == "order-api-abcde"
+
+
 @patch("time.sleep")
 @patch.object(worker_main.prometheus_query_client, "build_telemetry_window")
 @patch.object(worker_main.ai_client, "detect")
@@ -189,11 +214,18 @@ def test_worker_process_message_success(
 ):
     mock_sqs = MagicMock()
 
-    # Worker phải hỏi Prometheus lấy telemetry_window thật thay vì tự bịa dữ liệu
-    mock_build_window.return_value = [
-        {"ts": "2026-07-01T00:00:00+00:00", "tenant_id": "tenant-id",
-         "service": "payment-api", "signal_name": "pod_oom_event", "value": 1.0, "labels": {}}
-    ]
+    # Worker phải hỏi Prometheus lấy telemetry_window thật thay vì tự bịa dữ liệu.
+    # Mỗi lần build (detect/verify) gồm 2 lệnh gọi: tín hiệu chính (pod_oom_event) +
+    # tín hiệu thứ 2 (container_resource_usage, gửi kèm mọi alert để RCA có đủ evidence).
+    detect_primary = [{"ts": "2026-07-01T00:00:00+00:00", "tenant_id": "tenant-id",
+                        "service": "payment-api", "signal_name": "pod_oom_event", "value": 1.0, "labels": {}}]
+    detect_secondary = [{"ts": "2026-07-01T00:00:00+00:00", "tenant_id": "tenant-id",
+                          "service": "payment-api", "signal_name": "container_resource_usage", "value": 5e7, "labels": {}}]
+    verify_primary = [{"ts": "2026-07-01T00:05:00+00:00", "tenant_id": "tenant-id",
+                        "service": "payment-api", "signal_name": "pod_oom_event", "value": 0.0, "labels": {}}]
+    verify_secondary = [{"ts": "2026-07-01T00:05:00+00:00", "tenant_id": "tenant-id",
+                          "service": "payment-api", "signal_name": "container_resource_usage", "value": 1e7, "labels": {}}]
+    mock_build_window.side_effect = [detect_primary, detect_secondary, verify_primary, verify_secondary]
 
     # Cấu hình mock responses thành công
     mock_detect.return_value = {
@@ -233,25 +265,29 @@ def test_worker_process_message_success(
     assert mock_exec.called
     assert mock_verify.called
 
-    # Telemetry phải đến từ Prometheus (signal_name đúng theo alertname PodOOMKilled)
-    assert mock_build_window.called
-    _, build_window_kwargs = mock_build_window.call_args_list[0]
-    assert build_window_kwargs["namespace"] == "tenant-payment"
-    assert build_window_kwargs["service"] == "payment-api"
-    assert build_window_kwargs["signal_name"] == "pod_oom_event"
-    # detect() phải nhận đúng telemetry_window trả về từ Prometheus, không phải dữ liệu bịa
+    # Telemetry phải đến từ Prometheus (signal_name đúng theo alertname PodOOMKilled),
+    # gọi 4 lần: detect (primary+secondary) + verify (primary+secondary)
+    assert mock_build_window.call_count == 4
+    calls = mock_build_window.call_args_list
+    assert calls[0].kwargs["namespace"] == "tenant-payment"
+    assert calls[0].kwargs["service"] == "payment-api"
+    assert calls[0].kwargs["signal_name"] == "pod_oom_event"
+    assert calls[1].kwargs["signal_name"] == "container_resource_usage"
+    assert calls[2].kwargs["signal_name"] == "pod_oom_event"
+    assert calls[3].kwargs["signal_name"] == "container_resource_usage"
+
+    # detect() phải nhận đúng telemetry_window gộp (primary + secondary), không bịa
     detect_call_args = mock_detect.call_args[0]
-    assert detect_call_args[0] == mock_build_window.return_value
+    assert detect_call_args[0] == detect_primary + detect_secondary
 
     # Worker phải chờ đúng verify_policy.window_seconds AI Engine chỉ định trước khi verify
     mock_sleep.assert_called_once_with(120)
 
     # post_telemetry_window cho /v1/verify phải là dữ liệu Prometheus thật re-query lại
-    # (không phải 1 điểm 0.0 bịa), nên build_telemetry_window phải được gọi lần 2
-    assert mock_build_window.call_count == 2
+    # (gộp primary + secondary), không phải dữ liệu bịa
     verify_call_args = mock_verify.call_args[0]
     action_executed_sent, post_window_sent = verify_call_args[0], verify_call_args[1]
-    assert post_window_sent == mock_build_window.return_value
+    assert post_window_sent == verify_primary + verify_secondary
 
     # action_executed gửi cho AI Engine phải khớp schema ActionExecuted (status
     # COMPLETED|FAILED, execution_time_seconds là int)

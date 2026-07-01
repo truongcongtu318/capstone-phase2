@@ -71,6 +71,28 @@ def _to_ai_action_executed(exec_result) -> dict:
         "execution_time_seconds": round(exec_result.execution_time_seconds),
     }
 
+def _build_full_telemetry_window(namespace, service, signal_name, tenant_id, point_labels, pod):
+    """Gộp tín hiệu chính (theo alertname) + tín hiệu memory usage thật (thứ 2, cùng
+    pod) — áp dụng cho MỌI loại alert, không riêng OOMKilled.
+
+    AI Engine's correlation_analyzer.py chỉ gán service cho 1 điểm khi có cột metric
+    vượt RCA_ZSCORE_THRESHOLD; với đúng 1 cột mỏng (vd restart count tăng từng đơn vị),
+    rất dễ không cột nào vượt ngưỡng -> toàn bộ service_scores = 0 -> rơi vào fallback
+    hardcode "checkoutservice" (không phải service thật của CDO, gây 404 khi patch).
+    Memory usage thật biến thiên mạnh hơn nhiều, làm bằng chứng thứ 2 giúp RCA có cơ
+    hội gán đúng service ngay cả khi tín hiệu chính yếu.
+    """
+    primary = prometheus_query_client.build_telemetry_window(
+        namespace=namespace, service=service, signal_name=signal_name,
+        tenant_id=tenant_id, point_labels=point_labels, pod=pod,
+    )
+    secondary = prometheus_query_client.build_telemetry_window(
+        namespace=namespace, service=service, signal_name="container_resource_usage",
+        tenant_id=tenant_id, point_labels=point_labels, pod=pod,
+    )
+    return primary + secondary
+
+
 def _process_message(sqs_client, message) -> None:
     """Xử lý chi tiết một message nhận được từ SQS."""
     receipt_handle = message["ReceiptHandle"]
@@ -132,13 +154,8 @@ def _process_message(sqs_client, message) -> None:
         # Prometheus/K8s API (Brain/Hands separation). Match CHÍNH XÁC theo tên pod
         # (không phải regex prefix theo service) để tránh lấy nhầm pod khác cùng
         # prefix tên (vd nhiều pod cùng bắt đầu bằng "order-api").
-        telemetry_window = prometheus_query_client.build_telemetry_window(
-            namespace=namespace,
-            service=service,
-            signal_name=signal_name,
-            tenant_id=tenant_id,
-            point_labels=point_labels,
-            pod=pod_name,
+        telemetry_window = _build_full_telemetry_window(
+            namespace, service, signal_name, tenant_id, point_labels, pod_name
         )
 
         # 4. Invoke AI Engine /v1/detect
@@ -212,13 +229,8 @@ def _process_message(sqs_client, message) -> None:
             logger.info(f"Waiting {wait_seconds}s (verify_policy.window_seconds) before verify...")
             time.sleep(wait_seconds)
 
-        post_telemetry_window = prometheus_query_client.build_telemetry_window(
-            namespace=namespace,
-            service=service,
-            signal_name=signal_name,
-            tenant_id=tenant_id,
-            point_labels=point_labels,
-            pod=pod_name,
+        post_telemetry_window = _build_full_telemetry_window(
+            namespace, service, signal_name, tenant_id, point_labels, pod_name
         )
 
         action_executed = _to_ai_action_executed(exec_result)

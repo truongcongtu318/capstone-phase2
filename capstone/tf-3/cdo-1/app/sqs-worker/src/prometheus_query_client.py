@@ -42,6 +42,17 @@ SIGNAL_TO_PROM_QUERY = {
         ' / kube_deployment_spec_replicas{{namespace="{namespace}",deployment="{service}"}}'
     ),
     "queue_backlog": 'aws_sqs_approximate_number_of_messages_visible{{queue_name=~".*self-heal.*"}}',
+    # Tín hiệu THỨ 2 gửi kèm mọi alert (bất kể loại), cùng pod/service với signal
+    # chính. AI Engine's correlation_analyzer.py chỉ cho service 1 điểm khi có cột
+    # metric vượt RCA_ZSCORE_THRESHOLD; với đúng 1 cột mỏng (vd restart count tăng
+    # từng đơn vị), rất dễ không cột nào vượt ngưỡng -> toàn bộ service_scores = 0
+    # -> rơi vào fallback hardcode "checkoutservice" (không phải service thật của
+    # CDO). Gửi thêm memory usage thật (biến thiên mạnh hơn nhiều) làm bằng chứng
+    # thứ 2 để RCA có cơ hội gán đúng service ngay cả khi tín hiệu chính yếu.
+    "container_resource_usage": (
+        'container_memory_working_set_bytes'
+        '{{namespace="{namespace}",pod="{pod}",container="main"}}'
+    ),
 }
 
 _FALLBACK_VALUE = 1.0
