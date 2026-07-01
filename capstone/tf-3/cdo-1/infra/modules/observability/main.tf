@@ -586,13 +586,18 @@ resource "aws_iam_role_policy" "ai_engine_irsa" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "BedrockAccess"
+        Sid    = "BedrockFoundationModelAccess"
         Effect = "Allow"
         Action = [
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream",
         ]
-        Resource = "arn:aws:bedrock:us-east-1::foundation-model/*"
+        # foundation-model: direct model access (Claude, Titan, etc.)
+        # inference-profile: cross-region inference profiles (us.meta.llama4-*, us.anthropic.*)
+        Resource = [
+          "arn:aws:bedrock:us-east-1::foundation-model/*",
+          "arn:aws:bedrock:us-east-1::inference-profile/*",
+        ]
       }
     ]
   })

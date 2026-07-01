@@ -33,7 +33,7 @@ data:
   USE_LLM_DECISION: "True"
   USE_LLM_FAULT_TYPE: "False"
   LLM_PROVIDER: "bedrock"
-  # LLM_MODEL được inject qua Secret (ai-engine-llm-secret) để tránh hardcode
+  LLM_MODEL: "us.meta.llama4-scout-17b-instruct-v1:0"
   AWS_REGION: "us-east-1"
 
   # Telemetry mode — bench: CDO gửi telemetry_window trực tiếp trong request
