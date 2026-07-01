@@ -87,13 +87,20 @@ resource "helm_release" "kyverno" {
       admissionController = {
         replicas = 1
         image = {
+          registry   = local.ecr_registry
           repository = "kyverno/kyverno"
+          tag        = "v1.12.5"
+        }
+        initImage = {
+          registry   = local.ecr_registry
+          repository = "kyverno/kyvernopre"
           tag        = "v1.12.5"
         }
       }
       backgroundController = {
         replicas = 1
         image = {
+          registry   = local.ecr_registry
           repository = "kyverno/background-controller"
           tag        = "v1.12.5"
         }
@@ -101,6 +108,7 @@ resource "helm_release" "kyverno" {
       cleanupController = {
         replicas = 1
         image = {
+          registry   = local.ecr_registry
           repository = "kyverno/cleanup-controller"
           tag        = "v1.12.5"
         }
@@ -108,9 +116,17 @@ resource "helm_release" "kyverno" {
       reportsController = {
         replicas = 1
         image = {
+          registry   = local.ecr_registry
           repository = "kyverno/reports-controller"
           tag        = "v1.12.5"
         }
+      }
+      cleanupJobs = {
+        admissionReports        = { enabled = false }
+        clusterAdmissionReports = { enabled = false }
+        updateRequests          = { enabled = false }
+        ephemeralReports        = { enabled = false }
+        clusterEphemeralReports = { enabled = false }
       }
       resources = {
         limits   = { cpu = "1000m", memory = "512Mi" }
