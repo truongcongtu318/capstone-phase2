@@ -250,10 +250,6 @@ resource "helm_release" "karpenter" {
     name  = "image.tag"
     value = "1.0.6"
   }
-  set {
-    name  = "image.digest"
-    value = ""
-  }
 
   values = [
     yamlencode({
