@@ -12,4 +12,4 @@ resources:
 
 images:
   - name: 474013238625.dkr.ecr.us-east-1.amazonaws.com/tf-3-self-heal-worker
-    newTag: sha-431e22976cfef2fd73ae4beb2308974ab858960d
+    newTag: sha-79f0dab0646dd758459078001c4df483f884dc58
