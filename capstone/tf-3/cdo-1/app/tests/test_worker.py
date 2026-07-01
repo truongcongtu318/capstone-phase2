@@ -4,6 +4,7 @@ import pytest
 import sys
 import os
 import time
+import httpx
 from unittest.mock import patch, MagicMock
 import json
 
@@ -24,6 +25,7 @@ from src import ai_client
 from src import circuit_breaker
 from src import main
 from src import patch_executor
+from src import prometheus_client
 from src.ai_client import AIClientError
 from src.patch_executor import ExecutionResult, PreStateSnapshot
 from src import main as worker_main
@@ -151,6 +153,24 @@ def test_circuit_breaker_record_failure_opens_circuit(mock_log_cb, mock_get_sns,
 # 3. WORKER FLOW TESTS
 # ---------------------------------------------------------------------------
 
+def test_to_ai_action_executed_rounds_time_and_maps_dry_run_status():
+    """AI Engine's ActionExecuted schema chỉ nhận status COMPLETED|FAILED (không có
+    DRY_RUN) và execution_time_seconds kiểu int (không nhận float lẻ) — gửi sai kiểu
+    sẽ bị AI Engine trả 422."""
+    dry_run_result = ExecutionResult("PATCH_MEMORY_LIMIT", "deployment/payment-api", "DRY_RUN", 3.456)
+    mapped = worker_main._to_ai_action_executed(dry_run_result)
+    assert mapped["status"] == "COMPLETED"
+    assert mapped["execution_time_seconds"] == 3
+    assert isinstance(mapped["execution_time_seconds"], int)
+
+    completed_result = ExecutionResult("RESTART_DEPLOYMENT", "deployment/order-api", "COMPLETED", 7.9)
+    mapped2 = worker_main._to_ai_action_executed(completed_result)
+    assert mapped2["status"] == "COMPLETED"
+    assert mapped2["execution_time_seconds"] == 8
+
+
+@patch("time.sleep")
+@patch.object(worker_main.prometheus_client, "build_telemetry_window")
 @patch.object(worker_main.ai_client, "detect")
 @patch.object(worker_main.ai_client, "decide")
 @patch.object(worker_main.ai_client, "verify")
@@ -165,10 +185,16 @@ def test_circuit_breaker_record_failure_opens_circuit(mock_log_cb, mock_get_sns,
 @patch.object(worker_main, "log_verify")
 def test_worker_process_message_success(
     mock_log_verify, mock_log_exec_done, mock_log_exec_start, mock_log_decide, mock_log_detect, mock_log_inc_start,
-    mock_cb_is_open, mock_exec, mock_capture, mock_verify, mock_decide, mock_detect
+    mock_cb_is_open, mock_exec, mock_capture, mock_verify, mock_decide, mock_detect, mock_build_window, mock_sleep
 ):
     mock_sqs = MagicMock()
-    
+
+    # Worker phải hỏi Prometheus lấy telemetry_window thật thay vì tự bịa dữ liệu
+    mock_build_window.return_value = [
+        {"ts": "2026-07-01T00:00:00+00:00", "tenant_id": "tenant-id",
+         "service": "payment-api", "signal_name": "pod_oom_event", "value": 1.0, "labels": {}}
+    ]
+
     # Cấu hình mock responses thành công
     mock_detect.return_value = {
         "anomaly_detected": True,
@@ -176,7 +202,8 @@ def test_worker_process_message_success(
     }
     mock_decide.return_value = {
         "pattern_type": "urgent",
-        "action_plan": [{"action": "PATCH_MEMORY_LIMIT", "target": "deployment/payment-api"}]
+        "action_plan": [{"action": "PATCH_MEMORY_LIMIT", "target": "deployment/payment-api"}],
+        "verify_policy": {"window_seconds": 120}
     }
     mock_capture.return_value = PreStateSnapshot("urgent", "tenant-payment", "payment-api")
     mock_exec.return_value = ExecutionResult("PATCH_MEMORY_LIMIT", "deployment/payment-api", "COMPLETED", 5.0)
@@ -205,6 +232,32 @@ def test_worker_process_message_success(
     assert mock_decide.called
     assert mock_exec.called
     assert mock_verify.called
+
+    # Telemetry phải đến từ Prometheus (signal_name đúng theo alertname PodOOMKilled)
+    assert mock_build_window.called
+    _, build_window_kwargs = mock_build_window.call_args_list[0]
+    assert build_window_kwargs["namespace"] == "tenant-payment"
+    assert build_window_kwargs["service"] == "payment-api"
+    assert build_window_kwargs["signal_name"] == "pod_oom_event"
+    # detect() phải nhận đúng telemetry_window trả về từ Prometheus, không phải dữ liệu bịa
+    detect_call_args = mock_detect.call_args[0]
+    assert detect_call_args[0] == mock_build_window.return_value
+
+    # Worker phải chờ đúng verify_policy.window_seconds AI Engine chỉ định trước khi verify
+    mock_sleep.assert_called_once_with(120)
+
+    # post_telemetry_window cho /v1/verify phải là dữ liệu Prometheus thật re-query lại
+    # (không phải 1 điểm 0.0 bịa), nên build_telemetry_window phải được gọi lần 2
+    assert mock_build_window.call_count == 2
+    verify_call_args = mock_verify.call_args[0]
+    action_executed_sent, post_window_sent = verify_call_args[0], verify_call_args[1]
+    assert post_window_sent == mock_build_window.return_value
+
+    # action_executed gửi cho AI Engine phải khớp schema ActionExecuted (status
+    # COMPLETED|FAILED, execution_time_seconds là int)
+    assert action_executed_sent["status"] == "COMPLETED"
+    assert action_executed_sent["execution_time_seconds"] == 5
+    assert isinstance(action_executed_sent["execution_time_seconds"], int)
 
 
 @patch.object(worker_main.circuit_breaker, "is_open", return_value=True)
@@ -412,6 +465,103 @@ def test_webhook_client_ddb_lock_key():
     if webhook_path not in sys.path:
         sys.path.insert(0, webhook_path)
     import client_ddb
-    
+
     key = client_ddb.build_lock_key("tenant", "namespace", "service", "alert")
     assert len(key) == 64  # SHA-256 hex digest length
+
+
+# ---------------------------------------------------------------------------
+# 5. PROMETHEUS CLIENT TESTS
+# ---------------------------------------------------------------------------
+
+@patch("httpx.Client.get")
+def test_prometheus_query_range_parses_values(mock_get):
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {
+        "status": "success",
+        "data": {
+            "resultType": "matrix",
+            "result": [
+                {"metric": {}, "values": [[1700000000, "0"], [1700000030, "1"]]}
+            ]
+        }
+    }
+    mock_get.return_value = mock_response
+
+    points = prometheus_client.query_range("up", window_seconds=60, step_seconds=30)
+
+    assert points == [
+        {"ts": 1700000000.0, "value": 0.0},
+        {"ts": 1700000030.0, "value": 1.0},
+    ]
+
+
+@patch("httpx.Client.get")
+def test_prometheus_query_range_empty_result_returns_empty_list(mock_get):
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    mock_response.json.return_value = {"status": "success", "data": {"resultType": "matrix", "result": []}}
+    mock_get.return_value = mock_response
+
+    assert prometheus_client.query_range("up", window_seconds=60, step_seconds=30) == []
+
+
+@patch("httpx.Client.get")
+def test_prometheus_query_range_connection_error_returns_empty_list(mock_get):
+    mock_get.side_effect = httpx.ConnectError("connection refused")
+
+    assert prometheus_client.query_range("up", window_seconds=60, step_seconds=30) == []
+
+
+@patch.object(prometheus_client, "query_range")
+def test_build_telemetry_window_uses_prometheus_series(mock_query_range):
+    mock_query_range.return_value = [
+        {"ts": 1700000000.0, "value": 0.0},
+        {"ts": 1700000030.0, "value": 1.0},
+    ]
+
+    window = prometheus_client.build_telemetry_window(
+        namespace="tenant-payment",
+        service="order-api",
+        signal_name="pod_oom_event",
+        tenant_id="tenant-id-123",
+        point_labels={"deployment": "order-api"},
+    )
+
+    assert len(window) == 2
+    assert window[0]["signal_name"] == "pod_oom_event"
+    assert window[0]["tenant_id"] == "tenant-id-123"
+    assert window[0]["service"] == "order-api"
+    assert window[0]["value"] == 0.0
+    assert window[1]["value"] == 1.0
+    assert window[0]["labels"] == {"deployment": "order-api"}
+
+
+@patch.object(prometheus_client, "query_range", return_value=[])
+def test_build_telemetry_window_falls_back_when_prometheus_empty(mock_query_range):
+    window = prometheus_client.build_telemetry_window(
+        namespace="tenant-payment",
+        service="order-api",
+        signal_name="pod_oom_event",
+        tenant_id="tenant-id-123",
+        point_labels={},
+    )
+
+    assert len(window) == 1
+    assert window[0]["value"] == 1.0
+    assert window[0]["signal_name"] == "pod_oom_event"
+    assert window[0]["tenant_id"] == "tenant-id-123"
+
+
+def test_build_telemetry_window_unknown_signal_returns_fallback():
+    window = prometheus_client.build_telemetry_window(
+        namespace="tenant-payment",
+        service="order-api",
+        signal_name="not_a_real_signal",
+        tenant_id="tenant-id-123",
+        point_labels={},
+    )
+
+    assert len(window) == 1
+    assert window[0]["value"] == 1.0
