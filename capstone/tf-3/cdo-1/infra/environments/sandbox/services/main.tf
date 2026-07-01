@@ -27,25 +27,8 @@ data "terraform_remote_state" "networking" {
 locals {
   vpc_id                = data.terraform_remote_state.networking.outputs.vpc_id
   private_subnet_ids    = data.terraform_remote_state.networking.outputs.private_subnet_ids
-  sg_alb_internal_id    = data.terraform_remote_state.networking.outputs.sg_alb_internal_id
   kms_observability_arn = data.terraform_remote_state.networking.outputs.kms_observability_arn
   kms_audit_arn         = data.terraform_remote_state.networking.outputs.kms_audit_arn
-}
-
-# -----------------------------------------------------------------------------
-# MODULE: ingress — AWS Load Balancer Controller
-# -----------------------------------------------------------------------------
-
-module "ingress" {
-  source = "../../../modules/ingress"
-
-  enabled            = true
-  cluster_name       = local.cluster_name
-  oidc_provider_arn  = local.oidc_provider_arn
-  vpc_id             = local.vpc_id
-  private_subnet_ids = local.private_subnet_ids
-  sg_alb_internal_id = local.sg_alb_internal_id
-  global_tags        = var.global_tags
 }
 
 # -----------------------------------------------------------------------------

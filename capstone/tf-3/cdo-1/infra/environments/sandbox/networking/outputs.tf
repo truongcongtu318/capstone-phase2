@@ -28,11 +28,6 @@ output "sg_eks_control_plane_id" {
   value       = module.security.sg_eks_control_plane_id
 }
 
-output "sg_alb_internal_id" {
-  description = "Security group ID for the internal ALB"
-  value       = module.security.sg_alb_internal_id
-}
-
 output "sg_rds_id" {
   description = "Security group ID for RDS"
   value       = module.security.sg_rds_id

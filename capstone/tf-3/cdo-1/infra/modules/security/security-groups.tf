@@ -1,28 +1,6 @@
 # Security Groups (docs/03_security_design.md §1.2 & §4.1)
 
-# sg-alb-internal: Inbound 443 từ client/VPN. Outbound 8443 đến workload pods.
-resource "aws_security_group" "alb_internal" {
-  name        = "${var.name_prefix}-alb-internal"
-  description = "Security group for Internal ALB"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    description = "Allow HTTPS inbound from VPC (VPN/Client CIDR)"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
-  }
-
-  tags = merge(
-    local.module_tags,
-    {
-      Name = "alb-internal-sg"
-    }
-  )
-}
-
-# sg-eks-workload: Workload pods inbound 8443 từ ALB.
+# sg-eks-workload: Workload pods.
 resource "aws_security_group" "eks_workload" {
   name        = "${var.name_prefix}-eks-workload"
   description = "Security group for EKS workload pods"
@@ -97,28 +75,6 @@ resource "aws_security_group" "vpc_endpoint" {
 # =============================================================================
 # SECURITY GROUP RULES (Sử dụng resource riêng biệt để tránh lỗi circular dependency)
 # =============================================================================
-
-# ALB Outbound
-resource "aws_security_group_rule" "alb_egress_to_workload" {
-  type                     = "egress"
-  description              = "Allow HTTPS outbound to EKS workload pods"
-  from_port                = 8443
-  to_port                  = 8443
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.alb_internal.id
-  source_security_group_id = aws_security_group.eks_workload.id
-}
-
-# Workload Inbound
-resource "aws_security_group_rule" "workload_ingress_from_alb" {
-  type                     = "ingress"
-  description              = "Allow traffic from internal ALB on 8443"
-  from_port                = 8443
-  to_port                  = 8443
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.eks_workload.id
-  source_security_group_id = aws_security_group.alb_internal.id
-}
 
 # Workload Outbound
 resource "aws_security_group_rule" "workload_egress_to_endpoints" {

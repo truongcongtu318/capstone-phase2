@@ -31,8 +31,7 @@ CDO-01 là nền tảng **tự chữa lành (Self-Healing Platform)** dựa trê
 │                              │  │  observability     (monitoring)     │  │ │
 │                              │  │  external-secrets  (secrets sync)   │  │ │
 │                              │  │  amazon-cloudwatch (log shipping)   │  │ │
-│                              │  │  self-heal-system  (AI engine)      │  │ │
-│                              │  │  tenant-payment    (workload 1)     │  │ │
+│                              │  │  self-   (workload 1)     │  │ │
 │                              │  │  tenant-checkout   (workload 2)     │  │ │
 │                              │  └─────────────────────────────────────┘  │ │
 │                              └────────────────────────────────────────────┘ │
