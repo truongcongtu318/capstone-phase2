@@ -12,9 +12,11 @@ Tài liệu này ghi lại tất cả thay đổi thực hiện để tích hợ
 
 ## 1. `sqs-worker/src/main.py`
 
-### Thay đổi 1a: Fix `signal_name` mapping
+### Thay đổi 1a: Fix `signal_name` mapping + telemetry value phải là float
 
-**Vấn đề:** `signal_name = "queue_backlog_event"` (default cũ) **không có** trong `CONTRACT_SIGNAL_NAMES` của real AI engine. Real AI sẽ trả HTTP 400 khi nhận giá trị này.
+**Vấn đề 1:** `signal_name = "queue_backlog_event"` (default cũ) **không có** trong `CONTRACT_SIGNAL_NAMES` của real AI engine. Real AI sẽ trả HTTP 400 khi nhận giá trị này.
+
+**Vấn đề 2:** Real AI engine `telemetry.py` gọi `float(point.value)` cho mọi telemetry point. Các giá trị string như `"OOMKilled: Container None, Pod None"` hay `"Readiness probe failed..."` → `ValueError` → HTTP 500. Tất cả `value` phải là số (float).
 
 **Enum hợp lệ** (12 giá trị từ `telemetry-contract.md`):
 ```
@@ -30,21 +32,20 @@ secret_expiry_warning, db_connection_pool_saturation
 signal_name = "queue_backlog_event"  # ❌ không trong enum
 if alertname == "PodOOMKilled":
     signal_name = "pod_oom_event"
-elif alertname == "PodCrashLooping":
-    signal_name = "container_restart_count"
+    telemetry_value = f"OOMKilled: ..."  # ❌ string → float() fail → HTTP 500
 
 # Sau:
-signal_name = "queue_backlog"        # ✅ default đúng
-telemetry_value: object = 1000
+signal_name = "queue_backlog"          # ✅ default đúng
+telemetry_value: float = 1000.0        # ✅ float, không phải object/string
 if alertname == "PodOOMKilled":
     signal_name = "pod_oom_event"
-    telemetry_value = f"OOMKilled: Container {labels.get('container', 'main')}, Pod {labels.get('pod', service)}"
+    telemetry_value = 1.0              # ✅ count; context đã có trong labels.pod_name/container
 elif alertname == "PodCrashLooping":
     signal_name = "container_restart_count"
-    telemetry_value = 5
+    telemetry_value = 5.0              # ✅ restart count
 elif alertname == "ServiceStuck":
-    signal_name = "service_unhealthy"    # ✅ mới
-    telemetry_value = "Readiness probe failed: service not responding"
+    signal_name = "service_unhealthy"  # ✅ mới
+    telemetry_value = 1.0              # ✅ 1 = unhealthy state
 ```
 
 ### Thay đổi 1b: Truyền `namespace_override` vào patch_executor
