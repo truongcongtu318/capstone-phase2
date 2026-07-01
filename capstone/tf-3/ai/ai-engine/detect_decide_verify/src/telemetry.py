@@ -46,7 +46,11 @@ class TelemetryProcessor:
                 if not any(point.signal_name.startswith(s) for s in SERVICES_LIST if s != "redis" and s != "frontend"):
                     col_name = f"{point.service}_{point.signal_name}"
                     
-                metrics_records[ts_sec][col_name] = float(point.value)
+                try:
+                    metrics_records[ts_sec][col_name] = float(point.value)
+                except (ValueError, TypeError):
+                    # Skip non-numeric telemetry values (e.g. OOMKilled status strings)
+                    continue
                 
         if not metrics_records:
             return pd.DataFrame(), pd.DataFrame(), {}
