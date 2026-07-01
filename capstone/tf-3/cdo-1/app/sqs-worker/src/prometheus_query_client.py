@@ -14,10 +14,18 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 # signal_name (CONTRACT_SIGNAL_NAMES) -> PromQL query template
+#
+# pod_oom_event dùng chung metric với container_restart_count
+# (kube_pod_container_status_restarts_total), KHÔNG dùng
+# kube_pod_container_status_last_terminated_reason: metric đó chỉ tồn tại SAU
+# lần terminate đầu tiên và luôn = 1 khi có (== 1 filter) — không có baseline
+# "0" nào trong series để BOCPD so sánh, nên AI engine luôn trả NO_ANOMALY dù
+# pod đang OOMKill loop thật. restarts_total là counter tăng dần từ 0 ngay từ
+# khi container start, có baseline thật trước khi restart đầu tiên xảy ra.
 SIGNAL_TO_PROM_QUERY = {
     "pod_oom_event": (
-        'kube_pod_container_status_last_terminated_reason'
-        '{{reason="OOMKilled",namespace="{namespace}",pod=~"{service}.*"}} == 1'
+        'kube_pod_container_status_restarts_total'
+        '{{namespace="{namespace}",pod=~"{service}.*"}}'
     ),
     "container_restart_count": (
         'kube_pod_container_status_restarts_total'

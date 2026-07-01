@@ -40,10 +40,14 @@ data:
   TELEMETRY_RUNTIME_MODE: "bench"
   BENCH_TELEMETRY_SOURCE_KIND: "benchmark_fixture"
 
-  # RCA hyperparameters — tuned for CDO 56-point synthetic window (50 baseline + 6 anomaly)
+  # RCA hyperparameters
+  # LƯU Ý: BASELINE_LENGTH KHÔNG có tác dụng với /v1/detect live — engine.py
+  # tự tính baseline_len = max(10, int(N*0.8)) từ số điểm nhận được, bỏ qua
+  # biến này (chỉ dùng cho benchmark offline /v1/benchmark/e2e). Giữ lại đây
+  # chỉ để khỏi phá benchmark, đừng kỳ vọng nó ảnh hưởng alert thật.
   USE_BARO_RCA: "True"
   BARO_TOP_K: "3"
-  BASELINE_LENGTH: "50"     # match _BASELINE_COUNT in sqs-worker; was 600
-  BOCPD_HAZARD: "10"        # more sensitive; was 50
-  ANALYSIS_WINDOW_SIZE: "10"  # smaller window for faster correlation; was 120
+  BASELINE_LENGTH: "50"
+  BOCPD_HAZARD: "3"         # nhạy hơn nữa cho series ngắn (sqs-worker gửi ~15-60 điểm thật); was 10
+  ANALYSIS_WINDOW_SIZE: "10"  # chỉ ảnh hưởng RCA sau khi đã detect được, không ảnh hưởng detect
   CORRELATION_THRESHOLD: "0.25"
