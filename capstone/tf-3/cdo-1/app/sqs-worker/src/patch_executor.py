@@ -297,17 +297,19 @@ def _git_commit_push(repo: str, file: str, msg: str) -> str:
 
 # ── PUBLIC API ────────────────────────────────────────────────────────────────
 
-def capture_pre_state(decide_response: dict, dry_run: bool = False) -> PreStateSnapshot:
+def capture_pre_state(decide_response: dict, dry_run: bool = False,
+                      namespace_override: str = "") -> PreStateSnapshot:
     """
     Snapshot trạng thái hiện tại TRƯỚC khi vá để có thể rollback nếu cần.
 
     urgent   → đọc K8s API (memory_limit, replicas, container_name).
     deferred → lấy git HEAD SHA từ CodeCommit.
     dry_run  → trả snapshot giả, không gọi API.
+    namespace_override → dùng khi AI runbook trả "production" (hardcoded bug phía AI).
     """
     step   = (decide_response.get("action_plan") or [{}])[0]
     params = step.get("params", {})
-    ns     = params.get("namespace", "")
+    ns     = namespace_override or params.get("namespace", "")
     dep    = step.get("target", "").replace("deployment/", "")
     _guard_ns(ns)
 
@@ -340,7 +342,8 @@ def capture_pre_state(decide_response: dict, dry_run: bool = False) -> PreStateS
 
 
 
-def execute(decide_response: dict, correlation_id: str, dry_run: bool = False) -> ExecutionResult:
+def execute(decide_response: dict, correlation_id: str, dry_run: bool = False,
+            namespace_override: str = "") -> ExecutionResult:
     """
     Thực thi action plan từ /v1/decide.
 
@@ -349,6 +352,8 @@ def execute(decide_response: dict, correlation_id: str, dry_run: bool = False) -
 
     Slow Lane (deferred):
       clone CodeCommit → sửa YAML → commit/push → ArgoCD tự sync
+
+    namespace_override → dùng khi AI runbook trả "production" (hardcoded bug phía AI).
     """
     step   = (decide_response.get("action_plan") or [])
     matched_runbook = decide_response.get("matched_runbook", "UnknownRunbook")
@@ -364,7 +369,7 @@ def execute(decide_response: dict, correlation_id: str, dry_run: bool = False) -
         action = s.get("action", "")
         target = s.get("target", "")
         params = s.get("params", {})
-        ns     = params.get("namespace", "")
+        ns     = namespace_override or params.get("namespace", "")
         dep    = target.replace("deployment/", "")
         cont   = params.get("container", "")
         _guard_ns(ns)

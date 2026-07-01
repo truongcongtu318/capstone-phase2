@@ -81,7 +81,7 @@ async def receive_alerts(
         if alert.status != "firing":
             continue
             
-        if alert.labels.alertname not in ["PodOOMKilled", "ServiceStuck", "SQSQueueBacklog"]:
+        if alert.labels.alertname not in ["PodOOMKilled", "PodCrashLooping", "ServiceStuck", "SQSQueueBacklog"]:
             continue
             
         namespace = alert.labels.namespace

@@ -49,28 +49,21 @@ def detect(
 ):
     """
     Dummy detect endpoint. Always returns a fixed anomaly.
-    Reads namespace/service from telemetry_window so _guard_ns() in worker passes.
     """
-    first = telemetry_window[0] if telemetry_window else {}
-    labels = first.get("labels", {})
-    ns = labels.get("namespace") or first.get("tenant_id", "tenant-payment")
-    service = labels.get("service") or first.get("service", "order-service")
-    alertname = labels.get("alertname", "PodOOMKilled")
     return {
         "anomaly_detected": True,
         "severity": 0.85,
         "anomaly_context": {
-            "target_service": service,
+            "target_service": "order-service",
             "suspected_fault_type": "database_connection_failure",
             "system": "E-COMMERCE",
-            "namespace": ns,
-            "deployment": service,
-            "alertname": alertname,
+            "namespace": "production",
+            "deployment": "order-service",
             "trigger_metric": "service_error_rate",
             "trigger_value": 0.15
         },
         "confidence": 0.92,
-        "reasoning": "Tỷ lệ lỗi vượt ngưỡng an toàn 5%.",
+        "reasoning": "Tỷ lệ lỗi của order-service (15%) vượt ngưỡng an toàn 5% đồng thời xuất hiện lỗi NullPointerException liên tục trong stack trace.",
         "correlation_id": correlation_id or "c1a2b3c4-d5e6-4f7g-8h9i-0j1k2l3m4n5o"
     }
 
@@ -88,40 +81,27 @@ def decide(
 ):
     """
     Dummy decide endpoint. Returns an action plan.
-    Echoes namespace from anomaly_context so _guard_ns() in worker passes.
     """
-    ns = anomaly_context.get("namespace", "tenant-payment")
-    service = anomaly_context.get("target_service", "order-service")
-    alertname = anomaly_context.get("alertname", "PodOOMKilled")
-
-    if alertname in ("ServiceStuck", "DeploymentAvailableReplicasLow"):
-        action = "RESTART_DEPLOYMENT"
-        params = {"namespace": ns, "container": "main"}
-        runbook = "ServiceRestartRunbook"
-    elif alertname in ("SQSQueueBacklog", "WorkerQueueBacklog"):
-        action = "SCALE_REPLICAS"
-        params = {"namespace": ns, "replicas": 3}
-        runbook = "QueueBacklogScaleRunbook"
-    else:
-        action = "PATCH_MEMORY_LIMIT"
-        params = {"namespace": ns, "container": "main", "memory_request_mb": 512, "memory_limit_mb": 768}
-        runbook = "OOMKilledRunbook"
-
     return {
-        "matched_runbook": runbook,
+        "matched_runbook": "DatabaseConnectionRecoveryRunbook",
         "pattern_type": "urgent",
         "action_plan": [
             {
                 "step": 1,
-                "action": action,
-                "target": f"deployment/{service}",
-                "params": params
+                "action": "PATCH_MEMORY_LIMIT",
+                "target": "deployment/order-service",
+                "params": {
+                    "namespace": "production",
+                    "container": "main",
+                    "memory_request_mb": 512,
+                    "memory_limit_mb": 768
+                }
             }
         ],
         "blast_radius_config": {
             "max_pod_impact_pct": 25,
             "circuit_breaker_error_rate": 0.20,
-            "allowed_namespaces": [ns]
+            "allowed_namespaces": ["production"]
         },
         "verify_policy": {
             "window_seconds": 120,

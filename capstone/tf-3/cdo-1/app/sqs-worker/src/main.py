@@ -89,18 +89,28 @@ def _process_message(sqs_client, message) -> None:
             return
 
         # 3. Build telemetry window payload for AI Engine
-        signal_name = "queue_backlog_event"
+        # signal_name must be one of CONTRACT_SIGNAL_NAMES (telemetry-contract.md §2).
+        signal_name = "queue_backlog"
+        telemetry_value: object = 1000
         if alertname == "PodOOMKilled":
             signal_name = "pod_oom_event"
+            telemetry_value = (
+                f"OOMKilled: Container {labels.get('container', 'main')}, "
+                f"Pod {labels.get('pod', service)}"
+            )
         elif alertname == "PodCrashLooping":
             signal_name = "container_restart_count"
+            telemetry_value = 5
+        elif alertname == "ServiceStuck":
+            signal_name = "service_unhealthy"
+            telemetry_value = "Readiness probe failed: service not responding"
 
         telemetry_window = [{
             "ts": alert.get("startsAt") or datetime.now(timezone.utc).isoformat(),
             "tenant_id": tenant_id,
             "service": service,
             "signal_name": signal_name,
-            "value": 1.0,
+            "value": telemetry_value,
             "labels": {
                 "system": "CDO-PAYMENT" if namespace == "tenant-payment" else "CDO-CHECKOUT",
                 "namespace": namespace,
@@ -142,7 +152,8 @@ def _process_message(sqs_client, message) -> None:
             return
 
         # 6. Capture pre-state snapshot for rollback
-        snapshot = patch_executor.capture_pre_state(decide_resp, settings.dry_run)
+        snapshot = patch_executor.capture_pre_state(decide_resp, settings.dry_run,
+                                                    namespace_override=namespace)
 
         # 7. Execute self-healing action
         action_item = action_plan[0]
@@ -154,7 +165,8 @@ def _process_message(sqs_client, message) -> None:
         log_execute_start(tenant_id, correlation_id, action, target, pattern_type, settings.dry_run)
 
         logger.info(f"Executing self-heal action {action} on {target} ({pattern_type})...")
-        exec_result = patch_executor.execute(decide_resp, correlation_id, settings.dry_run)
+        exec_result = patch_executor.execute(decide_resp, correlation_id, settings.dry_run,
+                                             namespace_override=namespace)
         log_execute_done(
             tenant_id, correlation_id, exec_result.action, exec_result.target,
             exec_result.status, exec_result.execution_time_seconds, exec_result.error, settings.dry_run

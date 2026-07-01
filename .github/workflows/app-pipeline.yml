@@ -6,13 +6,13 @@ on:
     paths:
       - 'capstone/tf-3/cdo-1/app/**'
       - '.github/workflows/app-pipeline.yml'
-      - 'capstone/tf-3/ai/demo/**'
+      - 'capstone/tf-3/ai/ai-engine/detect_decide_verify/**'
   pull_request:
     branches: [ main ]
     paths:
       - 'capstone/tf-3/cdo-1/app/**'
       - '.github/workflows/app-pipeline.yml'
-      - 'capstone/tf-3/ai/demo/**'
+      - 'capstone/tf-3/ai/ai-engine/detect_decide_verify/**'
 
 permissions:
   id-token: write
@@ -76,9 +76,9 @@ jobs:
           - app: self-heal-worker
             dir: capstone/tf-3/cdo-1/app/sqs-worker
             ecr_repo: tf-3-self-heal-worker
-          - app: ai-engine-demo
-            dir: capstone/tf-3/ai/demo/app
-            ecr_repo: tf-3-ai-engine-demo
+          - app: ai-engine
+            dir: capstone/tf-3/ai/ai-engine/detect_decide_verify
+            ecr_repo: tf-3-ai-engine
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
