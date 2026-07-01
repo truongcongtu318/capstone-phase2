@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional
 import boto3
@@ -68,8 +68,13 @@ def health():
 @app.post("/alerts", status_code=202)
 async def receive_alerts(
     payload: dict,
-    x_tenant_id: Optional[str] = Header(None)
+    x_tenant_id: Optional[str] = Header(None),
+    # AlertmanagerConfig (CRD v1alpha1) webhook_config không hỗ trợ custom HTTP
+    # headers (chỉ có authorization/basicAuth/oauth2/tlsConfig) — Alertmanager
+    # thật không thể gửi X-Tenant-Id. Query param trên URL là kênh thay thế.
+    tenant_id_param: Optional[str] = Query(None, alias="tenant_id"),
 ):
+    effective_tenant_id = x_tenant_id or tenant_id_param
     import logging
     try:
         parsed_payload = AlertmanagerPayload(**payload)
@@ -93,7 +98,7 @@ async def receive_alerts(
         if not expected_tenant_id:
             continue
             
-        if x_tenant_id != expected_tenant_id:
+        if effective_tenant_id != expected_tenant_id:
             SECURITY_VIOLATIONS.inc()
             raise HTTPException(status_code=403, detail="SECURITY_VIOLATION")
 
