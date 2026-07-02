@@ -69,12 +69,13 @@ jobs:
           echo "🔄 Cloning CodeCommit repository..."
           git clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops codecommit-repo
           
-          echo "📁 Syncing GitOps manifests..."
+          echo "📁 Syncing GitOps manifests preserving monorepo path structure..."
           # Clean target directory except .git metadata
           find codecommit-repo -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
           
-          # Copy only the contents of the gitops directory to the root of the target repo
-          cp -r capstone/tf-3/cdo-1/gitops/* codecommit-repo/
+          # Recreate full directory tree and copy
+          mkdir -p codecommit-repo/capstone/tf-3/cdo-1
+          cp -r capstone/tf-3/cdo-1/gitops codecommit-repo/capstone/tf-3/cdo-1/
           
           cd codecommit-repo
           git add -A
