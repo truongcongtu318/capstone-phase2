@@ -6,12 +6,17 @@ set -euo pipefail
 
 NAMESPACE=${NAMESPACE:-tenant-payment}
 APP_NAME=${APP_NAME:-oom-chaos}
-ECR_REGISTRY=${ECR_REGISTRY:-544011261607.dkr.ecr.us-east-1.amazonaws.com}
+AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-474013238625}
+AWS_REGION=${AWS_REGION:-us-east-1}
+ECR_REGISTRY=${ECR_REGISTRY:-${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com}
 IMAGE=${IMAGE:-${ECR_REGISTRY}/alexeiled/stress-ng:latest}
 MEM_LIMIT=${MEM_LIMIT:-64Mi}
 VM_BYTES=${VM_BYTES:-128M}
 TIMEOUT=${TIMEOUT:-60s}
 DRY_RUN=${DRY_RUN:-false}
+KUBECTL=${KUBECTL:-kubectl}
+KUBECTL_VALIDATE=${KUBECTL_VALIDATE:-false}
+KUBECTL_DRY_RUN=${KUBECTL_DRY_RUN:-false}
 
 render_pod() {
   cat <<EOF
@@ -46,26 +51,33 @@ echo "VM bytes: ${VM_BYTES}"
 echo "Dry run: ${DRY_RUN}"
 
 if [[ "${DRY_RUN}" == "true" ]]; then
-  render_pod | kubectl apply --dry-run=client -f -
-  echo "Dry run completed. OOM pod was not applied."
+  if [[ "${KUBECTL_DRY_RUN}" == "true" ]]; then
+    render_pod | "${KUBECTL}" apply --dry-run=client --validate="${KUBECTL_VALIDATE}" -f -
+    echo "kubectl client dry-run completed. OOM pod was not applied."
+  else
+    echo "--- RENDERED POD MANIFEST ---"
+    render_pod
+    echo "--- END MANIFEST ---"
+    echo "Manifest-only dry run completed. Set KUBECTL_DRY_RUN=true to ask kubectl to validate it."
+  fi
   exit 0
 fi
 
-kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
-render_pod | kubectl apply -f -
+"${KUBECTL}" create namespace "${NAMESPACE}" --dry-run=client -o yaml | "${KUBECTL}" apply -f -
+render_pod | "${KUBECTL}" apply -f -
 
 echo "Waiting for pod to be created..."
 sleep 5
 
 echo "--- POD STATUS ---"
-kubectl get pod "${APP_NAME}" -n "${NAMESPACE}" || true
+"${KUBECTL}" get pod "${APP_NAME}" -n "${NAMESPACE}" || true
 
 echo "Waiting for OOMKilled..."
 OOM_DETECTED=false
 for _ in {1..60}; do
-  REASON_LAST=$(kubectl get pod "${APP_NAME}" -n "${NAMESPACE}" \
+  REASON_LAST=$("${KUBECTL}" get pod "${APP_NAME}" -n "${NAMESPACE}" \
     -o jsonpath='{.status.containerStatuses[0].lastState.terminated.reason}' 2>/dev/null || true)
-  REASON_CURR=$(kubectl get pod "${APP_NAME}" -n "${NAMESPACE}" \
+  REASON_CURR=$("${KUBECTL}" get pod "${APP_NAME}" -n "${NAMESPACE}" \
     -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' 2>/dev/null || true)
 
   if [[ "${REASON_LAST}" == "OOMKilled" || "${REASON_CURR}" == "OOMKilled" ]]; then
@@ -84,10 +96,10 @@ fi
 
 echo "--- EVIDENCE ---"
 echo "1. Pod:"
-kubectl get pod "${APP_NAME}" -n "${NAMESPACE}" -o wide || true
+"${KUBECTL}" get pod "${APP_NAME}" -n "${NAMESPACE}" -o wide || true
 echo "2. Events:"
-kubectl get events -n "${NAMESPACE}" --sort-by=.lastTimestamp | grep "${APP_NAME}" || true
+"${KUBECTL}" get events -n "${NAMESPACE}" --sort-by=.lastTimestamp | grep "${APP_NAME}" || true
 echo "3. Container state:"
-kubectl describe pod "${APP_NAME}" -n "${NAMESPACE}" | grep -A 12 "State" || true
+"${KUBECTL}" describe pod "${APP_NAME}" -n "${NAMESPACE}" | grep -A 12 "State" || true
 
 echo "Cleanup: kubectl delete pod ${APP_NAME} -n ${NAMESPACE} --ignore-not-found"

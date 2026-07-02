@@ -6,8 +6,10 @@
 # Nơi chạy: Chạy trên máy cá nhân có Internet và cấu hình AWS CLI có quyền đẩy ECR
 # ==============================================================================
 set -euo pipefail
-
-AWS_ACCOUNT="544011261607"
+# -e: gặp lỗi là dừng ngay
+# -u: dùng biến chưa khai báo là báo lỗi
+# -o pipefail: nếu một lệnh trong pipeline lỗi thì cả pipeline bị tính là lỗi
+AWS_ACCOUNT="${AWS_ACCOUNT:-474013238625}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIRROR_LIST="${MIRROR_LIST:-${SCRIPT_DIR}/mirror-list.txt}"

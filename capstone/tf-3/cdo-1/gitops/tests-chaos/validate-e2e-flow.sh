@@ -13,6 +13,7 @@ AI_ENGINE_LABEL=${AI_ENGINE_LABEL:-app=ai-engine}
 SELF_HEAL_SA=${SELF_HEAL_SA:-system:serviceaccount:self-heal-system:self-heal-executor}
 ARGOCD_SA=${ARGOCD_SA:-system:serviceaccount:argocd:argocd-application-controller}
 STRICT=${STRICT:-true}
+KUBECTL=${KUBECTL:-kubectl}
 
 FAILURES=0
 
@@ -61,16 +62,16 @@ file_contains() {
 }
 
 kubectl_available() {
-  command -v kubectl >/dev/null 2>&1
+  command -v "${KUBECTL}" >/dev/null 2>&1
 }
 
 cluster_available() {
-  kubectl version --client >/dev/null 2>&1 && kubectl cluster-info >/dev/null 2>&1
+  "${KUBECTL}" version --client >/dev/null 2>&1 && "${KUBECTL}" cluster-info >/dev/null 2>&1
 }
 
 namespace_exists() {
   local namespace=$1
-  if kubectl get namespace "${namespace}" >/dev/null 2>&1; then
+  if "${KUBECTL}" get namespace "${namespace}" >/dev/null 2>&1; then
     pass "namespace ${namespace} exists"
   else
     fail "namespace ${namespace} not found"
@@ -80,7 +81,7 @@ namespace_exists() {
 resource_exists() {
   local description=$1
   shift
-  if kubectl "$@" >/dev/null 2>&1; then
+  if "${KUBECTL}" "$@" >/dev/null 2>&1; then
     pass "${description}"
   else
     fail "${description} not found"
@@ -92,7 +93,7 @@ auth_can_i() {
   local description=$2
   shift 2
   local actual
-  actual=$(kubectl auth can-i "$@" 2>/dev/null || true)
+  actual=$("${KUBECTL}" auth can-i "$@" 2>/dev/null || true)
   if [[ "${actual}" == "${expected}" ]]; then
     pass "${description}: ${actual}"
   else
@@ -121,25 +122,28 @@ file_contains "${GITOPS_DIR}/security-policies/network-policies/ai-engine-netpol
 file_contains "${GITOPS_DIR}/monitoring/prometheus-rules.yaml" 'alert: PodOOMKilled' "PodOOMKilled alert declared"
 file_contains "${GITOPS_DIR}/monitoring/prometheus-rules.yaml" 'alert: SQSQueueBacklog' "SQSQueueBacklog alert declared"
 file_contains "${GITOPS_DIR}/monitoring/alertmanager-config.yaml" 'webhook-receiver.self-heal-system.svc.cluster.local' "Alertmanager routes to webhook receiver"
+file_contains "${GITOPS_DIR}/monitoring/alertmanager-config.yaml" 'tenant_id=d3b07384-d113-495f-9f58-20d18d357d75' "Alertmanager payment tenant_id query param declared"
+file_contains "${GITOPS_DIR}/monitoring/alertmanager-config.yaml" 'tenant_id=6c8b4b2b-4d45-4209-a1b4-4b532d56a31c' "Alertmanager checkout tenant_id query param declared"
 file_exists "${GITOPS_DIR}/manifests/base/webhook-receiver/service.yaml" "webhook-receiver Service manifest"
 file_exists "${GITOPS_DIR}/manifests/base/sqs-worker/serviceaccount.yaml" "sqs-worker self-heal-executor ServiceAccount manifest"
 file_exists "${GITOPS_DIR}/manifests/base/ai-engine/service.yaml" "ai-engine Service manifest"
+file_exists "${SCRIPT_DIR}/fixtures/oom-alert-payload.json" "OOM Alertmanager fixture"
 
 if ! kubectl_available; then
   skip "kubectl client unavailable; client and cluster checks were not executed"
 else
   echo "--- Kustomize client checks ---"
-  if kubectl kustomize "${GITOPS_DIR}/security-policies" >/dev/null 2>&1; then
+  if "${KUBECTL}" kustomize "${GITOPS_DIR}/security-policies" >/dev/null 2>&1; then
     pass "kubectl kustomize security-policies"
   else
-    fail "kubectl kustomize security-policies"
+    fail "${KUBECTL} kustomize security-policies"
   fi
 
   if ! cluster_available; then
     skip "BLOCKED_BY_INFRA: kubectl is installed but no reachable cluster context was found"
   else
     echo "--- Cluster checks ---"
-    if kubectl apply --dry-run=server -k "${GITOPS_DIR}/security-policies" >/dev/null 2>&1; then
+    if "${KUBECTL}" apply --dry-run=server -k "${GITOPS_DIR}/security-policies" >/dev/null 2>&1; then
       pass "server dry-run security-policies"
     else
       skip "BLOCKED_BY_INFRA: server dry-run security-policies needs cluster CRDs/admission ready"
@@ -159,19 +163,19 @@ else
   resource_exists "webhook-receiver Service exists" get service webhook-receiver -n "${SELF_HEAL_NAMESPACE}"
   resource_exists "sqs-worker ServiceAccount exists" get serviceaccount self-heal-executor -n "${SELF_HEAL_NAMESPACE}"
 
-  if kubectl get pods -n "${SELF_HEAL_NAMESPACE}" -l "${WEBHOOK_LABEL}" --no-headers 2>/dev/null | grep -q .; then
+  if "${KUBECTL}" get pods -n "${SELF_HEAL_NAMESPACE}" -l "${WEBHOOK_LABEL}" --no-headers 2>/dev/null | grep -q .; then
     pass "webhook-receiver pod exists"
   else
     skip "webhook-receiver pod not ready yet"
   fi
 
-  if kubectl get pods -n "${SELF_HEAL_NAMESPACE}" -l "${SQS_WORKER_LABEL}" --no-headers 2>/dev/null | grep -q .; then
+  if "${KUBECTL}" get pods -n "${SELF_HEAL_NAMESPACE}" -l "${SQS_WORKER_LABEL}" --no-headers 2>/dev/null | grep -q .; then
     pass "sqs-worker pod exists"
   else
     skip "sqs-worker pod not ready yet"
   fi
 
-  if kubectl get pods -n "${SELF_HEAL_NAMESPACE}" -l "${AI_ENGINE_LABEL}" --no-headers 2>/dev/null | grep -q .; then
+  if "${KUBECTL}" get pods -n "${SELF_HEAL_NAMESPACE}" -l "${AI_ENGINE_LABEL}" --no-headers 2>/dev/null | grep -q .; then
     pass "ai-engine pod exists"
   else
     skip "ai-engine pod not ready yet"
@@ -186,7 +190,7 @@ else
   resource_exists "PrometheusRule cdo1-self-heal-alerts exists" get prometheusrule cdo1-self-heal-alerts -n "${OBSERVABILITY_NAMESPACE}"
   resource_exists "AlertmanagerConfig cdo1-self-heal-routing exists" get alertmanagerconfig cdo1-self-heal-routing -n "${OBSERVABILITY_NAMESPACE}"
 
-  if kubectl get configmap,secret -n "${SELF_HEAL_NAMESPACE}" -o name 2>/dev/null | grep -qi firehose; then
+  if "${KUBECTL}" get configmap,secret -n "${SELF_HEAL_NAMESPACE}" -o name 2>/dev/null | grep -qi firehose; then
     pass "Firehose audit config exists"
   else
     skip "Firehose audit config not ready yet"

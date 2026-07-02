@@ -1,0 +1,22 @@
+{
+  "receiver": "webhook-tenant-payment",
+  "status": "firing",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "PodOOMKilled",
+        "namespace": "tenant-payment",
+        "service": "payment-api",
+        "severity": "critical",
+        "pod": "oom-chaos",
+        "container": "stress-ng"
+      },
+      "annotations": {
+        "summary": "Member 9 OOM chaos validation payload",
+        "description": "Synthetic Alertmanager payload used to validate webhook receiver, SQS worker, remediation, and audit flow."
+      },
+      "startsAt": "2026-07-02T00:00:00Z"
+    }
+  ]
+}

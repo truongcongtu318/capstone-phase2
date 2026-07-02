@@ -10,6 +10,9 @@ DB_ENDPOINT=${DB_ENDPOINT:-}
 POLICY_NAME=${POLICY_NAME:-chaos-deny-db-egress}
 DRY_RUN=${DRY_RUN:-false}
 AUTO_CLEANUP=${AUTO_CLEANUP:-false}
+KUBECTL=${KUBECTL:-kubectl}
+KUBECTL_VALIDATE=${KUBECTL_VALIDATE:-false}
+KUBECTL_DRY_RUN=${KUBECTL_DRY_RUN:-false}
 
 report_evidence() {
   echo "========================================"
@@ -29,7 +32,7 @@ probe_connection() {
   fi
   
   local pod_name
-  pod_name=$(kubectl get pod -n "${NAMESPACE}" -l "app=${APP_LABEL}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  pod_name=$("${KUBECTL}" get pod -n "${NAMESPACE}" -l "app=${APP_LABEL}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
   if [[ -z "${pod_name}" ]]; then
     echo "[NOT_VALIDATED] No pod found for app=${APP_LABEL}. Skipping probe (${phase})."
     return
@@ -42,7 +45,7 @@ probe_connection() {
   # Try nc first, fallback to wget if nc is missing
   local check_cmd="nc -z -w 3 ${host} ${port} || wget --spider -T 3 ${host}:${port} >/dev/null 2>&1"
   
-  if kubectl exec -n "${NAMESPACE}" "${pod_name}" -- sh -c "${check_cmd}" >/dev/null 2>&1; then
+  if "${KUBECTL}" exec -n "${NAMESPACE}" "${pod_name}" -- sh -c "${check_cmd}" >/dev/null 2>&1; then
     echo "[PROBE] ${phase}: Connection to ${DB_ENDPOINT} SUCCEEDED."
   else
     echo "[PROBE] ${phase}: Connection to ${DB_ENDPOINT} FAILED / BLOCKED."
@@ -52,7 +55,7 @@ probe_connection() {
 cleanup() {
   if [[ "${AUTO_CLEANUP}" == "true" && "${DRY_RUN}" != "true" ]]; then
     echo "Cleaning up NetworkPolicy..."
-    kubectl delete networkpolicy "${POLICY_NAME}" -n "${NAMESPACE}" --ignore-not-found
+    "${KUBECTL}" delete networkpolicy "${POLICY_NAME}" -n "${NAMESPACE}" --ignore-not-found
     probe_connection "AFTER_CLEANUP"
   fi
 }
@@ -93,20 +96,27 @@ echo "Dry run: ${DRY_RUN}"
 echo "WARNING: Kubernetes NetworkPolicy is allow-list based. This blocks DB only if no other NetworkPolicy allows DB egress for the selected pods."
 
 if [[ "${DRY_RUN}" == "true" ]]; then
-  render_policy | kubectl apply --dry-run=client -f -
-  echo "Dry run completed. NetworkPolicy was not applied."
+  if [[ "${KUBECTL_DRY_RUN}" == "true" ]]; then
+    render_policy | "${KUBECTL}" apply --dry-run=client --validate="${KUBECTL_VALIDATE}" -f -
+    echo "kubectl client dry-run completed. NetworkPolicy was not applied."
+  else
+    echo "--- RENDERED NETWORKPOLICY MANIFEST ---"
+    render_policy
+    echo "--- END MANIFEST ---"
+    echo "Manifest-only dry run completed. Set KUBECTL_DRY_RUN=true to ask kubectl to validate it."
+  fi
   exit 0
 fi
 
 probe_connection "BEFORE_APPLY"
 
-render_policy | kubectl apply -f -
+render_policy | "${KUBECTL}" apply -f -
 
 echo "[PASS] NetworkPolicy ${POLICY_NAME} applied."
 probe_connection "AFTER_APPLY"
 
 echo "--- EVIDENCE ---"
-kubectl describe networkpolicy "${POLICY_NAME}" -n "${NAMESPACE}" || true
+"${KUBECTL}" describe networkpolicy "${POLICY_NAME}" -n "${NAMESPACE}" || true
 
 if [[ "${AUTO_CLEANUP}" != "true" ]]; then
   echo "Cleanup: kubectl delete networkpolicy ${POLICY_NAME} -n ${NAMESPACE} --ignore-not-found"
