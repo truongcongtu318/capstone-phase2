@@ -8,11 +8,21 @@
 
 | Test type | Tool | Coverage / Scope |
 |---|---|---|
-| Unit test | <pytest / go test> | <X%> |
-| Integration test | <custom / Postman> | Tenant provision flow + AI integration |
-| E2E test | <Playwright / k6> | Happy path 3 scenarios |
-| Load test | <k6 / Locust> | Sustained 100 RPS for 10 min |
-| Chaos test | <Litmus / manual> | 3 curveball scenarios |
+| Unit test | pytest | 79% (`pytest --cov=capstone/tf-3/cdo-1/app/`, 29 test case, ngưỡng CI ≥70%) |
+| Integration test | pytest, gọi thẳng AI Engine thật đã deploy trên cluster (không mock) | Webhook idempotency + cross-tenant rejection (`test_webhook.py`), Worker ↔ AI Engine `/v1/detect`→`/v1/decide`→`/v1/verify` end-to-end (`test_worker.py`) |
+| E2E test | manual (kubectl + log thật, không dùng Playwright/k6 vì đây là hạ tầng K8s, không phải web UI) | Happy path PodOOMKilled: **đã chạy thành công end-to-end thật trên cluster** (xem bằng chứng bên dưới). PodCrashLooping: dùng chung cơ chế signal, chưa chạy riêng. ServiceStuck: đã có kịch bản test, phát hiện gap fault-type mapping (xem §6.2) |
+| Load test | chưa chạy | Cần k6/Locust nhắm `POST /alerts`, chưa thực hiện trong phạm vi phiên này |
+| Chaos test | manual (không dùng Litmus) | 10 lỗi hạ tầng/tích hợp thật được phát hiện + fix trong quá trình test end-to-end (xem bảng §6.1) — mỗi lỗi bản chất là 1 lần "chaos" tự nhiên phát sinh khi ghép nối thật giữa Alertmanager/Kyverno/ArgoCD/AI Engine |
+
+**Bằng chứng E2E PodOOMKilled thành công (log thật, 2026-07-01/02):**
+```
+[API][DETECT] Predicted Service: payment-worker | Fault: mem | Confidence: 0.950
+[API][DECIDE] Matched Runbook: MemoryLeakRecoveryRunbook
+k8s_patch_applied deployment=payment-worker ns=tenant-payment
+fast_lane_git_committed sha=ceff21e0b300615ae2822d441e67e54ecd372d04
+Self-heal successfully completed and verified for service 'payment-worker' in namespace 'tenant-payment'
+```
+CodeCommit xác nhận `values.yaml` đã cập nhật đúng: `resources.limits.memory: 768Mi` (từ `256Mi` gốc).
 
 ## 2. SLO evidence
 
@@ -82,17 +92,31 @@
 
 ### 6.1 Failures encountered during 2-week build
 
+<!-- Root cause/fix lấy từ 10 PR merge thật (#185→#212), điều tra bằng cách đọc trực
+     tiếp CRD schema/Go source/log cluster thật, không đoán. "Time to fix" tự điền
+     theo trí nhớ — không track chính xác theo từng lỗi trong lúc làm. -->
+
 | # | Failure | Root cause | Fix | Time to fix |
 |---|---|---|---|---|
-| 1 | <description> | ... | ... | X hours |
-| 2 | ... | ... | ... | X hours |
+| 1 | ArgoCD chưa sync `gitops/monitoring/` (AlertmanagerConfig chưa tồn tại trên cluster) | Thiếu app con trong App-of-Apps ArgoCD | Thêm `argo-apps/monitoring-app.yaml` (PR #185) | X |
+| 2 | `AlertmanagerConfig` bị Prometheus Operator reject | CRD `v1alpha1` bắt buộc `route.receiver` ở root dù mọi traffic đã match qua `routes[]` con | Thêm receiver fallback câm (PR #186) | X |
+| 3 | Webhook luôn trả 403 dù alert đúng tenant | Alertmanager CRD `v1alpha1` **không hỗ trợ** custom HTTP header (xác nhận qua `kubectl get crd ... -o json` + GitHub issue upstream prometheus-operator#8341, K8s API âm thầm prune field lạ) | Chuyển `tenant_id` sang query param trên URL (PR #187) | X |
+| 4 | Route theo tenant vẫn không chạy dù config đúng, không lỗi | `alertmanagerConfigMatcherStrategy` mặc định `OnNamespace` (xác nhận qua Go source `prometheus-operator`) — route chỉ áp dụng cho alert cùng namespace với chính AlertmanagerConfig | Set `type: None` qua Terraform (PR #190) | X |
+| 5 | `/v1/detect` luôn trả `NO_ANOMALY` dù pod OOMKilling thật | Signal `pod_oom_event` dùng metric `last_terminated_reason` — luôn = 1 khi có, không có baseline "0" để BOCPD so sánh | Đổi sang metric `restarts_total` (có baseline thật) + hạ `BOCPD_HAZARD` (PR #192) | X |
+| 6 | Kết quả detect không ổn định (lúc đúng lúc không, cùng 1 pod) | Regex prefix `pod=~"{service}.*"` khớp nhầm nhiều pod (pod thật + pod test cùng prefix tên), `query_range()` lấy ngẫu nhiên 1 trong các kết quả trả về | Match chính xác theo tên pod thay vì regex prefix (PR #194) | X |
+| 7 | AI RCA fallback sai service (hardcode `"checkoutservice"`), gây crash 404 khi patch | RCA (BARO + z-score) chỉ có 1 tín hiệu mỏng (restart count tăng từng đơn vị), không cột nào vượt `RCA_ZSCORE_THRESHOLD` | Gửi thêm tín hiệu memory usage thật làm bằng chứng thứ 2 (PR #196) | X |
+| 8 | Execute `PATCH_MEMORY_LIMIT` bị Kyverno từ chối (400 admission webhook) | Patch body set cả `resources.requests`, Kyverno `restrict-mutations` chỉ cho phép sửa `resources.limits` | Bỏ `memory_request_mb` khỏi patch body — chỉ set `resources.limits` (PR #202) | X |
+| 9 | RCA thỉnh thoảng vẫn chọn sai service dù đã có tín hiệu thứ 2 | Threshold `RCA_ZSCORE_THRESHOLD` mặc định (3.0) chưa đủ nhạy cho setup 2-metric mỏng của CDO | Sync fix từ AI team (bỏ hardcode, đọc config) + thêm `RCA_ZSCORE_THRESHOLD=1.5` (PR #209) | X |
+| 10 | Log `ArgoCD sync → 400 Bad Request` sau mỗi lần self-heal thành công | Race condition vô hại: bật lại `selfHeal:true` khiến ArgoCD tự động sync ngay, request sync tường minh theo sau bị từ chối `FailedPrecondition: another operation is already in progress` (xác nhận qua log server ArgoCD) | Không ảnh hưởng kết quả — patch/verify vẫn thành công. Chưa fix (chỉ dọn log ồn), không tính là failure ảnh hưởng chức năng | — |
+
+**Tổng:** 9/10 lỗi ảnh hưởng chức năng đã fix và merge (PR #185–#209), verify bằng test thật (không dry-run) trên cluster sandbox thật.
 
 ### 6.2 Test gaps acknowledged
 
-<!-- Honest: cái gì chưa test đủ, sẽ test post-capstone -->
-
-- Gap 1: ...
-- Gap 2: ...
+- **Gap 1 — `/v1/verify` không thực sự verify:** AI Engine's `verifier.py::verify_action()` chỉ coi thất bại khi `signal_name` chứa chuỗi `"error"`/`"latency"`. 4 signal của CDO (`pod_oom_event`, `container_restart_count`, `service_unhealthy`, `queue_backlog`) không khớp → `/v1/verify` luôn trả `success=True` bất kể trạng thái thật sau khi heal. Cần AI team mở rộng, hoặc CDO gửi thêm signal dạng `*_error_rate`. **Sẽ test/fix post-capstone.**
+- **Gap 2 — `ServiceStuck` không kích hoạt đúng `RESTART_DEPLOYMENT`:** signal `service_unhealthy` không khớp bất kỳ từ khóa nào trong `FAULT_SIGNAL_PATTERNS` của AI → rơi về `fault_type=cpu` mặc định (`SCALE_REPLICAS`) thay vì `RESTART_DEPLOYMENT` như thiết kế ban đầu. **Sẽ phối hợp AI team bổ sung từ khóa post-capstone.**
+- **Gap 3 — Detect kém nhạy với pod crash-loop lâu:** pod OOMKilling liên tục nhiều giờ khiến baseline BOCPD "bão hòa" (đã coi trạng thái lỗi là bình thường) — detect không còn phát hiện được dù pod vẫn lỗi thật. Đây là giới hạn tự nhiên của change-point detection, không phải bug — cần pod ở trạng thái "mới lỗi" để detect chính xác.
+- **Gap 4 — Chưa chạy load test / security scan chính thức** (k6/Locust, Trivy/Snyk) trong phạm vi build 2 tuần này.
 
 ## Related documents
 
