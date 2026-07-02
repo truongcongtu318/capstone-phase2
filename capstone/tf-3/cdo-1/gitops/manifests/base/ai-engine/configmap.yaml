@@ -51,3 +51,8 @@ data:
   BOCPD_HAZARD: "3"         # nhạy hơn nữa cho series ngắn (sqs-worker gửi ~15-60 điểm thật); was 10
   ANALYSIS_WINDOW_SIZE: "10"  # chỉ ảnh hưởng RCA sau khi đã detect được, không ảnh hưởng detect
   CORRELATION_THRESHOLD: "0.25"
+  # correlation_analyzer.py chỉ gán service khi có cột metric vượt ngưỡng này
+  # (mặc định 3.0 nếu không set). CDO chỉ gửi 2 cột mỏng (restart count tăng
+  # từng đơn vị, memory usage) — hạ xuống 1.5 để dễ vượt ngưỡng hơn, tránh rơi
+  # vào fallback DEFAULT_SERVICE khi không cột nào đủ mạnh.
+  RCA_ZSCORE_THRESHOLD: "1.5"
