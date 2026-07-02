@@ -1,0 +1,26 @@
+# ============================================================
+# karpenter-app.yaml
+# Managed via GitOps App-of-Apps
+# ============================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: karpenter-provisioners
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
+    targetRevision: main
+    path: capstone/tf-3/cdo-1/gitops/manifests/karpenter
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: karpenter
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

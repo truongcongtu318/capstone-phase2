@@ -172,3 +172,19 @@ resource "aws_security_group_rule" "workload_ingress_webhooks_from_control_plane
   security_group_id        = aws_security_group.eks_workload.id
   source_security_group_id = aws_security_group.eks_control_plane.id
 }
+
+# Allow outbound traffic to S3 Gateway Endpoint (ECR image pulling)
+data "aws_prefix_list" "s3" {
+  name = "com.amazonaws.us-east-1.s3"
+}
+
+resource "aws_security_group_rule" "workload_egress_to_s3" {
+  type              = "egress"
+  description       = "Allow HTTPS outbound to S3 Gateway Endpoint"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  security_group_id = aws_security_group.eks_workload.id
+  prefix_list_ids   = [data.aws_prefix_list.s3.id]
+}
+

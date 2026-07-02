@@ -244,6 +244,9 @@ resource "helm_release" "karpenter" {
 
   values = [
     yamlencode({
+      podAnnotations = {
+        "cloudwatch.aws.amazon.com/auto-annotate" = "false"
+      }
       serviceAccount = {
         create = true
         name   = "karpenter"
@@ -253,10 +256,7 @@ resource "helm_release" "karpenter" {
       }
       settings = {
         clusterName = local.cluster_name
-        aws = {
-          isolatedVPC = true
-          region      = "us-east-1"
-        }
+        isolatedVPC = true
       }
       controller = {
         image = {
