@@ -1,0 +1,271 @@
+<USER_REQUEST>
+# CDO-01 TF3 Self-Heal Engine — Bug Fixes & Lessons Learned
+
+> **Session:** 2026-06-30 → 2026-07-01  
+> **Branch:** `app/tan-webhook`  
+> **Scope:** ST2 (webhook-receiver + sqs-worker) — từ SyncFailed đến Fast Lane hoàn chỉnh
+
+---
+
+## TÓM TẮT KẾT QUẢ CUỐI
+
+Pipeline đã hoạt động end-to-end:
+
+```
+INCIDENT_START ✅ → DETECT ✅ → DECIDE ✅ → EXECUTE_START ✅
+→ ArgoCD suspend ✅ → K8s patch 256Mi→768Mi ✅
+→ Git commit CodeCommit ✅ (sha=17f31982)
+→ ArgoCD resume+sync ✅ → EXECUTE_DONE ✅ → VERIFY ✅
+```
+
+---
+
+## BUG 1 — ESO Pods ImagePullBackOff (ECR image không có)
+
+**Triệu chứng:** `external-secrets`, `external-secrets-cert-controller`, `external-secrets-webhook` ở trạng thái `ImagePullBackOff`.
+
+**Root cause:** `operators.tf` chỉ set `image.repository` cho main controller. `certController.image` và `webhook.image` mặc định về `ghcr.io/external-secrets/external-secrets` — không accessible trong VPC NAT-less.
+
+**Fix (Terraform):** Thêm vào `infra/environments/sandbox/services/operators.tf`:
+```hcl
+certController = {
+  image = {
+    repository = "${local.ecr_registry}/external-secrets/external-secrets"
+    tag        = "v0.9.13"
+  }
+}
+webhook = {
+  image = {
+    repository = "${local.ecr_registry}/external-secrets/external-secrets"
+    tag        = "v0.9.13"
+  }
+}
+```
+
+---
+
+## BUG 2 — ESO ClusterSecretStore ValidationFailed (STS global endpoint)
+
+**Triệu chứng:** `ClusterSecretStore aws-secrets-manager` ở trạng thái `ValidationFailed` với lỗi `sts.amazonaws.com: i/o timeout`.
+
+**Root cause:** ESO dùng STS **global** endpoint `sts.amazonaws.com` theo mặc định. VPC endpoint chỉ route **regional** endpoint `sts.us-east-1.amazonaws.com`. Dù VPC endpoint tồn tại (`vpce-05399e0bf8d89256d`), global endpoint traffic không được route qua nó.
+
+**Fix:** Thêm env var vào ESO deployment trong `operators.tf`:
+```hcl
+env = [
+  {
+    name  = "AWS_STS_REGIONAL_ENDPOINTS"
+    value = "regional"
+  }
+
+<truncated 9247 bytes>
+-|
+| `AwsEksResourceDetector 403` | `self-heal-executor` thiếu RBAC đọc `amazon-eks` configmap trong `kube-system` (configmap không tồn tại) | ST2 |
+| `AwsEc2ResourceDetector timed out` | IMDSv2 hop limit = 1, pod cần 2 hops | ST1 |
+| CloudWatch OTLP `Read timed out` | Thiếu VPC endpoint cho Application Signals / X-Ray → agent không forward được traces | ST1 |
+| Kyverno CRD ImagePullBackOff | Kyverno images (v1.12.5) chưa được mirror vào ECR | ST3/ST1 |
+| Ingress ALB `FailedBuildModel` | Thiếu VPC endpoint `com.amazonaws.us-east-1.elasticloadbalancing` | ST1 |
+
+---
+
+## CHECKLIST TRƯỚC KHI TEST KỊCH BẢN
+
+```bash
+# 1. Check sqs-worker đang chạy đúng image
+kubectl get pod -n self-heal-system -l app=sqs-worker
+
+# 2. Check node capacity
+kubectl get pods --all-namespaces -o wide --no-headers | grep -v "<none>" | \
+  awk '{print $8}' | sort | uniq -c
+
+# 3. Xóa Kyverno pods ImagePullBackOff nếu cần
+kubectl get pods -n kyverno --no-headers | grep "ImagePullBackOff" | \
+  awk '{print $1}' | xargs kubectl delete pod -n kyverno --grace-period=0 --force 2>/dev/null
+
+# 4. Reset checkout-api về 256Mi trước khi test OOMKilled
+kubectl patch deployment checkout-api -n tenant-checkout \
+  --type='json' \
+  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/resources/limits/memory","value":"256Mi"}]'
+
+# 5. Reset CodeCommit values.yaml (nếu đã bị commit 768Mi từ test trước)
+kubectl exec deploy/sqs-worker -n self-heal-system -- sh -c \
+  "git -C /tmp/r clone codecommit::us-east-1://tf3-cdo1-sandbox-gitops /tmp/r 2>/dev/null; \
+   # ... manually restore 256Mi ..."
+```
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-07-01T08:41:13+07:00.
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.1 Pro (High). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>{{ CHECKPOINT 1 }}
+ **The earlier parts of this conversation have been truncated due to its long length. The following content summarizes the truncated context so that you may continue your work. **
+
+
+# User Requests
+The following were user requests from the truncated conversation in chronological order:
+1. # CDO-01 TF3 Self-Heal Engine — Bug Fixes & Lessons Learned
+
+> **Session:** 2026-06-30 → 2026-07-01  
+> **Branch:** `app/tan-webhook`  
+> **Scope:** ST2 (webhook-receiver + sqs-worker) — từ SyncFailed đến Fast Lane hoàn chỉnh
+
+---
+
+## TÓM TẮT KẾT QUẢ CUỐI
+
+Pipeline đã hoạt động end-to-end:
+
+```
+INCIDENT_START ✅ → DETECT ✅ → DECIDE ✅ → EXECUTE_START ✅
+→ ArgoCD suspend ✅ → K8s patch 256Mi→768Mi ✅
+→ Git commit CodeCommit ✅ (sha=17f31982)
+→ ArgoCD resume+sync ✅ → EXECUTE_DONE ✅ → VERIFY ✅
+```
+
+---
+
+## BUG 1 — ESO Pods ImagePullBackOff (ECR image không có)
+
+**Triệu chứng:** `external-secrets`, `external-secrets-cert-controller`, `external-secrets-webhook` ở trạng thái `ImagePullBackOff`.
+
+**Root cause:** `operators.tf` chỉ set `image.repository` cho main controller. `certController.image` và `webhook.image` mặc định về `ghcr.io/external-secrets/external-secrets` — không accessible trong VPC NAT-less.
+
+**Fix (Terrafor
+<truncated 11903 bytes>
+2. subteam-3 đã có các evidence cần thiết chưa
+3. phân việc này có đúng với member 7 8 9 không, 
+4. soạn cho tôi docs chuẩn về các nội dung mà subteam-3 làm
+5. thằng nào nhận source từ codecommit để xử lý z chú
+6. https://us-east-1.console.aws.amazon.com/codesuite/codecommit/repositories/tf3-cdo1-sandbox-gitops/browse/refs/heads/main/--/capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/ai-engine/kustomization.yaml?region=us-east-1
+
+
+=)) cái image của ai-engine trên các chú coi lại nhé
+source của codecommit nó éo sync với github nè
+7. 
+capstone-phase2 on  main [$!?⇣] via ❄️  impure (shell) on ☁️  (ap-southeas
+<truncated 18541 bytes>
+d. I'm focusing on the appropri\n<truncated 344 bytes>\n**Confirming Role Alignment**\n\nI've just finished cross-referencing the proposed tasks—partial and full E2E validation, and SLO evidence—against the `subteam-briefs.md` file. The alignment is perfect, mirroring the role definitions in the documentation. Tasks assigned match skills. Long Trần, Lê Hoàng, and Tuấn Anh are ideally suited for their respective responsibilities, which include GitOps, Observability, and Chaos & Validation, respectively. The assignments seem logical and well-considered.\n\n\n"}
+{"step_index":41,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","created_at":"2026-07-01T02:36:07Z","content":"<USER_REQUEST>\nsoạn cho tôi docs chuẩn về các nội dung mà subteam-3 làm\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nThe current local time is: 2026-07-01T09:36:07+07:00.\n</ADDITIONAL_METADATA>"}
+{"step_index":43,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-07-01T02:36:07Z","thinking":"**Prioritizing Tool Specificity**\n\nI'm focusing intently on tool specificity. I've internalized the instruction to avoid `cat` for file creation/appending at all costs. I'm also now committed to leveraging `grep_search` directly instead of calling `grep` within a Bash script, unless a compelling reason exists to do otherwise. The directive against using `ls` is now firmly in place, too.\n\n\n**Defining Documentation Scope**\n\nI'm now prioritizing direct artifact creation for documentation tasks. The request to \n<truncated 306 bytes>\no the artifact.\n\n\n**Compiling Deliverables Content**\n\nI'm now integrating information regarding observability (Kube-Prometheus-Stack, Alertmanager, Firehose Terraform) and QA/Chaos engineering (chaos scripts, E2E validation). I'm constructing `subteam_3_deliverables.md`, utilizing the `/home/nvtank/.gemini/antigravity/brain/e33f8
+---
+The checkpoint summary has been truncated due to hitting max length. Please see the conversation log file for the full conversation.Created At: 2026-07-01T06:59:52Z
+Completed At: 2026-07-01T06:59:56Z
+
+				The command completed successfully.
+				Output:
+				<USER_REQUEST>
+# CDO-01 TF3 Self-Heal Engine — Bug Fixes & Lessons Learned
+
+> **Session:** 2026-06-30 → 2026-07-01
+> **Branch:** `app/tan-webhook`
+> **Scope:** ST2 (webhook-receiver + sqs-worker) — từ SyncFailed đến Fast Lane h
+oàn chỉnh
+
+---
+
+## TÓM TẮT KẾT QUẢ CUỐI
+
+Pipeline đã hoạt động end-to-end:
+
+```
+INCIDENT_START ✅ → DETECT ✅ → DECIDE ✅ → EXECUTE_START ✅
+→ ArgoCD suspend ✅ → K8s patch 256Mi→768Mi ✅
+→ Git commit CodeCommit ✅ (sha=17f31982)
+→ ArgoCD resume+sync ✅ → EXECUTE_DONE ✅ → VERIFY ✅
+```
+
+---
+
+## BUG 1 — ESO Pods ImagePullBackOff (ECR image không có)
+
+**Triệu chứng:** `external-secrets`, `external-secrets-cert-controller`, `extern
+al-secrets-webhook` ở trạng thái `ImagePullBackOff`.
+
+**Root cause:** `operators.tf` chỉ set `image.repository` cho main controller. `
+certController.image` và `webhook.image` mặc định về `ghcr.io/external-secrets/e
+xternal-secrets` — không accessible trong VPC NAT-less.
+
+**Fix (Terraform):** Thêm vào `infra/environments/sandbox/services/operators.tf`
+:
+```hcl
+certController = {
+  image = {
+    repository = "${local.ecr_registry}/external-secrets/external-secrets"
+    tag        = "v0.9.13"
+  }
+}
+webhook = {
+  image = {
+    repository = "${local.ecr_registry}/external-secrets/external-secrets"
+    tag        = "v0.9.13"
+  }
+}
+```
+
+---
+
+## BUG 2 — ESO ClusterSecretStore ValidationFailed (STS global endpoint)
+
+**Triệu chứng:** `ClusterSecretStore aws-secrets-manager` ở trạng thái `Validati
+onFailed` với lỗi `sts.amazonaws.com: i/o timeout`.
+
+**Root cause:** ESO dùng STS **global** endpoint `sts.amazonaws.com` theo mặc đị
+nh. VPC endpoint chỉ route **regional** endpoint `sts.us-east-1.amazonaws.com`.
+Dù VPC endpoint tồn tại (`vpce-05399e0bf8d89256d`), global endpoint traffic khôn
+g được route qua nó.
+
+**Fix:** Thêm env var 
+<truncated 284 bytes>
+ không tồn tại) | ST2 |
+| `AwsEc2ResourceDetector timed out` | IMDSv2 hop limit = 1, pod cần 2 hops | ST
+1 |
+| CloudWatch OTLP `Read timed out` | Thiếu VPC endpoint cho Application Signals
+/ X-Ray → agent không forward được traces | ST1 |
+| Kyverno CRD ImagePullBackOff | Kyverno images (v1.12.5) chưa được mirror vào E
+CR | ST3/ST1 |
+| Ingress ALB `FailedBuildModel` | Thiếu VPC endpoint `com.amazonaws.us-east-1.e
+lasticloadbalancing` | ST1 |
+
+---
+
+## CHECKLIST TRƯỚC KHI TEST KỊCH BẢN
+
+```bash
+# 1. Check sqs-worker đang chạy đúng image
+kubectl get pod -n self-heal-system -l app=sqs-worker
+
+# 2. Check node capacity
+kubectl get pods --all-namespaces -o wide --no-headers | grep -v "<none>" | \
+  awk '{print $8}' | sort | uniq -c
+
+# 3. Xóa Kyverno pods ImagePullBackOff nếu cần
+kubectl get pods -n kyverno --no-headers | grep "ImagePullBackOff" | \
+  awk '{print $1}' | xargs kubectl delete pod -n kyverno --grace-period=0 --forc
+e 2>/dev/null
+
+# 4. Reset checkout-api về 256Mi trước khi test OOMKilled
+kubectl patch deployment checkout-api -n tenant-checkout \
+  --type='json' \
+  -p='[{"op":"replace","path":"/spec/template/spec/containers/0/resources/limits
+/memory","value":"256Mi"}]'
+
+# 5. Reset CodeCommit values.yaml (nếu đã bị commit 768Mi từ test trước)
+kubectl exec deploy/sqs-worker -n self-heal-system -- sh -c \
+  "git -C /tmp/r clone codecommit::us-east-1://tf3-cdo1-sandbox-gitops /tmp/r 2>
+/dev/null; \
+   # ... manually restore 256Mi ..."
+```
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-07-01T08:41:13+07:00.
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to Gemini 3.1 Pro (High). N
+o need to comment on this change if the user doesn't ask abou
+o need to comment on this change if the user doesn't ask about it. If reporting
+what model you are, please use a human readable name instead of the exact string
+.
+Exception ignored on flushing sys.stdout:
+BrokenPipeError: [Errno 32] Broken pipe
+
