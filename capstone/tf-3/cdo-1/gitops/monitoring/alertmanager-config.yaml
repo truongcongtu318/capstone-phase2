@@ -15,7 +15,11 @@ spec:
     groupBy: ["alertname", "namespace", "service"]
     groupWait: 10s
     groupInterval: 30s
-    repeatInterval: 4h
+    # 4h là giá trị production (chống spam thông báo cho alert đang active liên
+    # tục). Hạ xuống 2m cho giai đoạn test lặp nhanh — PHẢI revert về 4h trước
+    # khi nộp bài, nếu không mỗi pod OOMKilling liên tục sẽ tự spam SQS/AI Engine
+    # mỗi 2 phút thay vì chỉ báo 1 lần/4h như thiết kế.
+    repeatInterval: 2m
     routes:
       - matchers:
           - name: namespace
