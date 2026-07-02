@@ -24,7 +24,7 @@ The `scripts/` folder only contains backward-compatible wrappers for older comma
 - Default private registry:
 
 ```bash
-544011261607.dkr.ecr.us-east-1.amazonaws.com
+474013238625.dkr.ecr.us-east-1.amazonaws.com
 ```
 
 If `kubectl` is not installed locally, use:
@@ -40,11 +40,10 @@ Current infra-derived values:
 | AWS region | `us-east-1` |
 | VPC CIDR | `10.42.0.0/16` |
 | Private subnet / endpoint CIDRs | `10.42.0.0/20`, `10.42.16.0/20` |
-| SQS queue name | `tf3-cdo1-sandbox-alert-queue` |
-| EKS cluster name | pending infra compute/EKS implementation |
-| kubeconfig command | pending infra compute/EKS implementation |
+| SQS queue name | `tf3-cdo1-sandbox-self-heal-queue` |
+| SQS queue URL | `https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue` |
+| EKS cluster access | pending usable kubeconfig / AWS SSO session |
 | DB CIDR | pending DB endpoint/CIDR confirmation |
-| SQS queue URL | pending queue URL/account confirmation |
 
 ## Static Validation
 
@@ -79,6 +78,8 @@ It checks:
 - webhook receiver, sqs-worker, and ai-engine manifests/resources
 - PrometheusRule `cdo1-self-heal-alerts`
 - AlertmanagerConfig `cdo1-self-heal-routing`
+- Alertmanager tenant scoping through `tenant_id` query params
+- OOM Alertmanager fixture at `fixtures/oom-alert-payload.json`
 - Firehose audit config presence, reported as `SKIP` until ready
 
 When a cluster is reachable, it also runs the expected RBAC checks:
@@ -121,12 +122,14 @@ APP_NAME=oom-chaos \
 ./capstone/tf-3/cdo-1/gitops/tests-chaos/oom-simulator.sh
 ```
 
+By default, dry-run renders the pod manifest without contacting a cluster. To ask `kubectl` to client-validate the manifest, use `KUBECTL_DRY_RUN=true` after kubeconfig and AWS SSO are working.
+
 Run on cluster:
 
 ```bash
 NAMESPACE=tenant-payment \
 APP_NAME=oom-chaos \
-IMAGE=544011261607.dkr.ecr.us-east-1.amazonaws.com/alexeiled/stress-ng:latest \
+IMAGE=474013238625.dkr.ecr.us-east-1.amazonaws.com/alexeiled/stress-ng:latest \
 MEM_LIMIT=64Mi \
 ./capstone/tf-3/cdo-1/gitops/tests-chaos/oom-simulator.sh
 ```
@@ -157,6 +160,8 @@ DB_CIDR=10.42.12.34/32 \
 ./capstone/tf-3/cdo-1/gitops/tests-chaos/network-blockade.sh
 ```
 
+By default, dry-run renders the NetworkPolicy manifest without contacting a cluster. Set `KUBECTL_DRY_RUN=true` when cluster discovery is available.
+
 Apply only after Sub-team 1 confirms the real DB CIDR:
 
 ```bash
@@ -174,7 +179,7 @@ Warning: Kubernetes NetworkPolicy is allow-list based. This blocks DB only if no
 Dry-run:
 
 ```bash
-QUEUE_URL=https://sqs.us-east-1.amazonaws.com/544011261607/tf3-cdo1-sandbox-alert-queue \
+QUEUE_URL=https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue \
 DRY_RUN=true \
 ./capstone/tf-3/cdo-1/gitops/tests-chaos/queue-backlog-stress.sh
 ```

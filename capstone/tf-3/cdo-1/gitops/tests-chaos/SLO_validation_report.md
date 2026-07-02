@@ -28,6 +28,7 @@ This report does not claim full E2E success until alert delivery, remediation ex
 | GitOps values.yaml path | `PRESENT_IN_GITHUB` | Created at gitops/tenant-payment/order-service/values.yaml |
 | ArgoCD tenant-payment-app | `CREATED` | argo-apps/tenant-payment-app.yaml |
 | ArgoCD tenant-checkout-app | `CREATED` | argo-apps/tenant-checkout-app.yaml |
+| OOM alert fixture | `CREATED` | `tests-chaos/fixtures/oom-alert-payload.json` |
 
 ## E2E Test Checklist (theo ST2 Handoff)
 
@@ -78,18 +79,17 @@ This report does not claim full E2E success until alert delivery, remediation ex
 
 ## Runtime Environment Note
 
-`kubectl` was installed temporarily with `nix-shell -p kubectl` and the validator was re-run.
+Latest local validation after pulling `origin/main` to `1a8d164` was run on 2026-07-02. `kubectl` was installed temporarily with `nix-shell -p kubectl` and the validator was re-run.
 
 Runtime check result:
 
 ```text
-Client Version: v1.34.3
-Kustomize Version: v5.7.1
 Local manifest checks: PASS
+kubectl kustomize security-policies: PASS
 Cluster checks: SKIP
 ```
 
-Cluster checks are still skipped because no reachable kubeconfig / cluster context is configured. Therefore, static manifest checks, shell syntax checks, and dry-run script paths are PR-ready, while full E2E runtime validation remains pending EKS cluster access.
+Cluster checks are still skipped because no usable cluster context is available in this workspace. The current kubeconfig attempts to reach EKS, but AWS SSO credentials are expired, so `kubectl` discovery/API calls cannot prove runtime behavior. Therefore, static manifest checks, shell syntax checks, manifest-only dry-runs, and queue dry-run paths are PR-ready, while full E2E runtime validation remains pending EKS access.
 
 ## Infra-Derived Runtime Inputs
 
@@ -107,15 +107,14 @@ Cluster checks are still skipped because no reachable kubeconfig / cluster conte
 | SNS topic ARN | KNOWN | `arn:aws:sns:us-east-1:474013238625:tf3-cdo1-sandbox-alerts-escalation` |
 | IRSA webhook-receiver role | KNOWN | `arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-irsa-webhook-receiver` |
 | IRSA self-heal-executor role | KNOWN | `arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-irsa-audit-writer` |
-| IRSA ai-engine role | MISSING (ST1) | `arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-irsa-ai-engine-bedrock` |
+| IRSA ai-engine role | KNOWN_IN_MANIFEST | `arn:aws:iam::474013238625:role/tf3-cdo1-sandbox-irsa-ai-engine-bedrock` |
 | AWS Secrets Manager Secret | MISSING (ST1) | `tf3-cdo1-sandbox/argocd-auth-token` |
-| EKS cluster name | MISSING | `infra/environments/sandbox/compute` still TODO |
-| kubeconfig command | MISSING | no concrete `aws eks update-kubeconfig` command |
+| EKS cluster access | BLOCKED_BY_INFRA | kubeconfig/SSO access is not usable for runtime evidence |
 | ACM Certificate ARN | MISSING | needed for ALB Ingress HTTPS |
 | CodeCommit repo URL | MISSING | CODECOMMIT_REPO_URL in sqs-worker env pending |
 | ARGOCD_AUTH_TOKEN | MISSING | pending ST2 creation (manual or ESO) |
 
-Note: Account ID 474013238625 is the ST2 confirmed account. Legacy references to 544011261607 in scripts are OLD — must be confirmed/corrected by ST1 before EKS deploy.
+Note: Account ID `474013238625` is the ST2 confirmed account. Member 9 scripts and docs now default to this account. Legacy `544011261607` references that remain outside `tests-chaos` should be handled by the owning GitOps/monitoring workstream before final EKS deploy.
 
 ## Open Questions for ST2/ST1
 
@@ -126,10 +125,9 @@ Note: Account ID 474013238625 is the ST2 confirmed account. Legacy references to
 4. **DRY_RUN khi demo**: để `false` (chạy thật) hay `true` (giả lập)?
 
 ### Cần hỏi ST1
-1. **Account ID**: xác nhận 474013238625 hay 544011261607 là account ID production? (Repo có lẫn 2 account ID)
-2. **EKS cluster name + kubeconfig**: `aws eks update-kubeconfig --name <cluster-name> --region us-east-1`
-3. **ACM Certificate ARN**: cho ALB Ingress HTTPS (ingress.yaml hiện để trống)
-4. **S3 audit bucket path**: bucket name và prefix để verify audit records
+1. **EKS cluster name + kubeconfig/SSO**: `aws eks update-kubeconfig --name <cluster-name> --region us-east-1` + working AWS SSO/profile
+2. **ACM Certificate ARN**: cho ALB Ingress HTTPS (ingress.yaml hiện để trống)
+3. **S3 audit bucket path**: bucket name và prefix để verify audit records
 
 ## Validation Summary
 
@@ -139,12 +137,15 @@ Note: Account ID 474013238625 is the ST2 confirmed account. Legacy references to
 | Mirror script syntax | PASS | `bash -n gitops/mirror-images.sh` |
 | Mirror list shape | PASS | `awk 'NF && $1 !~ /^#/ {print "source="$1, "dest="$2}' gitops/mirror-list.txt` |
 | Local manifest checks | PASS | `validate-e2e-flow.sh` local checks completed with `0 failure(s)` |
-| kubectl client | PASS | Installed via `nix-shell -p kubectl`; client `v1.34.3`, kustomize `v5.7.1` |
-| Placeholder cleanup | PASS | nginx:1.25, busybox:1.36, targetPort:80 removed from all manifests |
+| kubectl client kustomize | PASS | Installed via `nix-shell -p kubectl`; `kubectl kustomize security-policies` passed |
+| Core self-heal placeholder cleanup | PASS | webhook-receiver, sqs-worker, and ai-engine base/overlay manifests use ECR images, service ports, and IRSA annotations |
+| OOM Alertmanager fixture | PASS | `tests-chaos/fixtures/oom-alert-payload.json` exists and is valid JSON |
+| Chaos manifest-only dry-runs | PASS | OOM pod, DB blockade NetworkPolicy, and SQS backlog dry-run commands completed locally |
 | IRSA annotations | PASS | webhook-receiver, self-heal-executor, ai-engine all have IRSA annotations |
 | Env vars complete | PASS | All ST2 env vars injected in base manifests |
 | Prometheus scrape annotations | PASS | webhook (8443/metrics), worker (9090/metrics) annotated |
-| Cluster context | BLOCKED_BY_INFRA | No reachable kubeconfig / cluster context |
+| Alertmanager tenant scoping | PASS | `tenant_id` query params declared for tenant-payment and tenant-checkout routes |
+| Cluster context | BLOCKED_BY_INFRA | Current kubeconfig/SSO cannot reach the cluster for runtime checks |
 | Cluster kustomize / server dry-run | BLOCKED_BY_INFRA | Requires reachable cluster context |
 | RBAC behavior | BLOCKED_BY_INFRA | Requires `kubectl auth can-i` on target cluster |
 | Namespace wave -4 manifests | PASS | `security-policies/namespaces.yaml` declares `self-heal-system`, `observability`, `tenant-payment`, `tenant-checkout` |
@@ -152,13 +153,13 @@ Note: Account ID 474013238625 is the ST2 confirmed account. Legacy references to
 | RBAC self-heal executor manifests | PASS | `security-policies/rbac.yaml` declares `self-heal-executor-role` and tenant RoleBindings |
 | NetworkPolicy manifests | PASS | `webhook-netpolicy` and `ai-engine-netpolicy` declared |
 | Prometheus alerts | PASS | `PodOOMKilled`, `PodCrashLooping`, and `SQSQueueBacklog` declared |
-| Alertmanager route | PASS | `cdo1-self-heal-routing` routes to `webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts` |
+| Alertmanager route | PASS | `cdo1-self-heal-routing` routes to `webhook-receiver.self-heal-system.svc.cluster.local:8443/alerts?tenant_id=...` |
 | ArgoCD tenant-payment-app | PASS | argo-apps/tenant-payment-app.yaml created |
 | ArgoCD tenant-checkout-app | PASS | argo-apps/tenant-checkout-app.yaml created |
 | GitOps values.yaml path | PASS | gitops/tenant-payment/order-service/values.yaml created |
-| OOM trigger | READY | Run `oom-simulator.sh`; collect pod/events evidence |
-| DB network block | READY_FOR_DRY_RUN | Run `network-blockade.sh` with `DRY_RUN=true` |
-| Queue backlog | READY_FOR_DRY_RUN | Run `queue-backlog-stress.sh` with `DRY_RUN=true` |
+| OOM trigger | READY_FOR_CLUSTER_RUN | `DRY_RUN=true` renders the manifest locally; cluster run still needs EKS access |
+| DB network block | READY_FOR_DRY_RUN | `DRY_RUN=true` renders the NetworkPolicy; real run needs DB CIDR/endpoint and EKS access |
+| Queue backlog | READY_FOR_DRY_RUN | `DRY_RUN=true` prints the first synthetic SQS message with the confirmed queue URL |
 | Prometheus alert fired | PENDING | Requires target cluster monitoring evidence |
 | Webhook received alert | PENDING | Requires app and Alertmanager route evidence |
 | Worker remediation action | PENDING | Requires sqs-worker runtime evidence |
@@ -200,9 +201,9 @@ Note: Account ID 474013238625 is the ST2 confirmed account. Legacy references to
 
 | Test case | Trigger | Expected alert | Expected action | Current result | Recovery time | Evidence |
 |---|---|---|---|---|---|---|
-| Pod OOM | `oom-simulator.sh` creates stress-ng pod | `PodOOMKilled` | PATCH_MEMORY_LIMIT or escalation | READY_FOR_CLUSTER_RUN | TBD | syntax PASS; dry-run supported |
-| DB Network Block | `network-blockade.sh` denies DB CIDR egress | DB connection failure | Escalate or recover | READY_FOR_DRY_RUN | TBD | syntax PASS; `DRY_RUN=true` supported |
-| Queue Backlog | `queue-backlog-stress.sh` sends SQS messages | `SQSQueueBacklog` | Scale worker or escalate | READY_FOR_DRY_RUN | TBD | syntax PASS; waits for queue URL |
+| Pod OOM | `oom-simulator.sh` creates stress-ng pod | `PodOOMKilled` | PATCH_MEMORY_LIMIT or escalation | READY_FOR_CLUSTER_RUN | TBD | syntax PASS; manifest-only dry-run PASS; fixture created |
+| DB Network Block | `network-blockade.sh` denies DB CIDR egress | DB connection failure | Escalate or recover | READY_FOR_DRY_RUN | TBD | syntax PASS; manifest-only dry-run PASS |
+| Queue Backlog | `queue-backlog-stress.sh` sends SQS messages | `SQSQueueBacklog` | Scale worker or escalate | READY_FOR_DRY_RUN | TBD | syntax PASS; dry-run message PASS |
 | Full E2E | Alertmanager → webhook → worker → audit | matched alert | remediation + verify + audit | PENDING_EKS_DEPLOY | TBD | waiting for SHA tags + cluster access |
 
 ## Evidence Commands
@@ -210,9 +211,23 @@ Note: Account ID 474013238625 is the ST2 confirmed account. Legacy references to
 ```bash
 ./capstone/tf-3/cdo-1/gitops/tests-chaos/validate-e2e-flow.sh
 
-# Verify no placeholders remain
-grep -R "nginx:1.25\|busybox:1.36\|patch-controller\|patch-receiver\|targetPort: 80" \
-  capstone/tf-3/cdo-1/gitops/manifests
+# Validate fixture JSON
+python -m json.tool \
+  capstone/tf-3/cdo-1/gitops/tests-chaos/fixtures/oom-alert-payload.json >/dev/null
+
+# Manifest-only dry-runs, no cluster contact
+DRY_RUN=true NAMESPACE=tenant-payment APP_NAME=oom-chaos \
+  ./capstone/tf-3/cdo-1/gitops/tests-chaos/oom-simulator.sh
+
+DRY_RUN=true NAMESPACE=tenant-payment APP_LABEL=payment-api DB_CIDR=10.42.12.34/32 \
+  ./capstone/tf-3/cdo-1/gitops/tests-chaos/network-blockade.sh
+
+QUEUE_URL=https://sqs.us-east-1.amazonaws.com/474013238625/tf3-cdo1-sandbox-self-heal-queue \
+  DRY_RUN=true ./capstone/tf-3/cdo-1/gitops/tests-chaos/queue-backlog-stress.sh
+
+# Optional once kubeconfig/SSO works
+KUBECTL_DRY_RUN=true DRY_RUN=true NAMESPACE=tenant-payment APP_NAME=oom-chaos \
+  ./capstone/tf-3/cdo-1/gitops/tests-chaos/oom-simulator.sh
 
 # Kustomize build check
 kubectl kustomize capstone/tf-3/cdo-1/gitops/manifests/overlays/sandbox/webhook-receiver
@@ -235,8 +250,7 @@ kubectl get alertmanagerconfig -n observability cdo1-self-heal-routing
 | ST2 | Image SHA tags (3 images) | ECR image tags to update overlay kustomization.yaml |
 | ST2 | ARGOCD_AUTH_TOKEN | Token value or ESO secret path |
 | ST2 | CodeCommit repo URL | CODECOMMIT_REPO_URL env var in sqs-worker |
-| ST1 | EKS cluster access | cluster name, kubeconfig command, member AWS profile/role |
-| ST1 | Account ID confirmation | Reconcile 474013238625 vs 544011261607 |
+| ST1 | EKS cluster access | cluster name, kubeconfig command, working AWS SSO/profile |
 | ST1 | ACM Certificate ARN | For ALB Ingress HTTPS (ingress.yaml line 32) |
 | Member 7 | Cluster-applied security gate | `kubectl kustomize`, server dry-run, RBAC/Kyverno behavior |
 | Member 8 | Monitoring runtime | firing Prometheus alert and Alertmanager delivery |
