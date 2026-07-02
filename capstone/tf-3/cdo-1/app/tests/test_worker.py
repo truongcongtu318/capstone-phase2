@@ -296,6 +296,53 @@ def test_worker_process_message_success(
     assert isinstance(action_executed_sent["execution_time_seconds"], int)
 
 
+@patch("time.sleep")
+@patch.object(worker_main.prometheus_query_client, "build_telemetry_window")
+@patch.object(worker_main.ai_client, "detect")
+@patch.object(worker_main.ai_client, "decide")
+@patch.object(worker_main.ai_client, "verify")
+@patch.object(worker_main.patch_executor, "capture_pre_state")
+@patch.object(worker_main.patch_executor, "execute")
+@patch.object(worker_main.circuit_breaker, "is_open", return_value=False)
+@patch.object(worker_main, "log_incident_start")
+@patch.object(worker_main, "log_detect")
+@patch.object(worker_main, "log_decide")
+@patch.object(worker_main, "log_execute_start")
+@patch.object(worker_main, "log_execute_done")
+@patch.object(worker_main, "log_verify")
+def test_worker_logs_telemetry_window_before_calling_detect(
+    mock_log_verify, mock_log_exec_done, mock_log_exec_start, mock_log_decide, mock_log_detect, mock_log_inc_start,
+    mock_cb_is_open, mock_exec, mock_capture, mock_verify, mock_decide, mock_detect, mock_build_window, mock_sleep,
+    caplog,
+):
+    """Trước khi gọi /v1/detect, worker phải log ra đúng nội dung telemetry_window
+    gửi lên — để dev xem được dữ liệu thật đang gửi khi debug/quan sát log."""
+    mock_sqs = MagicMock()
+    telemetry_point = {"ts": "2026-07-01T00:00:00+00:00", "tenant_id": "tenant-id",
+                        "service": "order-api", "signal_name": "pod_oom_event", "value": 13.0, "labels": {}}
+    mock_build_window.return_value = [telemetry_point]
+
+    mock_detect.return_value = {"anomaly_detected": False}
+
+    alert_message = {
+        "ReceiptHandle": "receipt_123",
+        "Body": json.dumps({
+            "status": "firing",
+            "labels": {"alertname": "PodOOMKilled", "namespace": "tenant-payment", "service": "order-api"}
+        })
+    }
+
+    with caplog.at_level("INFO"):
+        main._process_message(mock_sqs, alert_message)
+
+    # Log phải chứa nội dung telemetry_window thật (không chỉ số lượng điểm)
+    assert any("pod_oom_event" in record.message and "13.0" in record.message for record in caplog.records)
+
+    # Phải log TRƯỚC khi gọi detect(), không phải sau
+    log_call_order = [r.message for r in caplog.records if "pod_oom_event" in r.message]
+    assert log_call_order, "Không tìm thấy log telemetry_window nào"
+
+
 @patch.object(worker_main.circuit_breaker, "is_open", return_value=True)
 @patch.object(worker_main, "log_incident_start")
 @patch.object(worker_main, "log_escalate")

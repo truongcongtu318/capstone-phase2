@@ -163,6 +163,10 @@ def _process_message(sqs_client, message) -> None:
         # Lý do: key dùng cho idempotency lock tại server AI, không nên share giữa các bước khác nhau.
         detect_idem_key = str(uuid.uuid4())
         logger.info(f"Invoking /v1/detect for {service}...")
+        logger.info(
+            f"telemetry_window gửi lên /v1/detect ({len(telemetry_window)} điểm): "
+            f"{json.dumps(telemetry_window, default=str)}"
+        )
         detect_resp = ai_client.detect(telemetry_window, tenant_id, detect_idem_key, correlation_id, settings.dry_run)
         log_detect(tenant_id, correlation_id, detect_resp, settings.dry_run)
 
