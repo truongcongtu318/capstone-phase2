@@ -66,23 +66,24 @@ jobs:
           git config --global credential.helper '!aws codecommit credential-helper $@'
           git config --global credential.UseHttpPath true
           
-          echo "📁 Preparing GitOps-only subtree..."
-          GITOPS_PATH="capstone/tf-3/cdo-1/gitops"
+          echo "🔄 Cloning CodeCommit repository..."
+          git clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops codecommit-repo
           
-          # Create a temporary orphan branch with only gitops folder
-          git checkout --orphan gitops-sync-temp
-          git reset --hard
-          git checkout main -- "$GITOPS_PATH"
+          echo "📁 Syncing GitOps manifests..."
+          # Clean target directory except .git metadata
+          find codecommit-repo -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          
+          # Copy only the contents of the gitops directory to the root of the target repo
+          cp -r capstone/tf-3/cdo-1/gitops/* codecommit-repo/
+          
+          cd codecommit-repo
           git add -A
-          git commit -m "GitOps manifests sync $(date -u +%Y-%m-%dT%H:%M:%SZ)" || {
+          
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "GitOps manifests sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "🚀 Pushing changes to CodeCommit..."
+            git push origin main
+          else
             echo "⚠️ No changes to sync"
-            exit 0
-          }
-          
-          echo "🔄 Setting up CodeCommit remote..."
-          git remote add codecommit https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops || git remote set-url codecommit https://git-codecommit.us-east-1.amazonaws.com/v1/repos/tf3-cdo1-sandbox-gitops
-          
-          echo "🚀 Force pushing GitOps-only tree to CodeCommit..."
-          git push --force codecommit gitops-sync-temp:main
-          
-          echo "✅ GitOps sync complete. CodeCommit now contains only $GITOPS_PATH"
+          fi
+
